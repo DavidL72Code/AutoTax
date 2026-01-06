@@ -1,0 +1,53 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.0
+
+# Data processing
+pandas==2.1.4
+openpyxl==3.1.2
+
+# AI APIs
+anthropic==0.7.8
+openai==1.3.7
+
+# Environment and config
+python-dotenv==1.0.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# Date/time handling
+python-dateutil==2.8.2
+
+# HTTP client
+httpx==0.25.2
+
+# Testing (optional but good for portfolio)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+
+# ============================================
+# FILE 4: .env
+# Place in root: receipt-automation/.env
+# ============================================
+
+# Database Configuration
+DATABASE_URL=postgresql://receiptuser:receiptpass123@postgres:5432/receipts
+
+# API Keys (REPLACE WITH YOUR ACTUAL KEYS)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Application Config
+APP_ENV=development
+LOG_LEVEL=info
+
+# n8n Config
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=admin123
