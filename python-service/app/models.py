@@ -14,7 +14,7 @@ class Transaction(Base):
     category=Column(String(100),nullable=True,index=True)
     payment_method=Column(String(100),nullable=True)
     items=Column(Text,nullable=True)#using text cause json string can stroe entire item list name,price
-    raw_email=Column(Text,nullable=True)
+    email_body=Column(Text,nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
