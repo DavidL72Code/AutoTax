@@ -1,6 +1,7 @@
 import re 
 from datetime import datetime
 from dateutil import parser as date_parser
+import ollama
 
 def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
     information={

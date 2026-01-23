@@ -8,7 +8,7 @@ def map_new_vendors():
     known_normalized_names={v.normalizedname for v in db.query(Vendor.all())}
 
     UnknownVendors=[]
-    for(vendor in transaction_vendor_names):
+    for vendor in transaction_vendor_names:
         if vendor_name not in known_raw_names and vendor_name not in known_normalized_names:
             count=db.query(Transaction).filter(transaction.vendor==vendor_name).count()
             UnknownVendors.append((vendor_name,count))

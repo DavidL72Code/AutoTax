@@ -2,7 +2,7 @@ from database import SessionLocal
 from models import Vendor
 import re
 
-def normalize_vendor_name(raw_vendor:str)->str:
+def normalize_vendor_name(raw_vendor:str, email_data:dict=None)->str:
     if not raw_vendor:
         return "Unknown"
 
