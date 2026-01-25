@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from dateutil import parser as date_parser
 import ollama
+import json
 
 def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
     information={
@@ -9,6 +10,7 @@ def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
         'vendor': "generic",
         'email body': email_text
     }
+    result={}
     regex_result=regex_parsing(email_text)
     result.update(regex_result)
 
@@ -82,36 +84,41 @@ def ai_search(email_text:str,missing_fields:list)->dict:
         prompt=f"""Extract ONLY these fields from this reciept: {field_list}
 Return JSON with only the requested fields:
 {{
-  "amount": 49.99,
-  "date": "2026-01-04",
-  "tax": 4.50
+  "amount": 0.00,
+  "date": "YYYY-MM-DD",
+  "tax": 0.00
 }}
 
 Rules:
-- Include ONLY the fields I asked for
-- amount: number only, no $ or commas
-- date: YYYY-MM-DD format
-- tax: number only if present
+1. amount: decimal number only (no symbols)
+2. date: format as YYYY-MM-DD
+3. tax: decimal number only (0.00 if not found)
+4. If a field is missing, use null.
 
-Receipt:
+Receipt Content:
 {email_text[:1500]}
 
 JSON:"""
         response=ollama.chat(
-            model=='llama3.2.3b'
-            messages=[{'role':'user','content':prompt}]
+            model='llama3.2:3b',
+            messages=[{'role':'user','content':prompt}],
             options={
-                'num_predict':100
+                'num_predict':100,
                 'temperature':0.1,
             }
         )
         ai_text = response['message']['content'].strip()
         
-        ai_text = re.sub(r'```json\s*', '', ai_text)
-        ai_text = re.sub(r'```\s*', '', ai_text)
-        
-        import json
-        ai_data = json.loads(ai_text)
+        # 1. Use Regex to find the first '{' and the last '}'
+        # This ignores any "Sure, here is your JSON" preamble
+        match = re.search(r'\{.*\}', ai_text, re.DOTALL)
+        if match:
+            clean_json = match.group(0)
+            ai_data = json.loads(clean_json)
+        else:
+            # Fallback if the AI returned something completely non-JSON
+            print(f"⚠️ AI returned text without a JSON block: {ai_text[:50]}...")
+            return {}
         
         ai_info = {}
         
