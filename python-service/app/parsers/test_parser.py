@@ -1,4 +1,4 @@
-from paypal_parser import paypal_parser
+from amazon_parser import amazon_parser
 
 test_email = """
 PayPal Receipt
@@ -10,5 +10,5 @@ Tax: $4.50
 Thank you for your purchase!
 """
 
-result = paypal_parser(test_email, "test_123")
+result = amazon_parser(test_email, "test_123")
 print(result)

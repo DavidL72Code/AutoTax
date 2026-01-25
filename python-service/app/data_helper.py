@@ -23,11 +23,11 @@ def log_transaction(parsed_data:dict):
         print(f"Saved: {transaction.vendor} ${transaction.amount}")
         return transaction
 
-except Exception as e:
-    db.rollback()
-    return None
-finally:
-    db.close()
+    except Exception as e:
+        db.rollback()
+        return None
+    finally:
+        db.close()
 
 def get_all_transactions():
     """Get all transactions from database"""

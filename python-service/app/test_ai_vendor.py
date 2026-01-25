@@ -4,7 +4,7 @@ from parser_select import identify_vendor_with_ai
 
 # Test case 1: Clear vendor name
 test_email_1 = """
-Blue Mountain Cafe
+Amazon
 123 Main Street
 
 Your order total: $15.99
