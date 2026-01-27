@@ -5,12 +5,12 @@ import ollama
 import json
 
 def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
-    information={
+    result={
         'email_id': email_id,
-        'vendor': "generic",
+        'vendor': vendor_name,
         'email body': email_text
     }
-    result={}
+    
     regex_result=regex_parsing(email_text)
     result.update(regex_result)
 
@@ -18,14 +18,16 @@ def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
     has_date=regex_result.get('date') is not None
     has_tax=regex_result.get('tax') is not None
 
-    if not has_amount or not has_date or has_tax:
-        missing_info=[]
-        if not has_amount:
-            missing_info.append('amount')
-        if not has_date:
-            missing_info.append('date')
-        if not has_tax:
-            missing_info.append('tax')
+    
+    missing_info=[]
+    if not has_amount:
+        missing_info.append('amount')
+    if not has_date:
+        missing_info.append('date')
+    if not has_tax:
+        missing_info.append('tax')
+    
+    if missing_info:
         print(f" Regex failed for {vendor_name}:{','.join(missing_info)} mssing")
         print("\n Using Ai to extract missing fields\n")
 
@@ -39,7 +41,7 @@ def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
         if ai_result.get('tax') and not result.get('tax'):
             result['tax'] = ai_result['tax']
     else:
-        print(f"Regex extraction successful for {vendor_name}")
+        print(f"Regex successful for {vendor_name}")
     
     return result
 

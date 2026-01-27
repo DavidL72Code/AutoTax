@@ -5,12 +5,14 @@ from parsers.generic_parser import regex_parsing
 from parsers.generic_parser import ai_search
 
 def amazon_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
-    information={
+    result={
         'email_id': email_id,
-        'vendor': "amazon",
-        'email body': email_text
+        'vendor': "Amazon",
+        'email body': email_text,
+        'amount': None,
+        'date': None,
+        'tax': 0.0
     }
-    result={}
     regex_result=regex_parsing(email_text)
     result.update(regex_result)
 
