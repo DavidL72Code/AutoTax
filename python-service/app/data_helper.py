@@ -3,9 +3,9 @@ from models import Transaction
 def log_transaction(parsed_data:dict):
     db=SessionLocal()
     try:
-        existing=db.query(Transaction).filter(Transaction.email_id==parsed_data['email_id']).first()
+        existing=db.query(Transaction).filter(Transaction.email_id==parsed_data.get('email_id')).first()
         if existing:
-            print(f"Transaction already exists:{parsed_data['email_id']}")
+            print(f"Transaction already exists:{parsed_data.get('email_id')}")
             return existing
     
         transaction=Transaction(
