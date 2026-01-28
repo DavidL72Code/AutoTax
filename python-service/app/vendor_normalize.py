@@ -3,23 +3,26 @@ from models import Vendor
 import re
 
 def normalize_vendor_name(raw_vendor:str, email_data:dict=None)->str:
-    if not raw_vendor:
-        return "Unknown"
+    try:
+        if not raw_vendor:
+            return "Unknown"
 
-    db=SessionLocal()
-    #exact
-    vendor=db.query(Vendor).filter(Vendor.name==raw_vendor).first()
-    if vendor:
-        db.close()
-        return vendor.normalized_name
-    
-    if email_data:
-        vendor_from_content = search_email_for_vendor(email_data, db)
-        if vendor_from_content:
+        db=SessionLocal()
+        #exact
+        vendor=db.query(Vendor).filter(Vendor.name==raw_vendor).first()
+        if vendor:
             db.close()
-            return vendor_from_content
+            return vendor.normalized_name
     
-    db.close()
+        if email_data:
+            vendor_from_content = search_email_for_vendor(email_data, db)
+            if vendor_from_content:
+                db.close()
+                return vendor_from_content
+    finally:
+        db.close()
+
+    return raw_vendor
 
 
 def search_email_for_vendor(email_data:dict,db)->str:
