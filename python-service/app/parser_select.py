@@ -1,37 +1,42 @@
 from parsers.paypal_parser import paypal_parser
 from parsers.amazon_parser import amazon_parser
+from parsers.generic_parser import generic_parser
 from database import SessionLocal 
 from models import Vendor
 import ollama
 import re
+from vendor_normalize import normalize_vendor_name
 
 def parser_select(email_data:dict)->dict:
     email_body=email_data.get('body','')
-    email_from=email_data.get('from','').lower
-    email_subject=email_data.get('subject','').lower
+    email_from=email_data.get('from','').lower()
+    email_subject=email_data.get('subject','').lower()
     email_id=email_data.get('id')
+    email_date=email_data.get('date')
 
     vendor_name=vendor_search(email_from,email_subject,email_body)
-    normalized_vendor=vendor_normalize(
+
+    if not vendor_name:
+        print(f"⚠️  Vendor unknown for {email_id}, using AI to identify...")
+        vendor_name = identify_vendor_with_ai(email_body,email_subject)
+        
+        if vendor_name != "Unknown":
+            print(f"AI identified vendor: {vendor_name}")
+        else:
+            print(f"AI could not identify vendor")
+    normalized_vendor=normalize_vendor_name(
     vendor_name or "Unknown",
     email_data=email_data
     )
-    if normalized_vendor == "Unknown":
-        print(f"⚠️  Vendor unknown for {email_id}, using AI to identify...")
-        normalized_vendor = identify_vendor_with_ai(email_text)
-        
-        if normalized_vendor != "Unknown":
-            print(f"AI identified vendor: {normalized_vendor}")
-        else:
-            print(f"AI could not identify vendor")
     if normalized_vendor == "PayPal":
-        return paypal_parser(email_text, email_id)
+        return paypal_parser(email_subject,email_body, email_id,email_date, normalized_vendor)
     elif normalized_vendor == "Amazon":
-        return amazon_parser(email_text, email_id)
+        return amazon_parser(email_subject,email_body, email_id,email_date,normalized_vendor)
     else:
-        return generic_parser(email_text, email_id, normalized_vendor)
+        return generic_parser(email_subject,email_body, email_id,email_date, normalized_vendor)
 
 def vendor_search(email_from: str, subject: str, body: str) -> str:
+    email_from
     if 'paypal.com' in email_from:
         return 'PayPal'
     elif 'amazon.com' in email_from or "amazon.co" in email_from:
@@ -47,7 +52,7 @@ def vendor_search(email_from: str, subject: str, body: str) -> str:
     return None
 
 
-def identify_vendor_with_ai(email_text: str) -> str:
+def identify_vendor_with_ai(email_body: str, email_subject:str) -> str:
     try:
         prompt = f"""What is the vendor/store/company name from this receipt or email?
 
@@ -59,8 +64,10 @@ Examples of good responses:
 - "Target"
 - "Joe's Pizza"
 
+Email Subject:
+{email_subject}
 Email text:
-{email_text[:1500]}
+{email_body[:1500]}
 
 Vendor name:"""
         
