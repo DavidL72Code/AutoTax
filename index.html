@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReceiptAuto - Smart Receipt Tracking</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <div class="logo">
+                <div class="logo-icon">💸</div>
+                <h1>Receipt<span>Auto</span></h1>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#dashboard">Dashboard</a>
+                <a href="#pricing">Pricing</a>
+            </div>
+            <div class="nav-actions">
+                <button class="btn-login">Log in</button>
+                <button class="btn-signup">Get Started</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-background">
+            <div class="gradient-orb orb-1"></div>
+            <div class="gradient-orb orb-2"></div>
+            <div class="gradient-orb orb-3"></div>
+        </div>
+        <div class="hero-content">
+            <div class="hero-text">
+                <div class="badge-new">✨ AI-Powered Receipt Tracking</div>
+                <h1 class="hero-title">
+                    The receipt tracker that
+                    <span class="gradient-text">works for you</span>
+                </h1>
+                <p class="hero-description">
+                    Never lose track of expenses again. ReceiptAuto automatically reads your emails, 
+                    extracts receipt data, and organizes everything beautifully. Save time, stay organized, 
+                    and take control of your finances.
+                </p>
+                <div class="hero-buttons">
+                    <button class="btn-hero-primary">
+                        Start Tracking Free
+                        <span class="btn-arrow">→</span>
+                    </button>
+                    <button class="btn-hero-secondary">
+                        <span class="play-icon">▶</span>
+                        See How It Works
+                    </button>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-number">10K+</div>
+                        <div class="stat-label">Receipts Processed</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <div class="stat-number">500+</div>
+                        <div class="stat-label">Happy Users</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <div class="stat-number">98%</div>
+                        <div class="stat-label">Accuracy Rate</div>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="floating-card card-1">
+                    <div class="mini-card-header">
+                        <span class="mini-icon">🛒</span>
+                        <span class="mini-vendor">Amazon</span>
+                    </div>
+                    <div class="mini-amount">$89.99</div>
+                    <div class="mini-status">✓ Processed</div>
+                </div>
+                <div class="floating-card card-2">
+                    <div class="mini-card-header">
+                        <span class="mini-icon">☕</span>
+                        <span class="mini-vendor">Starbucks</span>
+                    </div>
+                    <div class="mini-amount">$6.75</div>
+                    <div class="mini-status">✓ Processed</div>
+                </div>
+                <div class="floating-card card-3">
+                    <div class="mini-card-header">
+                        <span class="mini-icon">🍕</span>
+                        <span class="mini-vendor">UberEats</span>
+                    </div>
+                    <div class="mini-amount">$24.50</div>
+                    <div class="mini-status">✓ Processed</div>
+                </div>
+                <div class="center-visual">
+                    <div class="pulse-ring"></div>
+                    <div class="pulse-ring-2"></div>
+                    <div class="center-icon">📧</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Overview -->
+    <section class="stats-overview">
+        <div class="section-container">
+            <div class="stats-grid-hero">
+                <div class="stat-card-hero">
+                    <div class="stat-icon-large">💰</div>
+                    <div class="stat-content">
+                        <div class="stat-value-large">$4,892.45</div>
+                        <div class="stat-label-large">Total Spent This Month</div>
+                        <div class="stat-change-positive">+12.5% from last month</div>
+                    </div>
+                </div>
+                <div class="stat-card-hero">
+                    <div class="stat-icon-large">📧</div>
+                    <div class="stat-content">
+                        <div class="stat-value-large">247</div>
+                        <div class="stat-label-large">Receipts Processed</div>
+                        <div class="stat-change-positive">+8 this week</div>
+                    </div>
+                </div>
+                <div class="stat-card-hero">
+                    <div class="stat-icon-large">🏪</div>
+                    <div class="stat-content">
+                        <div class="stat-value-large">34</div>
+                        <div class="stat-label-large">Unique Vendors</div>
+                        <div class="stat-change-neutral">No change</div>
+                    </div>
+                </div>
+                <div class="stat-card-hero">
+                    <div class="stat-icon-large">📊</div>
+                    <div class="stat-content">
+                        <div class="stat-value-large">$162.41</div>
+                        <div class="stat-label-large">Average Transaction</div>
+                        <div class="stat-change-negative">-3.2% from last month</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dashboard Section -->
+    <section class="dashboard-section" id="dashboard">
+        <div class="section-container">
+            <div class="section-header-main">
+                <div>
+                    <h2 class="section-title">Recent Transactions</h2>
+                    <p class="section-subtitle">All your receipt data in one place</p>
+                </div>
+                <div class="section-actions">
+                    <input type="text" placeholder="🔍 Search transactions..." class="search-input">
+                    <button class="btn-action">
+                        <span>📥</span> Export CSV
+                    </button>
+                    <button class="btn-action btn-demo">
+                        <span>🧪</span> Demo Sync
+                    </button>
+                    <a class="btn-action btn-demo-view" href="demo.html" target="_blank" rel="noopener">
+                        <span>📨</span> Demo Emails
+                    </a>
+                    <button class="btn-action btn-clear">
+                        <span>🧹</span> Clear All
+                    </button>
+                    <button class="btn-action-primary">
+                        <span>🔄</span> Sync Emails
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transactions Table -->
+            <div class="table-wrapper">
+                <table class="transactions-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable sortable-date" data-sort="date" title="Click to sort">
+                                <div class="th-content">
+                                    <span>📅</span>
+                                    <span>Date</span>
+                                    <span class="sort-arrow" aria-hidden="true"></span>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-content">
+                                    <span>🏪</span>
+                                    <span>Vendor</span>
+                                </div>
+                            </th>
+                            <th class="sortable sortable-amount" data-sort="amount" title="Click to sort">
+                                <div class="th-content">
+                                    <span>💵</span>
+                                    <span>Amount</span>
+                                    <span class="sort-arrow" aria-hidden="true"></span>
+                                </div>
+                            </th>
+                            <th class="sortable sortable-tax" data-sort="tax" title="Click to sort">
+                                <div class="th-content">
+                                    <span>🧾</span>
+                                    <span>Tax</span>
+                                    <span class="sort-arrow" aria-hidden="true"></span>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-content">
+                                    <span>⚙️</span>
+                                    <span>Parser Type</span>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-content">
+                                    <span>📊</span>
+                                    <span>Status</span>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="th-content">
+                                    <span>✏️</span>
+                                    <span>Edit</span>
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- CSV Insights Section -->
+    <section class="csv-section">
+        <div class="section-container">
+            <div class="section-header-main">
+                <div>
+                    <h2 class="section-title">CSV Spend Breakdown</h2>
+                    <p class="section-subtitle">Build a pie chart from the exported transactions</p>
+                </div>
+            </div>
+            <div class="csv-grid">
+                <div class="csv-controls">
+                    <label class="csv-label" for="csv-group">Group By</label>
+                    <select id="csv-group" class="csv-select">
+                        <option value="vendor">Vendor</option>
+                        <option value="category">Category</option>
+                    </select>
+                    <button id="csv-build" class="btn-action" type="button">
+                        <span>📊</span> Build From Table
+                    </button>
+                    <p class="csv-hint">Uses the same data as the Export CSV button.</p>
+                </div>
+                <div class="csv-chart-card">
+                    <img id="csv-chart-img" alt="Vendor spend breakdown pie chart" />
+                    <canvas id="csv-chart" width="360" height="360"></canvas>
+                    <div id="csv-legend" class="csv-legend"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Top Vendors Section -->
+    <section class="vendors-section">
+        <div class="section-container">
+            <div class="section-header-main">
+                <h2 class="section-title">Top Vendors This Month</h2>
+                <p class="section-subtitle">Your most frequent spending destinations</p>
+            </div>
+            <div class="vendors-grid">
+                <div class="vendor-card-new">
+                    <div class="vendor-card-header">
+                        <span class="vendor-logo-large">🛒</span>
+                        <div>
+                            <h3 class="vendor-card-name">Amazon</h3>
+                            <p class="vendor-card-category">Online Shopping</p>
+                        </div>
+                    </div>
+                    <div class="vendor-card-amount">$1,234.56</div>
+                    <div class="vendor-card-transactions">12 transactions</div>
+                    <div class="progress-bar-new">
+                        <div class="progress-fill-new" style="width: 85%"></div>
+                    </div>
+                    <div class="vendor-card-footer">
+                        <span class="trend-up">↗ +15% vs last month</span>
+                    </div>
+                </div>
+
+                <div class="vendor-card-new">
+                    <div class="vendor-card-header">
+                        <span class="vendor-logo-large">🍕</span>
+                        <div>
+                            <h3 class="vendor-card-name">UberEats</h3>
+                            <p class="vendor-card-category">Food Delivery</p>
+                        </div>
+                    </div>
+                    <div class="vendor-card-amount">$456.78</div>
+                    <div class="vendor-card-transactions">18 transactions</div>
+                    <div class="progress-bar-new">
+                        <div class="progress-fill-new" style="width: 45%"></div>
+                    </div>
+                    <div class="vendor-card-footer">
+                        <span class="trend-up">↗ +8% vs last month</span>
+                    </div>
+                </div>
+
+                <div class="vendor-card-new">
+                    <div class="vendor-card-header">
+                        <span class="vendor-logo-large">☕</span>
+                        <div>
+                            <h3 class="vendor-card-name">Starbucks</h3>
+                            <p class="vendor-card-category">Coffee & Cafes</p>
+                        </div>
+                    </div>
+                    <div class="vendor-card-amount">$234.50</div>
+                    <div class="vendor-card-transactions">28 transactions</div>
+                    <div class="progress-bar-new">
+                        <div class="progress-fill-new" style="width: 30%"></div>
+                    </div>
+                    <div class="vendor-card-footer">
+                        <span class="trend-down">↘ -5% vs last month</span>
+                    </div>
+                </div>
+
+                <div class="vendor-card-new">
+                    <div class="vendor-card-header">
+                        <span class="vendor-logo-large">🏬</span>
+                        <div>
+                            <h3 class="vendor-card-name">Best Buy</h3>
+                            <p class="vendor-card-category">Electronics</p>
+                        </div>
+                    </div>
+                    <div class="vendor-card-amount">$899.99</div>
+                    <div class="vendor-card-transactions">3 transactions</div>
+                    <div class="progress-bar-new">
+                        <div class="progress-fill-new" style="width: 65%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Edit Transaction Modal -->
+    <div id="edit-modal" class="modal-overlay" aria-hidden="true" style="display:none;" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+            <div class="modal-header">
+                <h3 id="edit-modal-title" class="modal-title">Edit Transaction</h3>
+                <button id="modal-delete" class="modal-delete" type="button" title="Delete transaction">Delete</button>
+            </div>
+            <div class="modal-body">
+                <label class="modal-label" for="edit-vendor">Vendor</label>
+                <input id="edit-vendor" class="modal-input" type="text" />
+
+                <label class="modal-label" for="edit-amount">Amount</label>
+                <input id="edit-amount" class="modal-input" type="number" step="0.01" />
+
+                <label class="modal-label" for="edit-tax">Tax</label>
+                <input id="edit-tax" class="modal-input" type="number" step="0.01" />
+
+                <label class="modal-label" for="edit-date">Date</label>
+                <input id="edit-date" class="modal-input" type="date" />
+            </div>
+            <div class="modal-actions">
+                <button id="modal-cancel" class="btn-action" type="button">Cancel</button>
+                <button id="modal-save" class="btn-action-primary" type="button">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

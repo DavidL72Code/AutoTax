@@ -1,0 +1,26 @@
+name: Daily Sync
+
+on:
+  schedule:
+    # Runs daily at 13:00 UTC (adjust as needed)
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger API sync
+        env:
+          SYNC_URL: ${{ secrets.SYNC_URL }}
+          SYNC_API_KEY: ${{ secrets.SYNC_API_KEY }}
+        run: |
+          if [ -z "$SYNC_URL" ]; then
+            echo "SYNC_URL secret is not set. Add it in GitHub repo secrets."
+            exit 1
+          fi
+          if [ -z "$SYNC_API_KEY" ]; then
+            echo "SYNC_API_KEY secret is not set. Add it in GitHub repo secrets."
+            exit 1
+          fi
+          curl -sS -X POST "$SYNC_URL" -H "X-API-Key: $SYNC_API_KEY" -o /dev/null -w "%{http_code}\n"

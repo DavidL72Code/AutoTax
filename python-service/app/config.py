@@ -1,22 +1,29 @@
-from pydantic_settings import BaseSettings
-from typing import Optional 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional
+from pathlib import Path
 
-#Creates Settings class which inherits from pydantics BaseSettings
-class Settings(BaseSettings): 
-    #Required settings :str must be string and gets value from .env using pydantic
-    database_url:str 
-    anthropic_api_key:str
-    openai_api_key:Optional[str]=None #can be string or not app works without it using OpenAi as backup
+_APP_DIR = Path(__file__).resolve().parent
+_DEFAULT_DB = _APP_DIR / "test.db"
+
+# Creates Settings class which inherits from pydantics BaseSettings
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=[str(_APP_DIR / ".env"), str(_APP_DIR.parent.parent / ".env")],
+        case_sensitive=False,
+    )
+
+    # Required settings :str must be string and gets value from .env using pydantic
+    database_url: str = f"sqlite:///{_DEFAULT_DB}"
+    anthropic_api_key: str = "local_ollama"
+    openai_api_key: Optional[str] = None  # can be string or not app works without it using OpenAi as backup
 
     # gets mode and log should be string in env if not defaults to dev and info
-    app_env:str="development" 
-    log-level:str="info"
+    app_env: str = "development"
+    log_level: str = "info"
 
-#pydantic reads setting from .env 
-class Config:
-    env_file=".env"
-    case_sensitive=False
-settings=Settings():
+settings = Settings()
 
-
+# Defensive: if the DB URL was set as "database_url=sqlite:////path", strip the prefix.
+if settings.database_url.startswith("database_url="):
+    settings.database_url = settings.database_url.split("=", 1)[1]
 
