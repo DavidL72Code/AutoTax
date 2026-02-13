@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://autotax-xwly.onrender.com';
 
 async function loadDemoEmails() {
     const grid = document.querySelector('#demo-grid');

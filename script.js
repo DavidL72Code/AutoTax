@@ -1,7 +1,7 @@
 // Receipt Automation Dashboard JavaScript
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://autotax-xwly.onrender.com';
 
 // DOM Elements
 let searchInput;
