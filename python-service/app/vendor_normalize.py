@@ -1,5 +1,5 @@
-from database import SessionLocal
-from models import Vendor
+from .database import SessionLocal
+from .models import Vendor
 import re
 
 def normalize_vendor_name(raw_vendor:str, email_data:dict=None)->str:
