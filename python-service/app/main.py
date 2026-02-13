@@ -1,7 +1,7 @@
-from email_scraper import fetch_receipt_emails
-from parser_select import parser_select
-from data_helper import log_transaction, get_existing_email_ids
-from database import SessionLocal
+from .email_scraper import fetch_receipt_emails
+from .parser_select import parser_select
+from .data_helper import log_transaction, get_existing_email_ids
+from .database import SessionLocal
 
 def main():
     # Only fetch/parse emails we don't already have (saves parsing and AI)
