@@ -130,4 +130,3 @@ JSON:"""
     except Exception as e:
         print(f"AI extraction failed: {e}")
         return {}
-

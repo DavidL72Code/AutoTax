@@ -1,8 +1,8 @@
 import re 
 from datetime import datetime
 from dateutil import parser as date_parser
-from parsers.generic_parser import regex_parsing
-from parsers.generic_parser import ai_search
+from .generic_parser import regex_parsing
+from .generic_parser import ai_search
 
 def paypal_parser(email_subject:str, email_text:str,email_id:str,email_date:str,vendor_name:str)-> dict:
     result={

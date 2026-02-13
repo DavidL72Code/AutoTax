@@ -1,11 +1,11 @@
-from parsers.paypal_parser import paypal_parser
-from parsers.amazon_parser import amazon_parser
-from parsers.generic_parser import generic_parser
-from database import SessionLocal 
-from models import Vendor
+from .parsers.paypal_parser import paypal_parser
+from .parsers.amazon_parser import amazon_parser
+from .parsers.generic_parser import generic_parser
+from .database import SessionLocal 
+from .models import Vendor
 import ollama
 import re
-from vendor_normalize import normalize_vendor_name
+from .vendor_normalize import normalize_vendor_name
 
 def parser_select(email_data:dict)->dict:
     email_body=email_data.get('body','')
