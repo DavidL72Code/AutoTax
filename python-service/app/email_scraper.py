@@ -29,55 +29,64 @@ def get_gmail_service():
         print("Authentication saved")
     return build('gmail','v1',credentials=creds)
 
-def fetch_receipt_emails(max_results=15,days_back=60):
+def fetch_receipt_emails(max_results=15, days_back=60, existing_ids=None):
+    """
+    Fetch receipt-like emails from Gmail.
+    existing_ids: optional set of Gmail message ids already in DB; we skip fetching/parsing those to save time and AI.
+    """
     try:
         print("Connecting to Gmail...")
-        service=get_gmail_service()
+        service = get_gmail_service()
 
-        query_parts=[
+        query_parts = [
             '(subject:"confirmation" OR subject:"receipt" OR OR subject:"payment" OR subject:"order summary") -subject:"shipping" -subject:"delivered" -subject:"sale" -subject:"deals"',
             f' newer_than:{days_back}d',
         ]
-        query=''.join(query_parts)
+        query = ''.join(query_parts)
         print(f"Searching{query}")
 
-        results=service.users().messages().list(
+        results = service.users().messages().list(
             userId='me',
             q=query,
             maxResults=max_results
         ).execute()
 
-        messages=results.get('messages',[])
+        messages = results.get('messages', [])
 
         if not messages:
             print("No receipt emails found")
             return []
-        print(f"📬 Found {len(messages)} potential receipt emails")
+
+        # Skip messages we already have in DB (no fetch, no parsing, no AI)
+        if existing_ids:
+            before = len(messages)
+            messages = [m for m in messages if m['id'] not in existing_ids]
+            skipped = before - len(messages)
+            if skipped:
+                print(f"📬 Skipping {skipped} already in database (no parse/AI)")
+            if not messages:
+                print("✅ All listed emails already processed")
+                return []
+
+        print(f"📬 Found {len(messages)} new receipt emails to process")
         print(f"⏳ Fetching email details...")
 
         emails = []
-        
         for i, message in enumerate(messages):
             try:
-                # Fetch full message
                 msg = service.users().messages().get(
                     userId='me',
                     id=message['id'],
                     format='full'
                 ).execute()
-                
-                # Parse message
                 email_data = parse_gmail_message(msg)
                 emails.append(email_data)
-                
-                # Progress indicator
                 if (i + 1) % 10 == 0:
                     print(f"  📊 Processed {i + 1}/{len(messages)}...")
-                
             except Exception as e:
                 print(f"⚠️  Error processing message {message['id']}: {e}")
                 continue
-        
+
         print(f"✅ Successfully fetched {len(emails)} emails")
         return emails
         

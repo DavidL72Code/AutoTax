@@ -4,26 +4,26 @@ from dateutil import parser as date_parser
 import ollama
 import json
 
-def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
+def generic_parser(email_subject:str ,email_text:str,email_id:str,email_date:str,vendor_name:str)-> dict:
     result={
         'email_id': email_id,
         'vendor': vendor_name,
-        'email body': email_text
+        'email body': email_text,
+        'amount':0.0,
+        'date': email_date,
+        'tax': 0.0
     }
     
     regex_result=regex_parsing(email_text)
     result.update(regex_result)
 
     has_amount=regex_result.get('amount') is not None
-    has_date=regex_result.get('date') is not None
     has_tax=regex_result.get('tax') is not None
 
     
     missing_info=[]
     if not has_amount:
         missing_info.append('amount')
-    if not has_date:
-        missing_info.append('date')
     if not has_tax:
         missing_info.append('tax')
     
@@ -31,12 +31,9 @@ def generic_parser(email_text:str,email_id:str,vendor_name:str)-> dict:
         print(f" Regex failed for {vendor_name}:{','.join(missing_info)} mssing")
         print("\n Using Ai to extract missing fields\n")
 
-        ai_result=ai_search(email_text,missing_info)
+        ai_result=ai_search(email_subject,email_text,missing_info)
         if ai_result.get('amount') and not has_amount:
             result['amount'] = ai_result['amount']
-        
-        if ai_result.get('date') and not has_date:
-            result['date'] = ai_result['date']
         
         if ai_result.get('tax') and not result.get('tax'):
             result['tax'] = ai_result['tax']
@@ -62,42 +59,33 @@ def regex_parsing(email_text:str)->dict:
                 continue
             break
 
-    #regex match for date
-    date_patterns = [
-        r'date[:\s]+([^\n]+)',
-        r'(?:on|ordered)[:\s]+([^\n]+)',
-        ]
-    for pattern in date_patterns:
-        date_match=re.search(pattern,email_text,re.IGNORECASE)
-        if date_match:
-            try:
-                regex_info["date"]=date_parser.parse(date_match.group(1),fuzzy=True)
-            except:
-                continue
-
     #regex match for tax
     tax_match=re.search(r'tax[:\s]+\$?([\d,]+\.\d{2})',email_text,re.IGNORECASE)
     if tax_match:
         regex_info["tax"]=float(tax_match.group(1).replace(',',''))
     return regex_info
-def ai_search(email_text:str,missing_fields:list)->dict:
+def ai_search(email_subject:str,email_text:str,missing_fields:list)->dict:
     try:
         field_list=','.join(missing_fields)
         prompt=f"""Extract ONLY these fields from this reciept: {field_list}
 Return JSON with only the requested fields:
 {{
   "amount": 0.00,
-  "date": "YYYY-MM-DD",
   "tax": 0.00
 }}
 
-Rules:
-1. amount: decimal number only (no symbols)
-2. date: format as YYYY-MM-DD
-3. tax: decimal number only (0.00 if not found)
-4. If a field is missing, use null.
+You are a data extraction tool.
+OUTPUT: ONLY JSON 
+dont explain or any other thing other than the JSON
+
+RULES:
+1. "amount": Decimal only.
+2. "tax": Decimal only.
+
+JSON:
 
 Receipt Content:
+{email_subject}
 {email_text[:1500]}
 
 JSON:"""
