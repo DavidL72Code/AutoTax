@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
     searchInput = document.querySelector('.search-input');
     syncBtn = document.querySelector('.btn-action-primary');
-    exportBtn = document.querySelector('.btn-action');
+    exportBtn = document.querySelector('#export-csv');
     tableBody = document.querySelector('.transactions-table tbody');
     csvGroupSelect = document.querySelector('#csv-group');
     csvChartCanvas = document.querySelector('#csv-chart');
@@ -402,7 +402,11 @@ async function loadDashboardData() {
         console.log('✅ Dashboard data loaded successfully');
     } catch (error) {
         console.error('❌ Error loading dashboard:', error);
-        showError('Failed to load dashboard data. Make sure the API is running on http://localhost:8000');
+        const base = API_BASE_URL || 'the API';
+        const message = DEMO_MODE
+            ? `Failed to load demo data. Make sure the API is running at ${base}.`
+            : `Failed to load dashboard data. Make sure the API is running at ${base}.`;
+        showError(message);
     }
 }
 
@@ -799,6 +803,10 @@ async function syncEmails() {
     if (DEMO_MODE) {
         return;
     }
+    if (!localStorage.getItem('AUTH_TOKEN')) {
+        handleAuthRequired();
+        return;
+    }
     
     const originalHTML = syncBtn.innerHTML;
     const previousSignature = buildTransactionSignature(allTransactions);
@@ -850,6 +858,10 @@ function buildAuthHeaders() {
 }
 
 function handleAuthRequired() {
+    if (handleAuthRequired.lastShown && Date.now() - handleAuthRequired.lastShown < 2500) {
+        return;
+    }
+    handleAuthRequired.lastShown = Date.now();
     showError('Please log in to view your data.');
     openAuthModal('login');
 }
@@ -887,11 +899,7 @@ async function loadDemoEmails() {
     const grid = document.querySelector('#demo-grid');
     if (!grid) return;
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/demo-emails`, { cache: 'no-store' });
-        if (response.status === 401) {
-            grid.innerHTML = '<div class="demo-empty">Please log in to view demo emails.</div>';
-            return;
-        }
+        const response = await fetch(`${API_BASE_URL}/api/demo-emails`, { cache: 'no-store' });
         const emails = await response.json();
         grid.innerHTML = '';
         if (!emails.length) {
@@ -922,7 +930,7 @@ async function runDemoGenerate() {
     demoGenerateBtn.innerHTML = '<span>⏳</span> Generating...';
     demoGenerateBtn.disabled = true;
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
+        const response = await fetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(result.detail || 'Demo generation failed');
@@ -959,7 +967,7 @@ async function runDemoParse() {
 
     try {
         const forceParam = demoForceToggle && demoForceToggle.checked ? '?force_reprocess=true' : '';
-        const response = await authFetch(`${API_BASE_URL}/api/demo-parse${forceParam}`, { method: 'POST' });
+        const response = await fetch(`${API_BASE_URL}/api/demo-parse${forceParam}`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.run_id) {
             throw new Error(result.detail || 'Demo parse failed to start');
@@ -982,7 +990,7 @@ function startDemoParsePolling(originalHTML) {
     if (!activeDemoRunId) return;
     demoParsePollTimer = setInterval(async () => {
         try {
-            const response = await authFetch(`${API_BASE_URL}/api/demo-parse-status?run_id=${encodeURIComponent(activeDemoRunId)}`, {
+            const response = await fetch(`${API_BASE_URL}/api/demo-parse-status?run_id=${encodeURIComponent(activeDemoRunId)}`, {
                 cache: 'no-store'
             });
             const result = await response.json().catch(() => ({}));
@@ -1025,6 +1033,10 @@ function startDemoParsePolling(originalHTML) {
 
 async function clearAllTransactions() {
     if (!clearBtn) return;
+    if (!DEMO_MODE && !localStorage.getItem('AUTH_TOKEN')) {
+        handleAuthRequired();
+        return;
+    }
     if (!confirm('Clear all transactions from the database? This cannot be undone.')) {
         return;
     }
@@ -1405,9 +1417,10 @@ async function saveTransactionEdits() {
         date: editDateInput ? editDateInput.value : undefined
     };
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/transactions/${activeTransactionId}`, {
+        const endpoint = DEMO_MODE ? `/api/demo/transactions/${activeTransactionId}` : `/api/transactions/${activeTransactionId}`;
+        const response = await (DEMO_MODE ? fetch : authFetch)(`${API_BASE_URL}${endpoint}`, {
             method: 'PUT',
-            headers: Object.assign({ 'Content-Type': 'application/json' }, buildAuthHeaders()),
+            headers: Object.assign({ 'Content-Type': 'application/json' }, DEMO_MODE ? {} : buildAuthHeaders()),
             body: JSON.stringify(payload)
         });
         const result = await response.json().catch(() => ({}));
@@ -1424,9 +1437,10 @@ async function saveTransactionEdits() {
 async function deleteTransaction() {
     if (!activeTransactionId) return;
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/transactions/${activeTransactionId}`, {
+        const endpoint = DEMO_MODE ? `/api/demo/transactions/${activeTransactionId}` : `/api/transactions/${activeTransactionId}`;
+        const response = await (DEMO_MODE ? fetch : authFetch)(`${API_BASE_URL}${endpoint}`, {
             method: 'DELETE',
-            headers: buildAuthHeaders()
+            headers: DEMO_MODE ? {} : buildAuthHeaders()
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {

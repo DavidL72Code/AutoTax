@@ -893,6 +893,63 @@ def clear_demo_transactions(request: Request):
     finally:
         db.close()
 
+@app.put("/api/demo/transactions/{transaction_id}")
+def update_demo_transaction(transaction_id: int, payload: dict = Body(...)):
+    """Update a demo transaction without auth."""
+    demo_user = _get_demo_user()
+    db = SessionLocal()
+    try:
+        tx = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == demo_user.id
+        ).first()
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+
+        if "vendor" in payload:
+            vendor = (payload.get("vendor") or "").strip()
+            if vendor:
+                tx.vendor = vendor
+        if "amount" in payload:
+            try:
+                tx.amount = float(str(payload["amount"]).replace("$", "").replace(",", "").strip())
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid amount")
+        if "tax" in payload:
+            try:
+                tx.tax = float(str(payload["tax"]).replace("$", "").replace(",", "").strip())
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid tax")
+        if "date" in payload:
+            try:
+                tx.date = date_parser.parse(str(payload["date"]))
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid date")
+
+        db.commit()
+        db.refresh(tx)
+        return {"status": "success", "id": tx.id}
+    finally:
+        db.close()
+
+@app.delete("/api/demo/transactions/{transaction_id}")
+def delete_demo_transaction(transaction_id: int):
+    """Delete a demo transaction without auth."""
+    demo_user = _get_demo_user()
+    db = SessionLocal()
+    try:
+        tx = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == demo_user.id
+        ).first()
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        db.delete(tx)
+        db.commit()
+        return {"status": "success", "id": transaction_id}
+    finally:
+        db.close()
+
 @app.delete("/api/transactions/clear")
 def clear_transactions(request: Request):
     """Delete all transactions for the current user."""
