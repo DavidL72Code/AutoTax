@@ -1,8 +1,11 @@
-import ollama 
+import os
+import google.generativeai as genai
 
-response=ollama.chat(
-    model='llama3.2:3b',
-    messages=[{'role':'user','content':'Hello!'}]
-)
+api_key = os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    raise RuntimeError("Set GOOGLE_API_KEY before running this test.")
 
-print(response['message']['content'])
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash"))
+response = model.generate_content("Hello!")
+print((response.text or "").strip())

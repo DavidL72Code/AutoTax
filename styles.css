@@ -624,6 +624,46 @@ body {
     color: #94a3b8;
 }
 
+.demo-run-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem 1.2rem;
+    padding: 0.7rem 1rem;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.demo-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #e2e8f0;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.demo-toggle input {
+    accent-color: #f472b6;
+    width: 16px;
+    height: 16px;
+}
+
+.demo-run-stats {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    color: #cbd5f5;
+    font-size: 0.78rem;
+    letter-spacing: 0.01em;
+}
+
+.demo-run-stats strong {
+    color: #f8fafc;
+    font-size: 0.85rem;
+}
+
 .demo-run-log {
     margin: 0;
     padding: 0.9rem 1rem;

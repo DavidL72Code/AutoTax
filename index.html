@@ -182,6 +182,18 @@
                     <h3 class="demo-run-title">Demo Parse Log</h3>
                     <p class="demo-run-subtitle">Live parser output from the current demo parse run.</p>
                 </div>
+                <div class="demo-run-controls">
+                    <label class="demo-toggle">
+                        <input type="checkbox" id="demo-force-reprocess">
+                        <span>Force reprocess (uses extra AI calls)</span>
+                    </label>
+                    <div class="demo-run-stats">
+                        <span><strong id="demo-run-processed">0</strong> processed</span>
+                        <span><strong id="demo-run-success">0</strong> saved</span>
+                        <span><strong id="demo-run-skipped">0</strong> skipped</span>
+                        <span><strong id="demo-run-failed">0</strong> failed</span>
+                    </div>
+                </div>
                 <pre id="demo-run-log" class="demo-run-log">No demo parse run yet.</pre>
             </div>
 

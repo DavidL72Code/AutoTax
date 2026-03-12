@@ -1,6 +1,7 @@
 import os
 import threading
 import json
+import hashlib
 import uuid
 import random
 import re
@@ -169,7 +170,7 @@ def _demo_emails_path() -> Path:
 def _now_iso() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
-def _init_demo_run(run_id: str):
+def _init_demo_run(run_id: str, force_reprocess: bool = False):
     with DEMO_PARSE_LOCK:
         DEMO_PARSE_RUNS[run_id] = {
             "run_id": run_id,
@@ -177,7 +178,9 @@ def _init_demo_run(run_id: str):
             "total": 0,
             "processed": 0,
             "success": 0,
+            "skipped": 0,
             "failed": 0,
+            "force_reprocess": force_reprocess,
             "started_at": _now_iso(),
             "finished_at": None,
             "logs": [],
@@ -204,11 +207,24 @@ def _get_demo_run(run_id: str):
         run = DEMO_PARSE_RUNS.get(run_id)
         return dict(run) if run else None
 
+def _demo_email_id(email: dict) -> str:
+    """Stable id for demo emails based on content so duplicates are skipped."""
+    raw = "|".join(
+        [
+            str(email.get("from", "")),
+            str(email.get("subject", "")),
+            str(email.get("date", "")),
+            str(email.get("body", "")),
+        ]
+    )
+    return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
+
+
 def _prepare_demo_emails(emails):
     demo_rows = []
     for e in emails:
         email = {
-            "id": e.get("id") or uuid.uuid4().hex,
+            "id": e.get("id") or _demo_email_id(e),
             "from": e.get("from", "demo@example.com"),
             "subject": e.get("subject", "Demo receipt"),
             "date": e.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
@@ -217,9 +233,9 @@ def _prepare_demo_emails(emails):
         demo_rows.append(email)
     return demo_rows
 
-def _run_demo_parse(run_id: str):
+def _run_demo_parse(run_id: str, force_reprocess: bool = False):
     from .parser_select import parser_select
-    from .data_helper import log_transaction
+    from .data_helper import get_existing_email_ids, log_transaction
 
     try:
         _update_demo_run(run_id, status="running")
@@ -235,12 +251,20 @@ def _run_demo_parse(run_id: str):
             _update_demo_run(run_id, status="failed", finished_at=_now_iso())
             return
 
-        _update_demo_run(run_id, total=len(emails), processed=0, success=0, failed=0)
+        existing_ids = get_existing_email_ids()
+        _update_demo_run(run_id, total=len(emails), processed=0, success=0, skipped=0, failed=0)
         _append_demo_log(run_id, f"Loaded {len(emails)} demo emails.")
 
         success = 0
+        skipped = 0
         failed = 0
         for idx, email in enumerate(emails, start=1):
+            email_id = email.get("id")
+            if not force_reprocess and email_id in existing_ids:
+                skipped += 1
+                _append_demo_log(run_id, f"[SKIP] Already processed: {email_id}")
+                _update_demo_run(run_id, processed=idx, success=success, skipped=skipped, failed=failed)
+                continue
             subject = (email.get("subject") or "Demo receipt")[:80]
             _append_demo_log(run_id, f"Parsing {idx}/{len(emails)}: {subject}")
             try:
@@ -274,6 +298,8 @@ def _run_demo_parse(run_id: str):
                         _append_demo_log(run_id, f"AI amount/tax raw -> {amount_tax_ai_raw or '(empty)'}")
                     if tx is not None:
                         success += 1
+                        if email_id:
+                            existing_ids.add(email_id)
                         _append_demo_log(run_id, f"Saved: vendor={vendor}, amount=${amount:.2f}")
                     else:
                         failed += 1
@@ -285,7 +311,7 @@ def _run_demo_parse(run_id: str):
                 failed += 1
                 _append_demo_log(run_id, f"Error: {row_error}")
             finally:
-                _update_demo_run(run_id, processed=idx, success=success, failed=failed)
+                _update_demo_run(run_id, processed=idx, success=success, skipped=skipped, failed=failed)
 
         _update_demo_run(run_id, status="completed", finished_at=_now_iso())
         _append_demo_log(run_id, f"Run complete. success={success}, failed={failed}")
@@ -565,15 +591,20 @@ def demo_sync():
     """Generate demo emails with AI, parse them, and store transactions."""
     try:
         from .parser_select import parser_select
-        from .data_helper import log_transaction
+        from .data_helper import get_existing_email_ids, log_transaction
         emails = _generate_demo_emails(10)
         demo_rows = _prepare_demo_emails(emails)
+        existing_ids = get_existing_email_ids()
         for email in demo_rows:
             email_id = email.get("id")
+            if email_id in existing_ids:
+                continue
             try:
                 parsed = parser_select(email)
                 if parsed and isinstance(parsed, dict):
-                    log_transaction(parsed)
+                    saved = log_transaction(parsed)
+                    if saved is not None:
+                        existing_ids.add(email_id)
             except Exception as row_error:
                 print(f"⚠️ Demo parse failed for {email_id}: {row_error}")
                 continue
@@ -595,12 +626,12 @@ def demo_generate():
         raise HTTPException(status_code=500, detail=f"Demo generation failed: {e}")
 
 @app.post("/api/demo-parse")
-def demo_parse():
+def demo_parse(force_reprocess: bool = False):
     """Parse existing demo emails in background and expose progress logs."""
     try:
         run_id = uuid.uuid4().hex
-        _init_demo_run(run_id)
-        thread = threading.Thread(target=_run_demo_parse, args=(run_id,), daemon=True)
+        _init_demo_run(run_id, force_reprocess=force_reprocess)
+        thread = threading.Thread(target=_run_demo_parse, args=(run_id, force_reprocess), daemon=True)
         thread.start()
         return {"status": "started", "run_id": run_id}
     except Exception as e:

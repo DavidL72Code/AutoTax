@@ -35,6 +35,11 @@ let demoParseBtn;
 let demoViewBtn;
 let clearBtn;
 let demoRunLogEl;
+let demoForceToggle;
+let demoRunProcessedEl;
+let demoRunSuccessEl;
+let demoRunSkippedEl;
+let demoRunFailedEl;
 
 // Cached transactions and sort state (so we can re-sort without re-fetching)
 let allTransactions = [];
@@ -68,6 +73,11 @@ document.addEventListener('DOMContentLoaded', function() {
     demoViewBtn = document.querySelector('.btn-demo-view');
     clearBtn = document.querySelector('.btn-clear');
     demoRunLogEl = document.querySelector('#demo-run-log');
+    demoForceToggle = document.querySelector('#demo-force-reprocess');
+    demoRunProcessedEl = document.querySelector('#demo-run-processed');
+    demoRunSuccessEl = document.querySelector('#demo-run-success');
+    demoRunSkippedEl = document.querySelector('#demo-run-skipped');
+    demoRunFailedEl = document.querySelector('#demo-run-failed');
     
     // Initialize animations
     initAnimations();
@@ -650,10 +660,15 @@ function appendDemoRunLog(line) {
 
 function renderDemoRunStatus(status) {
     if (!demoRunLogEl || !status) return;
-    const header = `status=${status.status} processed=${status.processed}/${status.total} success=${status.success} failed=${status.failed}`;
+    const skipped = status.skipped || 0;
+    const header = `status=${status.status} processed=${status.processed}/${status.total} success=${status.success} skipped=${skipped} failed=${status.failed}`;
     const lines = [header].concat(status.logs || []);
     demoRunLogEl.textContent = lines.join('\n');
     demoRunLogEl.scrollTop = demoRunLogEl.scrollHeight;
+    if (demoRunProcessedEl) demoRunProcessedEl.textContent = status.processed ?? 0;
+    if (demoRunSuccessEl) demoRunSuccessEl.textContent = status.success ?? 0;
+    if (demoRunSkippedEl) demoRunSkippedEl.textContent = skipped;
+    if (demoRunFailedEl) demoRunFailedEl.textContent = status.failed ?? 0;
 }
 
 async function runDemoGenerate() {
@@ -695,7 +710,8 @@ async function runDemoParse() {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/demo-parse`, { method: 'POST' });
+        const forceParam = demoForceToggle && demoForceToggle.checked ? '?force_reprocess=true' : '';
+        const response = await fetch(`${API_BASE_URL}/api/demo-parse${forceParam}`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.run_id) {
             throw new Error(result.detail || 'Demo parse failed to start');
