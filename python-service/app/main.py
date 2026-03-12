@@ -3,9 +3,9 @@ from .parser_select import parser_select
 from .data_helper import log_transaction, get_existing_email_ids
 from .database import SessionLocal
 
-def main():
+def main(user_id: int | None = None):
     # Only fetch/parse emails we don't already have (saves parsing and AI)
-    existing_ids = get_existing_email_ids()
+    existing_ids = get_existing_email_ids(user_id=user_id)
     emails = fetch_receipt_emails(existing_ids=existing_ids)
     db = SessionLocal()
     try:
@@ -27,7 +27,7 @@ def main():
                     subject = email.get('subject', 'No Subject')
                     print(f"⚠️  [SKIP] No expenditure (total 0): {subject[:40]}...")
                     continue
-                log_transaction(parsed_data)
+                log_transaction(parsed_data, user_id=user_id)
                 vendor = parsed_data.get('vendor', 'Unknown')
                 date = parsed_data.get('date', 'N/A')
                 display_vendor = (vendor or "Unknown")[:20]

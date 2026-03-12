@@ -2,6 +2,8 @@ import os
 import threading
 import json
 import hashlib
+import secrets
+import base64 as b64
 import uuid
 import random
 import re
@@ -9,9 +11,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from .data_helper import get_all_transactions, delete_zero_amount_transactions
+from .data_helper import get_all_transactions, delete_zero_amount_transactions, get_existing_email_ids
 from .database import SessionLocal
-from .models import Transaction
+from .models import Transaction, User, AuthToken
 from datetime import datetime, timedelta
 import uvicorn
 from dateutil import parser as date_parser
@@ -36,9 +38,149 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+PASSWORD_ITERATIONS = 120_000
+TOKEN_TTL_DAYS = 30
+
+def _hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+    return f"{b64.b64encode(salt).decode()}${b64.b64encode(dk).decode()}"
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        salt_b64, hash_b64 = stored.split("$", 1)
+        salt = b64.b64decode(salt_b64.encode())
+        expected = b64.b64decode(hash_b64.encode())
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+        return secrets.compare_digest(dk, expected)
+    except Exception:
+        return False
+
+def _create_token(user_id: int) -> str:
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(days=TOKEN_TTL_DAYS)
+    db = SessionLocal()
+    try:
+        db.add(AuthToken(user_id=user_id, token=token, expires_at=expires_at))
+        db.commit()
+        return token
+    finally:
+        db.close()
+
+def _claim_legacy_transactions(user_id: int):
+    """Assign legacy transactions (user_id is NULL) to the only user in the system."""
+    db = SessionLocal()
+    try:
+        user_count = db.query(User).count()
+        if user_count != 1:
+            return
+        updated = (
+            db.query(Transaction)
+            .filter(Transaction.user_id.is_(None))
+            .update({Transaction.user_id: user_id})
+        )
+        if updated:
+            db.commit()
+    finally:
+        db.close()
+
+def _get_user_from_request(request: Request):
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    db = SessionLocal()
+    try:
+        row = (
+            db.query(AuthToken, User)
+            .join(User, User.id == AuthToken.user_id)
+            .filter(AuthToken.token == token)
+            .first()
+        )
+        if not row:
+            return None
+        auth_token, user = row
+        if auth_token.expires_at and auth_token.expires_at < datetime.utcnow():
+            db.delete(auth_token)
+            db.commit()
+            return None
+        return user
+    finally:
+        db.close()
+
+def _require_user(request: Request) -> User:
+    user = _get_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
 @app.get("/")
 def root():
     return {"message": "Receipt Automation API", "status": "running"}
+
+@app.post("/api/auth/register")
+def register(payload: dict = Body(...)):
+    username = (payload.get("username") or "").strip().lower()
+    password = payload.get("password") or ""
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters.")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.username == username).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists.")
+        user = User(username=username, password_hash=_hash_password(password))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        _claim_legacy_transactions(user.id)
+        token = _create_token(user.id)
+        return {"token": token, "user": {"id": user.id, "username": user.username}}
+    finally:
+        db.close()
+
+@app.post("/api/auth/login")
+def login(payload: dict = Body(...)):
+    username = (payload.get("username") or "").strip().lower()
+    password = payload.get("password") or ""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        if not user or not _verify_password(password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+        _claim_legacy_transactions(user.id)
+        token = _create_token(user.id)
+        return {"token": token, "user": {"id": user.id, "username": user.username}}
+    finally:
+        db.close()
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return {"status": "ok"}
+    token = auth.split(" ", 1)[1].strip()
+    if not token:
+        return {"status": "ok"}
+    db = SessionLocal()
+    try:
+        row = db.query(AuthToken).filter(AuthToken.token == token).first()
+        if row:
+            db.delete(row)
+            db.commit()
+        return {"status": "ok"}
+    finally:
+        db.close()
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    user = _require_user(request)
+    return {"id": user.id, "username": user.username}
 
 def _nonzero_transactions(transactions):
     """Filter out transactions with amount 0 or None (no expenditure)."""
@@ -56,10 +198,11 @@ def _nonzero_transactions(transactions):
     return out
 
 @app.get("/api/transactions")
-def get_transactions():
+def get_transactions(request: Request):
     """Get all transactions from database (excludes zero-amount)."""
     try:
-        transactions = get_all_transactions()
+        user = _require_user(request)
+        transactions = get_all_transactions(user_id=user.id)
         transactions = _nonzero_transactions(transactions)
         return [
             {
@@ -78,10 +221,11 @@ def get_transactions():
         raise HTTPException(status_code=500, detail=f"Error fetching transactions: {str(e)}")
 
 @app.get("/api/stats")
-def get_stats():
+def get_stats(request: Request):
     """Get dashboard statistics (excludes zero-amount transactions)."""
     try:
-        transactions = _nonzero_transactions(get_all_transactions())
+        user = _require_user(request)
+        transactions = _nonzero_transactions(get_all_transactions(user_id=user.id))
         total_spent = sum(t.amount for t in transactions if t.amount)
         total_receipts = len(transactions)
         unique_vendors = len(set(t.vendor for t in transactions if t.vendor))
@@ -97,10 +241,11 @@ def get_stats():
         raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
 
 @app.get("/api/top-vendors")
-def get_top_vendors():
+def get_top_vendors(request: Request):
     """Get top vendors by spending (excludes zero-amount transactions)."""
     try:
-        transactions = _nonzero_transactions(get_all_transactions())
+        user = _require_user(request)
+        transactions = _nonzero_transactions(get_all_transactions(user_id=user.id))
         # Group by vendor
         vendor_totals = {}
         vendor_counts = {}
@@ -131,24 +276,25 @@ def get_top_vendors():
         raise HTTPException(status_code=500, detail=f"Error fetching top vendors: {str(e)}")
 
 @app.post("/api/cleanup-zero")
-def cleanup_zero_transactions():
+def cleanup_zero_transactions(request: Request):
     """Delete all transactions with amount 0 or null from the database. Returns count removed."""
     try:
-        deleted = delete_zero_amount_transactions()
+        user = _require_user(request)
+        deleted = delete_zero_amount_transactions(user_id=user.id)
         return {"status": "success", "deleted": deleted, "message": f"Removed {deleted} zero-amount transaction(s)."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
-def _run_sync():
+def _run_sync(user_id: int):
     """Run email sync in background (avoids request timeouts). Auto-removes $0 transactions after sync."""
     try:
         from .main import main
         print("🔄 Starting email sync...")
-        main()
-        deleted = delete_zero_amount_transactions()
+        main(user_id=user_id)
+        deleted = delete_zero_amount_transactions(user_id=user_id)
         if deleted:
             print(f"🧹 Removed {deleted} zero-amount transaction(s) after sync.")
-        _print_db_snapshot()
+        _print_db_snapshot(user_id=user_id)
         print("✅ Email sync completed")
     except Exception as e:
         print(f"❌ Sync failed: {e}")
@@ -170,10 +316,11 @@ def _demo_emails_path() -> Path:
 def _now_iso() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
-def _init_demo_run(run_id: str, force_reprocess: bool = False):
+def _init_demo_run(run_id: str, user_id: int, force_reprocess: bool = False):
     with DEMO_PARSE_LOCK:
         DEMO_PARSE_RUNS[run_id] = {
             "run_id": run_id,
+            "user_id": user_id,
             "status": "queued",
             "total": 0,
             "processed": 0,
@@ -233,7 +380,7 @@ def _prepare_demo_emails(emails):
         demo_rows.append(email)
     return demo_rows
 
-def _run_demo_parse(run_id: str, force_reprocess: bool = False):
+def _run_demo_parse(run_id: str, user_id: int, force_reprocess: bool = False):
     from .parser_select import parser_select
     from .data_helper import get_existing_email_ids, log_transaction
 
@@ -251,7 +398,7 @@ def _run_demo_parse(run_id: str, force_reprocess: bool = False):
             _update_demo_run(run_id, status="failed", finished_at=_now_iso())
             return
 
-        existing_ids = get_existing_email_ids()
+        existing_ids = get_existing_email_ids(user_id=user_id)
         _update_demo_run(run_id, total=len(emails), processed=0, success=0, skipped=0, failed=0)
         _append_demo_log(run_id, f"Loaded {len(emails)} demo emails.")
 
@@ -270,7 +417,7 @@ def _run_demo_parse(run_id: str, force_reprocess: bool = False):
             try:
                 parsed = parser_select(email)
                 if parsed and isinstance(parsed, dict):
-                    tx = log_transaction(parsed)
+                    tx = log_transaction(parsed, user_id=user_id)
                     vendor = parsed.get("vendor", "Unknown")
                     amount = float(parsed.get("amount") or 0.0)
                     meta = parsed.get("_meta") or {}
@@ -553,16 +700,14 @@ Rules:
         })
     return out
 
-def _print_db_snapshot(limit: int = 50):
+def _print_db_snapshot(limit: int = 50, user_id: int | None = None):
     """Print a snapshot of the latest transactions (date, vendor, amount)."""
     db = SessionLocal()
     try:
-        rows = (
-            db.query(Transaction)
-            .order_by(Transaction.id.desc())
-            .limit(limit)
-            .all()
-        )
+        query = db.query(Transaction)
+        if user_id is not None:
+            query = query.filter(Transaction.user_id == user_id)
+        rows = query.order_by(Transaction.id.desc()).limit(limit).all()
         print("🧾 DB Snapshot (latest transactions):")
         if not rows:
             print("  (no rows found)")
@@ -579,22 +724,23 @@ def _print_db_snapshot(limit: int = 50):
 def sync_emails(request: Request):
     """Start email scraper in background; returns immediately so the request doesn't timeout."""
     try:
-        _require_api_key(request)
-        thread = threading.Thread(target=_run_sync, daemon=True)
+        user = _require_user(request)
+        thread = threading.Thread(target=_run_sync, args=(user.id,), daemon=True)
         thread.start()
         return {"status": "success", "message": "Sync started. Fetching and parsing emails in the background—refresh in a minute to see new receipts."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed to start: {str(e)}")
 
 @app.post("/api/demo-sync")
-def demo_sync():
+def demo_sync(request: Request):
     """Generate demo emails with AI, parse them, and store transactions."""
     try:
+        user = _require_user(request)
         from .parser_select import parser_select
         from .data_helper import get_existing_email_ids, log_transaction
         emails = _generate_demo_emails(10)
         demo_rows = _prepare_demo_emails(emails)
-        existing_ids = get_existing_email_ids()
+        existing_ids = get_existing_email_ids(user_id=user.id)
         for email in demo_rows:
             email_id = email.get("id")
             if email_id in existing_ids:
@@ -602,7 +748,7 @@ def demo_sync():
             try:
                 parsed = parser_select(email)
                 if parsed and isinstance(parsed, dict):
-                    saved = log_transaction(parsed)
+                    saved = log_transaction(parsed, user_id=user.id)
                     if saved is not None:
                         existing_ids.add(email_id)
             except Exception as row_error:
@@ -615,9 +761,10 @@ def demo_sync():
         raise HTTPException(status_code=500, detail=f"Demo sync failed: {e}")
 
 @app.post("/api/demo-generate")
-def demo_generate():
+def demo_generate(request: Request):
     """Generate demo emails only (no parsing)."""
     try:
+        _require_user(request)
         emails = _generate_demo_emails(10)
         demo_rows = _prepare_demo_emails(emails)
         _demo_emails_path().write_text(json.dumps(demo_rows, indent=2))
@@ -626,27 +773,32 @@ def demo_generate():
         raise HTTPException(status_code=500, detail=f"Demo generation failed: {e}")
 
 @app.post("/api/demo-parse")
-def demo_parse(force_reprocess: bool = False):
+def demo_parse(request: Request, force_reprocess: bool = False):
     """Parse existing demo emails in background and expose progress logs."""
     try:
+        user = _require_user(request)
         run_id = uuid.uuid4().hex
-        _init_demo_run(run_id, force_reprocess=force_reprocess)
-        thread = threading.Thread(target=_run_demo_parse, args=(run_id, force_reprocess), daemon=True)
+        _init_demo_run(run_id, user_id=user.id, force_reprocess=force_reprocess)
+        thread = threading.Thread(target=_run_demo_parse, args=(run_id, user.id, force_reprocess), daemon=True)
         thread.start()
         return {"status": "started", "run_id": run_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Demo parse failed to start: {e}")
 
 @app.get("/api/demo-parse-status")
-def demo_parse_status(run_id: str):
+def demo_parse_status(request: Request, run_id: str):
+    user = _require_user(request)
     run = _get_demo_run(run_id)
     if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.get("user_id") != user.id:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
 
 @app.get("/api/demo-emails")
-def demo_emails():
+def demo_emails(request: Request):
     """Return last generated demo emails."""
+    _require_user(request)
     path = _demo_emails_path()
     if not path.exists():
         return []
@@ -657,11 +809,11 @@ def demo_emails():
 
 @app.delete("/api/transactions/clear")
 def clear_transactions(request: Request):
-    """Delete all transactions (protected by API key)."""
-    _require_api_key(request)
+    """Delete all transactions for the current user."""
+    user = _require_user(request)
     db = SessionLocal()
     try:
-        deleted = db.query(Transaction).delete()
+        deleted = db.query(Transaction).filter(Transaction.user_id == user.id).delete()
         db.commit()
         return {"status": "success", "deleted": deleted}
     finally:
@@ -739,11 +891,15 @@ async def vendor_pie(request: Request):
         raise HTTPException(status_code=500, detail=f"Chart generation failed: {e}")
 
 @app.put("/api/transactions/{transaction_id}")
-def update_transaction(transaction_id: int, payload: dict = Body(...)):
+def update_transaction(request: Request, transaction_id: int, payload: dict = Body(...)):
     """Update a transaction's vendor, amount, tax, or date."""
+    user = _require_user(request)
     db = SessionLocal()
     try:
-        tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+        tx = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user.id
+        ).first()
         if not tx:
             raise HTTPException(status_code=404, detail="Transaction not found")
 
@@ -774,11 +930,15 @@ def update_transaction(transaction_id: int, payload: dict = Body(...)):
         db.close()
 
 @app.delete("/api/transactions/{transaction_id}")
-def delete_transaction(transaction_id: int):
+def delete_transaction(request: Request, transaction_id: int):
     """Delete a transaction by ID."""
+    user = _require_user(request)
     db = SessionLocal()
     try:
-        tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+        tx = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user.id
+        ).first()
         if not tx:
             raise HTTPException(status_code=404, detail="Transaction not found")
         db.delete(tx)

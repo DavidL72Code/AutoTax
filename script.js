@@ -40,6 +40,19 @@ let demoRunProcessedEl;
 let demoRunSuccessEl;
 let demoRunSkippedEl;
 let demoRunFailedEl;
+let loginBtn;
+let signupBtn;
+let authModal;
+let authCloseBtn;
+let authTabLogin;
+let authTabSignup;
+let authFormLogin;
+let authFormSignup;
+let authLoginUsername;
+let authLoginPassword;
+let authSignupUsername;
+let authSignupPassword;
+let currentUser = null;
 
 // Cached transactions and sort state (so we can re-sort without re-fetching)
 let allTransactions = [];
@@ -78,6 +91,18 @@ document.addEventListener('DOMContentLoaded', function() {
     demoRunSuccessEl = document.querySelector('#demo-run-success');
     demoRunSkippedEl = document.querySelector('#demo-run-skipped');
     demoRunFailedEl = document.querySelector('#demo-run-failed');
+    loginBtn = document.querySelector('.btn-login');
+    signupBtn = document.querySelector('.btn-signup');
+    authModal = document.querySelector('#auth-modal');
+    authCloseBtn = document.querySelector('#auth-close');
+    authTabLogin = document.querySelector('#auth-tab-login');
+    authTabSignup = document.querySelector('#auth-tab-signup');
+    authFormLogin = document.querySelector('#auth-form-login');
+    authFormSignup = document.querySelector('#auth-form-signup');
+    authLoginUsername = document.querySelector('#auth-login-username');
+    authLoginPassword = document.querySelector('#auth-login-password');
+    authSignupUsername = document.querySelector('#auth-signup-username');
+    authSignupPassword = document.querySelector('#auth-signup-password');
     
     // Initialize animations
     initAnimations();
@@ -86,10 +111,18 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     
     // Load real data from API
-    loadDashboardData();
+    bootstrapAuth().then(() => {
+        if (currentUser) {
+            loadDashboardData();
+        }
+    });
     
     // Auto-refresh table and stats every 10s so new syncs show up without manual refresh
-    setInterval(loadDashboardData, 10000);
+    setInterval(() => {
+        if (currentUser) {
+            loadDashboardData();
+        }
+    }, 10000);
 });
 
 // Animations for elements on page load
@@ -193,6 +226,161 @@ function setupEventListeners() {
     if (modalDeleteBtn) {
         modalDeleteBtn.addEventListener('click', deleteTransaction);
     }
+
+    if (loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            openAuthModal('login');
+        });
+    }
+    if (signupBtn) {
+        signupBtn.addEventListener('click', function() {
+            if (currentUser) {
+                logoutUser();
+            } else {
+                openAuthModal('signup');
+            }
+        });
+    }
+    if (authCloseBtn) {
+        authCloseBtn.addEventListener('click', closeAuthModal);
+    }
+    if (authTabLogin) {
+        authTabLogin.addEventListener('click', function() { setAuthMode('login'); });
+    }
+    if (authTabSignup) {
+        authTabSignup.addEventListener('click', function() { setAuthMode('signup'); });
+    }
+    if (authFormLogin) {
+        authFormLogin.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitLogin();
+        });
+    }
+    if (authFormSignup) {
+        authFormSignup.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitSignup();
+        });
+    }
+}
+
+function openAuthModal(mode) {
+    if (!authModal) return;
+    setAuthMode(mode || 'login');
+    authModal.classList.add('show');
+    authModal.hidden = false;
+    authModal.style.display = 'flex';
+}
+
+function closeAuthModal() {
+    if (!authModal) return;
+    authModal.classList.remove('show');
+    authModal.hidden = true;
+    authModal.style.display = 'none';
+}
+
+function setAuthMode(mode) {
+    const isLogin = mode === 'login';
+    if (authTabLogin) authTabLogin.classList.toggle('auth-tab-active', isLogin);
+    if (authTabSignup) authTabSignup.classList.toggle('auth-tab-active', !isLogin);
+    if (authFormLogin) authFormLogin.hidden = !isLogin;
+    if (authFormSignup) authFormSignup.hidden = isLogin;
+    const title = isLogin ? 'Log in' : 'Sign up';
+    const titleEl = document.querySelector('#auth-modal-title');
+    if (titleEl) titleEl.textContent = title;
+}
+
+function setAuthState(user) {
+    currentUser = user || null;
+    if (loginBtn) {
+        loginBtn.textContent = currentUser ? currentUser.username : 'Log in';
+    }
+    if (signupBtn) {
+        signupBtn.textContent = currentUser ? 'Log out' : 'Get Started';
+    }
+}
+
+async function bootstrapAuth() {
+    const token = localStorage.getItem('AUTH_TOKEN');
+    if (!token) {
+        setAuthState(null);
+        return;
+    }
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/auth/me`, { cache: 'no-store' });
+        if (!response.ok) {
+            localStorage.removeItem('AUTH_TOKEN');
+            setAuthState(null);
+            return;
+        }
+        const user = await response.json();
+        setAuthState(user);
+    } catch (error) {
+        setAuthState(null);
+    }
+}
+
+async function submitLogin() {
+    if (!authLoginUsername || !authLoginPassword) return;
+    const username = authLoginUsername.value.trim();
+    const password = authLoginPassword.value;
+    if (!username || !password) {
+        showError('Enter your username and password.');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(result.detail || 'Login failed');
+        }
+        localStorage.setItem('AUTH_TOKEN', result.token);
+        setAuthState(result.user);
+        closeAuthModal();
+        loadDashboardData();
+    } catch (error) {
+        showError(error.message || 'Login failed.');
+    }
+}
+
+async function submitSignup() {
+    if (!authSignupUsername || !authSignupPassword) return;
+    const username = authSignupUsername.value.trim();
+    const password = authSignupPassword.value;
+    if (!username || !password) {
+        showError('Enter a username and password.');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(result.detail || 'Signup failed');
+        }
+        localStorage.setItem('AUTH_TOKEN', result.token);
+        setAuthState(result.user);
+        closeAuthModal();
+        loadDashboardData();
+    } catch (error) {
+        showError(error.message || 'Signup failed.');
+    }
+}
+
+async function logoutUser() {
+    const token = localStorage.getItem('AUTH_TOKEN');
+    if (token) {
+        await authFetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST' });
+    }
+    localStorage.removeItem('AUTH_TOKEN');
+    setAuthState(null);
 }
 
 // Load all dashboard data from API
@@ -217,7 +405,7 @@ async function loadDashboardData() {
 // Load transactions from API
 async function loadTransactions() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/transactions`, { cache: 'no-store' });
+        const response = await authFetch(`${API_BASE_URL}/api/transactions`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -247,7 +435,7 @@ async function loadTransactions() {
 // Load statistics from API
 async function loadStats() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/stats`, { cache: 'no-store' });
+        const response = await authFetch(`${API_BASE_URL}/api/stats`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -270,7 +458,7 @@ async function loadStats() {
 // Load top vendors from API
 async function loadTopVendors() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/top-vendors`, { cache: 'no-store' });
+        const response = await authFetch(`${API_BASE_URL}/api/top-vendors`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -644,11 +832,25 @@ async function syncEmails() {
 
 function buildAuthHeaders() {
     const headers = {};
-    const key = localStorage.getItem('SYNC_API_KEY');
-    if (key) {
-        headers['X-API-Key'] = key;
+    const token = localStorage.getItem('AUTH_TOKEN');
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
+}
+
+function handleAuthRequired() {
+    showError('Please log in to view your data.');
+    openAuthModal('login');
+}
+
+async function authFetch(url, options = {}) {
+    const headers = Object.assign({}, options.headers || {}, buildAuthHeaders());
+    const response = await fetch(url, Object.assign({}, options, { headers }));
+    if (response.status === 401) {
+        handleAuthRequired();
+    }
+    return response;
 }
 
 function appendDemoRunLog(line) {
@@ -677,7 +879,7 @@ async function runDemoGenerate() {
     demoGenerateBtn.innerHTML = '<span>⏳</span> Generating...';
     demoGenerateBtn.disabled = true;
     try {
-        const response = await fetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
+        const response = await authFetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(result.detail || 'Demo generation failed');
@@ -711,7 +913,7 @@ async function runDemoParse() {
 
     try {
         const forceParam = demoForceToggle && demoForceToggle.checked ? '?force_reprocess=true' : '';
-        const response = await fetch(`${API_BASE_URL}/api/demo-parse${forceParam}`, { method: 'POST' });
+        const response = await authFetch(`${API_BASE_URL}/api/demo-parse${forceParam}`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.run_id) {
             throw new Error(result.detail || 'Demo parse failed to start');
@@ -734,7 +936,7 @@ function startDemoParsePolling(originalHTML) {
     if (!activeDemoRunId) return;
     demoParsePollTimer = setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/demo-parse-status?run_id=${encodeURIComponent(activeDemoRunId)}`, {
+            const response = await authFetch(`${API_BASE_URL}/api/demo-parse-status?run_id=${encodeURIComponent(activeDemoRunId)}`, {
                 cache: 'no-store'
             });
             const result = await response.json().catch(() => ({}));
@@ -781,7 +983,7 @@ async function clearAllTransactions() {
     clearBtn.innerHTML = '<span>⏳</span> Clearing...';
     clearBtn.disabled = true;
     try {
-        const response = await fetch(`${API_BASE_URL}/api/transactions/clear`, {
+        const response = await authFetch(`${API_BASE_URL}/api/transactions/clear`, {
             method: 'DELETE',
             headers: buildAuthHeaders()
         });
@@ -1153,9 +1355,9 @@ async function saveTransactionEdits() {
         date: editDateInput ? editDateInput.value : undefined
     };
     try {
-        const response = await fetch(`${API_BASE_URL}/api/transactions/${activeTransactionId}`, {
+        const response = await authFetch(`${API_BASE_URL}/api/transactions/${activeTransactionId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign({ 'Content-Type': 'application/json' }, buildAuthHeaders()),
             body: JSON.stringify(payload)
         });
         const result = await response.json().catch(() => ({}));
@@ -1172,8 +1374,9 @@ async function saveTransactionEdits() {
 async function deleteTransaction() {
     if (!activeTransactionId) return;
     try {
-        const response = await fetch(`${API_BASE_URL}/api/transactions/${activeTransactionId}`, {
-            method: 'DELETE'
+        const response = await authFetch(`${API_BASE_URL}/api/transactions/${activeTransactionId}`, {
+            method: 'DELETE',
+            headers: buildAuthHeaders()
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime,Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -6,8 +6,10 @@ from datetime import datetime
 Base=declarative_base()
 class Transaction(Base):
     __tablename__="transactions"
+    __table_args__ = (UniqueConstraint("user_id", "email_id", name="uq_user_email"),)
     id=Column(Integer,primary_key=True,index=True)
-    email_id=Column(String(255),unique=True,nullable=False,index=True)
+    user_id=Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    email_id=Column(String(255),nullable=False,index=True)
     vendor=Column(String(255),nullable=False,index=True)
     amount=Column(Float,nullable=False)
     tax=Column(Float,nullable=True)
@@ -33,3 +35,23 @@ class Vendor(Base):
 
     def __repr__(self):
         return f"<Vendor {self.name}>"  
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(150), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<User {self.username}>"
+
+class AuthToken(Base):
+    __tablename__ = "auth_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)

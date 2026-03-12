@@ -8,11 +8,27 @@ const API_BASE_URL = (() => {
     return 'https://autotax-xwly.onrender.com';
 })();
 
+function buildAuthHeaders() {
+    const headers = {};
+    const token = localStorage.getItem('AUTH_TOKEN');
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+}
+
 async function loadDemoEmails() {
     const grid = document.querySelector('#demo-grid');
     if (!grid) return;
     try {
-        const response = await fetch(`${API_BASE_URL}/api/demo-emails`, { cache: 'no-store' });
+        const response = await fetch(`${API_BASE_URL}/api/demo-emails`, {
+            cache: 'no-store',
+            headers: buildAuthHeaders()
+        });
+        if (response.status === 401) {
+            grid.innerHTML = '<div class="demo-empty">Please log in on the main page to view demo emails.</div>';
+            return;
+        }
         const emails = await response.json();
         grid.innerHTML = '';
         if (!emails.length) {
