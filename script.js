@@ -10,6 +10,7 @@ const API_BASE_URL = (() => {
     if (forced) return forced;
     return 'https://autotax-xwly.onrender.com';
 })();
+const DEMO_MODE = Boolean(window.DEMO_MODE);
 
 // DOM Elements
 let searchInput;
@@ -112,8 +113,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load real data from API
     bootstrapAuth().then(() => {
-        if (currentUser) {
+        if (DEMO_MODE || currentUser) {
             loadDashboardData();
+            if (DEMO_MODE) {
+                loadDemoEmails();
+            }
         }
     });
     
@@ -405,7 +409,8 @@ async function loadDashboardData() {
 // Load transactions from API
 async function loadTransactions() {
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/transactions`, { cache: 'no-store' });
+        const endpoint = DEMO_MODE ? '/api/demo/transactions' : '/api/transactions';
+        const response = await authFetch(`${API_BASE_URL}${endpoint}`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -435,7 +440,8 @@ async function loadTransactions() {
 // Load statistics from API
 async function loadStats() {
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/stats`, { cache: 'no-store' });
+        const endpoint = DEMO_MODE ? '/api/demo/stats' : '/api/stats';
+        const response = await authFetch(`${API_BASE_URL}${endpoint}`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -458,7 +464,8 @@ async function loadStats() {
 // Load top vendors from API
 async function loadTopVendors() {
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/top-vendors`, { cache: 'no-store' });
+        const endpoint = DEMO_MODE ? '/api/demo/top-vendors' : '/api/top-vendors';
+        const response = await authFetch(`${API_BASE_URL}${endpoint}`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -789,6 +796,9 @@ function filterTransactions(searchTerm) {
 // Sync emails via API (sync runs in background on server; this returns right away)
 async function syncEmails() {
     if (!syncBtn) return;
+    if (DEMO_MODE) {
+        return;
+    }
     
     const originalHTML = syncBtn.innerHTML;
     const previousSignature = buildTransactionSignature(allTransactions);
@@ -873,6 +883,39 @@ function renderDemoRunStatus(status) {
     if (demoRunFailedEl) demoRunFailedEl.textContent = status.failed ?? 0;
 }
 
+async function loadDemoEmails() {
+    const grid = document.querySelector('#demo-grid');
+    if (!grid) return;
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/demo-emails`, { cache: 'no-store' });
+        if (response.status === 401) {
+            grid.innerHTML = '<div class="demo-empty">Please log in to view demo emails.</div>';
+            return;
+        }
+        const emails = await response.json();
+        grid.innerHTML = '';
+        if (!emails.length) {
+            grid.innerHTML = '<div class="demo-empty">No demo emails yet. Run Demo Generate first.</div>';
+            return;
+        }
+        emails.forEach(email => {
+            const card = document.createElement('div');
+            card.className = 'demo-card';
+            card.innerHTML = `
+                <div class="demo-card-header">
+                    <span class="demo-subject">${email.subject || 'Demo Receipt'}</span>
+                    <span class="demo-date">${email.date || ''}</span>
+                </div>
+                <div class="demo-from">${email.from || ''}</div>
+                <div class="demo-body">${email.body || ''}</div>
+            `;
+            grid.appendChild(card);
+        });
+    } catch (error) {
+        grid.innerHTML = '<div class="demo-empty">Failed to load demo emails.</div>';
+    }
+}
+
 async function runDemoGenerate() {
     if (!demoGenerateBtn) return;
     const originalHTML = demoGenerateBtn.innerHTML;
@@ -886,6 +929,9 @@ async function runDemoGenerate() {
         }
         demoGenerateBtn.innerHTML = '<span>✓</span> Demo Emails Ready';
         appendDemoRunLog(`Generated ${result.count || 0} demo emails.`);
+        if (DEMO_MODE) {
+            await loadDemoEmails();
+        }
         setTimeout(() => {
             demoGenerateBtn.innerHTML = originalHTML;
             demoGenerateBtn.disabled = false;
@@ -950,6 +996,9 @@ function startDemoParsePolling(originalHTML) {
                 if (result.status === 'completed') {
                     demoParseBtn.innerHTML = '<span>✓</span> Parse Complete';
                     await loadDashboardData();
+                    if (DEMO_MODE) {
+                        await loadDemoEmails();
+                    }
                 } else {
                     demoParseBtn.innerHTML = '<span>⚠</span> Parse Failed';
                 }
@@ -983,7 +1032,8 @@ async function clearAllTransactions() {
     clearBtn.innerHTML = '<span>⏳</span> Clearing...';
     clearBtn.disabled = true;
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/transactions/clear`, {
+        const endpoint = DEMO_MODE ? '/api/demo/clear' : '/api/transactions/clear';
+        const response = await authFetch(`${API_BASE_URL}${endpoint}`, {
             method: 'DELETE',
             headers: buildAuthHeaders()
         });

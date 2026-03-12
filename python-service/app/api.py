@@ -116,6 +116,21 @@ def _require_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user
 
+def _get_demo_user() -> User:
+    """Ensure a shared demo user exists and return it."""
+    db = SessionLocal()
+    try:
+        demo = db.query(User).filter(User.username == "demo").first()
+        if demo:
+            return demo
+        demo = User(username="demo", password_hash=_hash_password(secrets.token_urlsafe(16)))
+        db.add(demo)
+        db.commit()
+        db.refresh(demo)
+        return demo
+    finally:
+        db.close()
+
 @app.get("/")
 def root():
     return {"message": "Receipt Automation API", "status": "running"}
@@ -735,12 +750,12 @@ def sync_emails(request: Request):
 def demo_sync(request: Request):
     """Generate demo emails with AI, parse them, and store transactions."""
     try:
-        user = _require_user(request)
+        demo_user = _get_demo_user()
         from .parser_select import parser_select
         from .data_helper import get_existing_email_ids, log_transaction
         emails = _generate_demo_emails(10)
         demo_rows = _prepare_demo_emails(emails)
-        existing_ids = get_existing_email_ids(user_id=user.id)
+        existing_ids = get_existing_email_ids(user_id=demo_user.id)
         for email in demo_rows:
             email_id = email.get("id")
             if email_id in existing_ids:
@@ -748,7 +763,7 @@ def demo_sync(request: Request):
             try:
                 parsed = parser_select(email)
                 if parsed and isinstance(parsed, dict):
-                    saved = log_transaction(parsed, user_id=user.id)
+                    saved = log_transaction(parsed, user_id=demo_user.id)
                     if saved is not None:
                         existing_ids.add(email_id)
             except Exception as row_error:
@@ -764,7 +779,6 @@ def demo_sync(request: Request):
 def demo_generate(request: Request):
     """Generate demo emails only (no parsing)."""
     try:
-        _require_user(request)
         emails = _generate_demo_emails(10)
         demo_rows = _prepare_demo_emails(emails)
         _demo_emails_path().write_text(json.dumps(demo_rows, indent=2))
@@ -776,10 +790,10 @@ def demo_generate(request: Request):
 def demo_parse(request: Request, force_reprocess: bool = False):
     """Parse existing demo emails in background and expose progress logs."""
     try:
-        user = _require_user(request)
+        demo_user = _get_demo_user()
         run_id = uuid.uuid4().hex
-        _init_demo_run(run_id, user_id=user.id, force_reprocess=force_reprocess)
-        thread = threading.Thread(target=_run_demo_parse, args=(run_id, user.id, force_reprocess), daemon=True)
+        _init_demo_run(run_id, user_id=demo_user.id, force_reprocess=force_reprocess)
+        thread = threading.Thread(target=_run_demo_parse, args=(run_id, demo_user.id, force_reprocess), daemon=True)
         thread.start()
         return {"status": "started", "run_id": run_id}
     except Exception as e:
@@ -787,18 +801,17 @@ def demo_parse(request: Request, force_reprocess: bool = False):
 
 @app.get("/api/demo-parse-status")
 def demo_parse_status(request: Request, run_id: str):
-    user = _require_user(request)
+    demo_user = _get_demo_user()
     run = _get_demo_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    if run.get("user_id") != user.id:
+    if run.get("user_id") != demo_user.id:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
 
 @app.get("/api/demo-emails")
 def demo_emails(request: Request):
     """Return last generated demo emails."""
-    _require_user(request)
     path = _demo_emails_path()
     if not path.exists():
         return []
@@ -806,6 +819,79 @@ def demo_emails(request: Request):
         return json.loads(path.read_text())
     except Exception:
         return []
+
+@app.get("/api/demo/transactions")
+def get_demo_transactions(request: Request):
+    """Get demo transactions (shared demo user)."""
+    demo_user = _get_demo_user()
+    transactions = get_all_transactions(user_id=demo_user.id)
+    transactions = _nonzero_transactions(transactions)
+    return [
+        {
+            "id": t.id,
+            "date": t.date.strftime('%Y-%m-%d') if isinstance(t.date, datetime) else str(t.date),
+            "vendor": t.vendor or "Unknown",
+            "amount": float(t.amount) if t.amount else 0.0,
+            "tax": float(t.tax) if t.tax else 0.0,
+            "email_id": t.email_id,
+            "category": t.category,
+            "payment_method": t.payment_method
+        }
+        for t in transactions
+    ]
+
+@app.get("/api/demo/stats")
+def get_demo_stats(request: Request):
+    """Get demo stats (shared demo user)."""
+    demo_user = _get_demo_user()
+    transactions = _nonzero_transactions(get_all_transactions(user_id=demo_user.id))
+    total_spent = sum(t.amount for t in transactions if t.amount)
+    total_receipts = len(transactions)
+    unique_vendors = len(set(t.vendor for t in transactions if t.vendor))
+    avg_transaction = total_spent / total_receipts if total_receipts > 0 else 0
+    return {
+        "total_spent": round(total_spent, 2),
+        "total_receipts": total_receipts,
+        "unique_vendors": unique_vendors,
+        "avg_transaction": round(avg_transaction, 2)
+    }
+
+@app.get("/api/demo/top-vendors")
+def get_demo_top_vendors(request: Request):
+    """Get top demo vendors by spending (shared demo user)."""
+    demo_user = _get_demo_user()
+    transactions = _nonzero_transactions(get_all_transactions(user_id=demo_user.id))
+    vendor_totals = {}
+    vendor_counts = {}
+    for t in transactions:
+        vendor = t.vendor or "Unknown"
+        amount = t.amount or 0
+        if vendor not in vendor_totals:
+            vendor_totals[vendor] = 0
+            vendor_counts[vendor] = 0
+        vendor_totals[vendor] += amount
+        vendor_counts[vendor] += 1
+    top_vendors = sorted(vendor_totals.items(), key=lambda x: x[1], reverse=True)[:4]
+    return [
+        {
+            "vendor": vendor,
+            "total": round(amount, 2),
+            "count": vendor_counts[vendor]
+        }
+        for vendor, amount in top_vendors
+    ]
+
+@app.delete("/api/demo/clear")
+def clear_demo_transactions(request: Request):
+    """Clear all demo transactions."""
+    demo_user = _get_demo_user()
+    db = SessionLocal()
+    try:
+        deleted = db.query(Transaction).filter(Transaction.user_id == demo_user.id).delete()
+        db.commit()
+        return {"status": "success", "deleted": deleted}
+    finally:
+        db.close()
 
 @app.delete("/api/transactions/clear")
 def clear_transactions(request: Request):

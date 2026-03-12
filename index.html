@@ -17,6 +17,7 @@
             <div class="nav-links">
                 <a href="#dashboard">Transactions</a>
                 <a href="#top-vendors">Top Vendors</a>
+                <a href="demo.html">Demo</a>
             </div>
             <div class="nav-actions">
                 <button class="btn-login">Log in</button>
@@ -154,15 +155,6 @@
                     <button class="btn-action">
                         <span>📥</span> Export CSV
                     </button>
-                    <button class="btn-action btn-demo-generate">
-                        <span>🧪</span> Generate Demo
-                    </button>
-                    <button class="btn-action btn-demo-parse">
-                        <span>⚙️</span> Parse Demo
-                    </button>
-                    <a class="btn-action btn-demo-view" href="demo.html" target="_blank" rel="noopener">
-                        <span>📨</span> Demo Emails
-                    </a>
                     <button class="btn-action btn-clear">
                         <span>🧹</span> Clear All
                     </button>
@@ -174,20 +166,8 @@
 
             <div class="demo-run-panel">
                 <div class="demo-run-header">
-                    <h3 class="demo-run-title">Demo Parse Log</h3>
-                    <p class="demo-run-subtitle">Live parser output from the current demo parse run.</p>
-                </div>
-                <div class="demo-run-controls">
-                    <label class="demo-toggle">
-                        <input type="checkbox" id="demo-force-reprocess">
-                        <span>Force reprocess (uses extra AI calls)</span>
-                    </label>
-                    <div class="demo-run-stats">
-                        <span><strong id="demo-run-processed">0</strong> processed</span>
-                        <span><strong id="demo-run-success">0</strong> saved</span>
-                        <span><strong id="demo-run-skipped">0</strong> skipped</span>
-                        <span><strong id="demo-run-failed">0</strong> failed</span>
-                    </div>
+                    <h3 class="demo-run-title">Parser Log</h3>
+                    <p class="demo-run-subtitle">Live parser output from the most recent run.</p>
                 </div>
                 <pre id="demo-run-log" class="demo-run-log">No demo parse run yet.</pre>
             </div>

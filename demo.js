@@ -25,10 +25,6 @@ async function loadDemoEmails() {
             cache: 'no-store',
             headers: buildAuthHeaders()
         });
-        if (response.status === 401) {
-            grid.innerHTML = '<div class="demo-empty">Please log in on the main page to view demo emails.</div>';
-            return;
-        }
         const emails = await response.json();
         grid.innerHTML = '';
         if (!emails.length) {
