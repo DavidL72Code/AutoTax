@@ -159,8 +159,11 @@
                     <button class="btn-action">
                         <span>📥</span> Export CSV
                     </button>
-                    <button class="btn-action btn-demo">
-                        <span>🧪</span> Demo Sync
+                    <button class="btn-action btn-demo-generate">
+                        <span>🧪</span> Generate Demo
+                    </button>
+                    <button class="btn-action btn-demo-parse">
+                        <span>⚙️</span> Parse Demo
                     </button>
                     <a class="btn-action btn-demo-view" href="demo.html" target="_blank" rel="noopener">
                         <span>📨</span> Demo Emails
@@ -172,6 +175,14 @@
                         <span>🔄</span> Sync Emails
                     </button>
                 </div>
+            </div>
+
+            <div class="demo-run-panel">
+                <div class="demo-run-header">
+                    <h3 class="demo-run-title">Demo Parse Log</h3>
+                    <p class="demo-run-subtitle">Live parser output from the current demo parse run.</p>
+                </div>
+                <pre id="demo-run-log" class="demo-run-log">No demo parse run yet.</pre>
             </div>
 
             <!-- Transactions Table -->

@@ -14,8 +14,10 @@ services:
         value: production
       - key: LOG_LEVEL
         value: info
-      - key: ANTHROPIC_API_KEY
+      - key: GOOGLE_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
       - key: OPENAI_API_KEY
         sync: false
 

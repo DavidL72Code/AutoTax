@@ -14,8 +14,9 @@ class Settings(BaseSettings):
 
     # Required settings :str must be string and gets value from .env using pydantic
     database_url: str = f"sqlite:///{_DEFAULT_DB}"
-    anthropic_api_key: str = "local_ollama"
-    openai_api_key: Optional[str] = None  # can be string or not app works without it using OpenAi as backup
+    google_api_key: Optional[str] = None
+    gemini_model: str = "models/gemma-3-27b-it"
+    openai_api_key: Optional[str] = None  # reserved for future fallback provider support
 
     # gets mode and log should be string in env if not defaults to dev and info
     app_env: str = "development"
@@ -26,4 +27,3 @@ settings = Settings()
 # Defensive: if the DB URL was set as "database_url=sqlite:////path", strip the prefix.
 if settings.database_url.startswith("database_url="):
     settings.database_url = settings.database_url.split("=", 1)[1]
-

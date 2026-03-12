@@ -3,6 +3,7 @@ from .models import Vendor
 import re
 
 def normalize_vendor_name(raw_vendor:str, email_data:dict=None)->str:
+    db = None
     try:
         if not raw_vendor:
             return "Unknown"
@@ -11,16 +12,15 @@ def normalize_vendor_name(raw_vendor:str, email_data:dict=None)->str:
         #exact
         vendor=db.query(Vendor).filter(Vendor.name==raw_vendor).first()
         if vendor:
-            db.close()
             return vendor.normalized_name
     
         if email_data:
             vendor_from_content = search_email_for_vendor(email_data, db)
             if vendor_from_content:
-                db.close()
                 return vendor_from_content
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
     return raw_vendor
 
@@ -32,24 +32,33 @@ def search_email_for_vendor(email_data:dict,db)->str:
 
     email_info=f"{sender}{subject}{body}"
     vendors=db.query(Vendor).all()
+    if not vendors:
+        return None
+
     best_score=0
+    best_match=None
     for vendor in vendors:
-        if vendor.normalize_name in email_info or vendor.name in email_info:
+        normalized_name = (vendor.normalized_name or "").lower()
+        name = (vendor.name or "").lower()
+
+        if normalized_name and normalized_name in email_info:
             return vendor.normalized_name
+        if name and name in email_info:
+            return vendor.normalized_name
+
         score = 0
-        vendor_words = vendor.normalized_name.lower().split()
+        vendor_words = normalized_name.split()
             
         for word in vendor_words:
             if len(word) >= 3 and word in email_info:  
                 score += 20
             elif word in sender or word in subject:
                 score += 70
-            else:
-                score += 3
             
         if score > best_score:
             best_score = score
             best_match = vendor.normalized_name
         
-    if best_score >= 10:
+    if best_match and best_score >= 40:
         return best_match
+    return None

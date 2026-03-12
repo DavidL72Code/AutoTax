@@ -1,7 +1,15 @@
 // Receipt Automation Dashboard JavaScript
 
 // API Configuration
-const API_BASE_URL = 'https://autotax-xwly.onrender.com';
+const API_BASE_URL = (() => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+        return 'http://localhost:8000';
+    }
+    const forced = localStorage.getItem('API_BASE_URL');
+    if (forced) return forced;
+    return 'https://autotax-xwly.onrender.com';
+})();
 
 // DOM Elements
 let searchInput;
@@ -22,15 +30,19 @@ let editAmountInput;
 let editTaxInput;
 let editDateInput;
 let activeTransactionId = null;
-let demoBtn;
+let demoGenerateBtn;
+let demoParseBtn;
 let demoViewBtn;
 let clearBtn;
+let demoRunLogEl;
 
 // Cached transactions and sort state (so we can re-sort without re-fetching)
 let allTransactions = [];
 let sortColumn = 'date';
 let sortDirection = 'desc'; // 'asc' = least to greatest, 'desc' = greatest to least
 let syncPollTimer = null;
+let demoParsePollTimer = null;
+let activeDemoRunId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
@@ -51,9 +63,11 @@ document.addEventListener('DOMContentLoaded', function() {
     editAmountInput = document.querySelector('#edit-amount');
     editTaxInput = document.querySelector('#edit-tax');
     editDateInput = document.querySelector('#edit-date');
-    demoBtn = document.querySelector('.btn-demo');
+    demoGenerateBtn = document.querySelector('.btn-demo-generate');
+    demoParseBtn = document.querySelector('.btn-demo-parse');
     demoViewBtn = document.querySelector('.btn-demo-view');
     clearBtn = document.querySelector('.btn-clear');
+    demoRunLogEl = document.querySelector('#demo-run-log');
     
     // Initialize animations
     initAnimations();
@@ -144,9 +158,14 @@ function setupEventListeners() {
         });
     }
 
-    if (demoBtn) {
-        demoBtn.addEventListener('click', function() {
-            runDemoSync();
+    if (demoGenerateBtn) {
+        demoGenerateBtn.addEventListener('click', function() {
+            runDemoGenerate();
+        });
+    }
+    if (demoParseBtn) {
+        demoParseBtn.addEventListener('click', function() {
+            runDemoParse();
         });
     }
     if (clearBtn) {
@@ -318,13 +337,57 @@ function renderTransactionsTable() {
     }
 }
 
+function parseIsoDateParts(dateStr) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return { year, month, day };
+}
+
+function formatIsoDateForEasternDisplay(dateStr) {
+    const parts = parseIsoDateParts(dateStr);
+    if (!parts) {
+        const d = new Date(dateStr);
+        return {
+            dateFormatted: d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
+            yearFormatted: d.getFullYear()
+        };
+    }
+    // Use UTC noon to avoid day rollovers when rendering in America/New_York.
+    const noonUtc = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0));
+    const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric'
+    });
+    const tokens = dtf.formatToParts(noonUtc);
+    const month = (tokens.find(t => t.type === 'month') || {}).value || '';
+    const day = (tokens.find(t => t.type === 'day') || {}).value || '';
+    const year = (tokens.find(t => t.type === 'year') || {}).value || String(parts.year);
+    return {
+        dateFormatted: `${month} ${day}`.trim(),
+        yearFormatted: Number(year) || parts.year
+    };
+}
+
 function sortTransactions(transactions) {
     const mult = sortDirection === 'asc' ? 1 : -1;
     return transactions.sort((a, b) => {
         let va, vb;
         if (sortColumn === 'date') {
-            va = new Date(a.date).getTime();
-            vb = new Date(b.date).getTime();
+            const ap = parseIsoDateParts(a.date);
+            const bp = parseIsoDateParts(b.date);
+            if (ap && bp) {
+                va = (ap.year * 10000) + (ap.month * 100) + ap.day;
+                vb = (bp.year * 10000) + (bp.month * 100) + bp.day;
+            } else {
+                va = new Date(a.date).getTime();
+                vb = new Date(b.date).getTime();
+            }
             return mult * (va - vb);
         }
         if (sortColumn === 'amount') {
@@ -358,9 +421,9 @@ function createTransactionRow(transaction) {
     row.dataset.transactionId = transaction.id;
     
     // Format date
-    const date = new Date(transaction.date);
-    const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
-    const yearFormatted = date.getFullYear();
+    const dateDisplay = formatIsoDateForEasternDisplay(transaction.date);
+    const dateFormatted = dateDisplay.dateFormatted;
+    const yearFormatted = dateDisplay.yearFormatted;
     
     // Determine vendor icon and color
     const vendorInfo = getVendorInfo(transaction.vendor);
@@ -578,31 +641,119 @@ function buildAuthHeaders() {
     return headers;
 }
 
-async function runDemoSync() {
-    if (!demoBtn) return;
-    const originalHTML = demoBtn.innerHTML;
-    demoBtn.innerHTML = '<span>⏳</span> Demo...';
-    demoBtn.disabled = true;
+function appendDemoRunLog(line) {
+    if (!demoRunLogEl) return;
+    const current = demoRunLogEl.textContent || '';
+    demoRunLogEl.textContent = current ? `${current}\n${line}` : line;
+    demoRunLogEl.scrollTop = demoRunLogEl.scrollHeight;
+}
+
+function renderDemoRunStatus(status) {
+    if (!demoRunLogEl || !status) return;
+    const header = `status=${status.status} processed=${status.processed}/${status.total} success=${status.success} failed=${status.failed}`;
+    const lines = [header].concat(status.logs || []);
+    demoRunLogEl.textContent = lines.join('\n');
+    demoRunLogEl.scrollTop = demoRunLogEl.scrollHeight;
+}
+
+async function runDemoGenerate() {
+    if (!demoGenerateBtn) return;
+    const originalHTML = demoGenerateBtn.innerHTML;
+    demoGenerateBtn.innerHTML = '<span>⏳</span> Generating...';
+    demoGenerateBtn.disabled = true;
     try {
-        const response = await fetch(`${API_BASE_URL}/api/demo-sync`, { method: 'POST' });
+        const response = await fetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(result.detail || 'Demo sync failed');
+            throw new Error(result.detail || 'Demo generation failed');
         }
-        demoBtn.innerHTML = '<span>✓</span> Demo Ready';
-        await loadDashboardData();
+        demoGenerateBtn.innerHTML = '<span>✓</span> Demo Emails Ready';
+        appendDemoRunLog(`Generated ${result.count || 0} demo emails.`);
         setTimeout(() => {
-            demoBtn.innerHTML = originalHTML;
-            demoBtn.disabled = false;
-        }, 2000);
+            demoGenerateBtn.innerHTML = originalHTML;
+            demoGenerateBtn.disabled = false;
+        }, 1500);
     } catch (error) {
-        demoBtn.innerHTML = '<span>⚠</span> Failed';
+        demoGenerateBtn.innerHTML = '<span>⚠</span> Failed';
         setTimeout(() => {
-            demoBtn.innerHTML = originalHTML;
-            demoBtn.disabled = false;
+            demoGenerateBtn.innerHTML = originalHTML;
+            demoGenerateBtn.disabled = false;
         }, 2000);
-        showError(error.message || 'Demo sync failed.');
+        showError(error.message || 'Demo generation failed.');
     }
+}
+
+async function runDemoParse() {
+    if (!demoParseBtn) return;
+    const originalHTML = demoParseBtn.innerHTML;
+    demoParseBtn.innerHTML = '<span>⏳</span> Starting Parse...';
+    demoParseBtn.disabled = true;
+
+    if (demoParsePollTimer) {
+        clearInterval(demoParsePollTimer);
+        demoParsePollTimer = null;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/demo-parse`, { method: 'POST' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.run_id) {
+            throw new Error(result.detail || 'Demo parse failed to start');
+        }
+        activeDemoRunId = result.run_id;
+        demoParseBtn.innerHTML = '<span>⏳</span> Parsing...';
+        appendDemoRunLog(`Started demo parse run ${activeDemoRunId}.`);
+        startDemoParsePolling(originalHTML);
+    } catch (error) {
+        demoParseBtn.innerHTML = '<span>⚠</span> Failed';
+        setTimeout(() => {
+            demoParseBtn.innerHTML = originalHTML;
+            demoParseBtn.disabled = false;
+        }, 2000);
+        showError(error.message || 'Demo parse failed.');
+    }
+}
+
+function startDemoParsePolling(originalHTML) {
+    if (!activeDemoRunId) return;
+    demoParsePollTimer = setInterval(async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/demo-parse-status?run_id=${encodeURIComponent(activeDemoRunId)}`, {
+                cache: 'no-store'
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(result.detail || 'Could not fetch parse status');
+            }
+            renderDemoRunStatus(result);
+            if (result.status === 'completed' || result.status === 'failed') {
+                clearInterval(demoParsePollTimer);
+                demoParsePollTimer = null;
+                if (result.status === 'completed') {
+                    demoParseBtn.innerHTML = '<span>✓</span> Parse Complete';
+                    await loadDashboardData();
+                } else {
+                    demoParseBtn.innerHTML = '<span>⚠</span> Parse Failed';
+                }
+                setTimeout(() => {
+                    if (!demoParseBtn) return;
+                    demoParseBtn.innerHTML = originalHTML;
+                    demoParseBtn.disabled = false;
+                }, 2000);
+            }
+        } catch (error) {
+            clearInterval(demoParsePollTimer);
+            demoParsePollTimer = null;
+            if (demoParseBtn) {
+                demoParseBtn.innerHTML = '<span>⚠</span> Poll Failed';
+                setTimeout(() => {
+                    demoParseBtn.innerHTML = originalHTML;
+                    demoParseBtn.disabled = false;
+                }, 2000);
+            }
+            showError(error.message || 'Could not poll demo parse status.');
+        }
+    }, 1200);
 }
 
 async function clearAllTransactions() {
@@ -948,11 +1099,18 @@ function openEditModal(row) {
     if (editAmountInput) editAmountInput.value = Number(tx.amount || 0).toFixed(2);
     if (editTaxInput) editTaxInput.value = Number(tx.tax || 0).toFixed(2);
     if (editDateInput) {
-        const d = new Date(tx.date);
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        editDateInput.value = `${yyyy}-${mm}-${dd}`;
+        const parts = parseIsoDateParts(tx.date);
+        if (parts) {
+            const mm = String(parts.month).padStart(2, '0');
+            const dd = String(parts.day).padStart(2, '0');
+            editDateInput.value = `${parts.year}-${mm}-${dd}`;
+        } else {
+            const d = new Date(tx.date);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            editDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
     }
 
     editModal.hidden = false;

@@ -1,6 +1,7 @@
 import os 
 import base64
 import re
+from pathlib import Path
 from google.auth.transport.requests import Request 
 from google.oauth2.credentials import Credentials 
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -9,11 +10,14 @@ from bs4 import BeautifulSoup
 from email.utils import parsedate_to_datetime
 
 SCOPES=['https://www.googleapis.com/auth/gmail.readonly']
+_APP_DIR = Path(__file__).resolve().parent
+_TOKEN_PATH = _APP_DIR / "token.json"
+_CREDENTIALS_PATH = _APP_DIR / "credentials.json"
 
 def get_gmail_service():
     creds=None
-    if os.path.exists('token.json'):
-        creds=Credentials.from_authorized_user_file('token.json',SCOPES)
+    if _TOKEN_PATH.exists():
+        creds=Credentials.from_authorized_user_file(str(_TOKEN_PATH),SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -21,10 +25,10 @@ def get_gmail_service():
         else:
             print("First time setup-open browswer for autherntication...")
             flow=InstalledAppFlow.from_client_secrets_file(
-                'credentials.json',SCOPES)
+                str(_CREDENTIALS_PATH),SCOPES)
             creds=flow.run_local_server(port=0)
         
-        with open('token.json','w') as token:
+        with open(_TOKEN_PATH,'w') as token:
             token.write(creds.to_json())
         print("Authentication saved")
     return build('gmail','v1',credentials=creds)

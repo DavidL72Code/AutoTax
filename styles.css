@@ -596,6 +596,46 @@ body {
     text-decoration: none;
 }
 
+.demo-run-panel {
+    margin: 1rem 0 1.25rem;
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    background: #0f172a;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.25);
+    overflow: hidden;
+}
+
+.demo-run-header {
+    padding: 0.8rem 1rem;
+    background: #111827;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.demo-run-title {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #f8fafc;
+    font-weight: 700;
+}
+
+.demo-run-subtitle {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+.demo-run-log {
+    margin: 0;
+    padding: 0.9rem 1rem;
+    color: #e2e8f0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    max-height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .demo-section {
     padding: 4rem 2rem;
     background: linear-gradient(135deg, #fef3f9 0%, #eef2ff 100%);

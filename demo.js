@@ -1,4 +1,12 @@
-const API_BASE_URL = 'https://autotax-xwly.onrender.com';
+const API_BASE_URL = (() => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+        return 'http://localhost:8000';
+    }
+    const forced = localStorage.getItem('API_BASE_URL');
+    if (forced) return forced;
+    return 'https://autotax-xwly.onrender.com';
+})();
 
 async function loadDemoEmails() {
     const grid = document.querySelector('#demo-grid');

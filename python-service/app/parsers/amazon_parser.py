@@ -19,7 +19,7 @@ def amazon_parser(email_subject:str,email_text:str,email_id:str,email_date:str,v
     has_amount=regex_result.get('amount') is not None
     has_tax=regex_result.get('tax') is not None
 
-    if not has_amount or has_tax:
+    if not has_amount or not has_tax:
         missing_info=[]
         if not has_amount:
             missing_info.append('amount')

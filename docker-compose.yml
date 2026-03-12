@@ -1,30 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: receipts-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: receipts
-      POSTGRES_USER: receiptuser
-      POSTGRES_PASSWORD: receiptpass123
-      POSTGRES_HOST_AUTH_METHOD: trust
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U receiptuser -d receipts"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - receipt-network
-
-  # Python FastAPI Service
+  # Python FastAPI Service (SQLite)
   python-api:
     build:
       context: ./python-service
@@ -34,75 +11,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Database
-      DATABASE_URL: postgresql://receiptuser:receiptpass123@postgres:5432/receipts
-      
-      # API Keys (replace with your actual keys)
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      
-      # App Config
-      APP_ENV: development
+      # SQLite DB stored in mounted volume
+      DATABASE_URL: sqlite:////data/receipts.db
+      APP_ENV: production
       LOG_LEVEL: info
-    depends_on:
-      postgres:
-        condition: service_healthy
+      SYNC_API_KEY: ${SYNC_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
     volumes:
-      # Mount code for hot reload during development
+      - receipts_data:/data
       - ./python-service/app:/app/app
-      # Mount reports output folder
       - ./reports:/app/reports
-      # Mount sample data
       - ./sample_data:/app/sample_data
-    networks:
-      - receipt-network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # n8n Workflow Automation
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: receipts-n8n
-    restart: unless-stopped
-    ports:
-      - "5678:5678"
-    environment:
-      # Basic Config
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - N8N_HOST=localhost
-      
-      # Webhook Config
-      - WEBHOOK_URL=http://localhost:5678/
-      
-      # Timezone
-      - GENERIC_TIMEZONE=America/New_York
-      
-      # Auth (change these!)
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=admin123
-      
-      # Execution
-      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
-      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
-      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - ./n8n-workflows:/home/node/.n8n/workflows
-    depends_on:
-      - python-api
-    networks:
-      - receipt-network
-
-# Volumes for data persistence
 volumes:
-  postgres_data:
+  receipts_data:
     driver: local
-  n8n_data:
-    driver: local
-
-# Network for inter-container communication
-networks:
-  receipt-network:
-    driver: bridge
-

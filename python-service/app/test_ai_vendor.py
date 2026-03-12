@@ -1,6 +1,6 @@
 # test_ai_vendor.py
 
-from parser_select import identify_vendor_with_ai
+from .parser_select import identify_vendor_with_ai
 
 # Test case 1: Clear vendor name
 test_email_1 = """

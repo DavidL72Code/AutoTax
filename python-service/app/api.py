@@ -20,9 +20,11 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import ollama
+from .ai_client import generate_text
 
 app = FastAPI()
+DEMO_PARSE_RUNS = {}
+DEMO_PARSE_LOCK = threading.Lock()
 
 # Allow your website to call the API
 app.add_middleware(
@@ -164,47 +166,364 @@ def _demo_emails_path() -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
-def _generate_demo_emails(count: int = 6):
-    """Generate demo emails via local model; fallback to templates."""
-    prompt = f"""Generate {count} fake receipt emails in JSON array format.
-Each item must include: subject, from, date (YYYY-MM-DD), body.
-Include realistic vendors and totals like "Total: $12.34".
-Return ONLY JSON.
-"""
+def _now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+def _init_demo_run(run_id: str):
+    with DEMO_PARSE_LOCK:
+        DEMO_PARSE_RUNS[run_id] = {
+            "run_id": run_id,
+            "status": "queued",
+            "total": 0,
+            "processed": 0,
+            "success": 0,
+            "failed": 0,
+            "started_at": _now_iso(),
+            "finished_at": None,
+            "logs": [],
+        }
+
+def _append_demo_log(run_id: str, line: str):
+    with DEMO_PARSE_LOCK:
+        run = DEMO_PARSE_RUNS.get(run_id)
+        if not run:
+            return
+        run["logs"].append(f"[{datetime.utcnow().strftime('%H:%M:%S')}] {line}")
+        if len(run["logs"]) > 500:
+            run["logs"] = run["logs"][-500:]
+
+def _update_demo_run(run_id: str, **kwargs):
+    with DEMO_PARSE_LOCK:
+        run = DEMO_PARSE_RUNS.get(run_id)
+        if not run:
+            return
+        run.update(kwargs)
+
+def _get_demo_run(run_id: str):
+    with DEMO_PARSE_LOCK:
+        run = DEMO_PARSE_RUNS.get(run_id)
+        return dict(run) if run else None
+
+def _prepare_demo_emails(emails):
+    demo_rows = []
+    for e in emails:
+        email = {
+            "id": e.get("id") or uuid.uuid4().hex,
+            "from": e.get("from", "demo@example.com"),
+            "subject": e.get("subject", "Demo receipt"),
+            "date": e.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
+            "body": e.get("body", "Total: $10.00"),
+        }
+        demo_rows.append(email)
+    return demo_rows
+
+def _run_demo_parse(run_id: str):
+    from .parser_select import parser_select
+    from .data_helper import log_transaction
+
     try:
-        response = ollama.chat(
-            model="llama3.2:3b",
-            messages=[{"role": "user", "content": prompt}],
-            options={"num_predict": 400, "temperature": 0.6},
+        _update_demo_run(run_id, status="running")
+        path = _demo_emails_path()
+        if not path.exists():
+            _append_demo_log(run_id, "No demo_emails.json found. Generate demo emails first.")
+            _update_demo_run(run_id, status="failed", finished_at=_now_iso())
+            return
+
+        emails = json.loads(path.read_text())
+        if not isinstance(emails, list) or not emails:
+            _append_demo_log(run_id, "Demo email list is empty. Generate demo emails first.")
+            _update_demo_run(run_id, status="failed", finished_at=_now_iso())
+            return
+
+        _update_demo_run(run_id, total=len(emails), processed=0, success=0, failed=0)
+        _append_demo_log(run_id, f"Loaded {len(emails)} demo emails.")
+
+        success = 0
+        failed = 0
+        for idx, email in enumerate(emails, start=1):
+            subject = (email.get("subject") or "Demo receipt")[:80]
+            _append_demo_log(run_id, f"Parsing {idx}/{len(emails)}: {subject}")
+            try:
+                parsed = parser_select(email)
+                if parsed and isinstance(parsed, dict):
+                    tx = log_transaction(parsed)
+                    vendor = parsed.get("vendor", "Unknown")
+                    amount = float(parsed.get("amount") or 0.0)
+                    meta = parsed.get("_meta") or {}
+                    vendor_ai_called = bool(meta.get("vendor_ai_called", False))
+                    vendor_ai_success = bool(meta.get("vendor_ai_success", False))
+                    amount_ai_called = bool(meta.get("ai_amount_tax_called", False))
+                    amount_ai_success = bool(meta.get("ai_amount_found", False))
+                    tax_ai_called = bool(meta.get("ai_amount_tax_called", False))
+                    tax_ai_success = bool(meta.get("ai_tax_found", False))
+                    vendor_ai_raw = str(meta.get("vendor_ai_raw", ""))
+                    amount_tax_ai_raw = str(meta.get("ai_amount_tax_raw", ""))
+                    _append_demo_log(
+                        run_id,
+                        "AI indicators -> "
+                        f"vendor_ai_called={vendor_ai_called}, "
+                        f"vendor_ai_success={vendor_ai_success}, "
+                        f"amount_ai_called={amount_ai_called}, "
+                        f"amount_ai_success={amount_ai_success}, "
+                        f"tax_ai_called={tax_ai_called}, "
+                        f"tax_ai_success={tax_ai_success}"
+                    )
+                    if vendor_ai_called:
+                        _append_demo_log(run_id, f"AI vendor raw -> {vendor_ai_raw or '(empty)'}")
+                    if amount_ai_called:
+                        _append_demo_log(run_id, f"AI amount/tax raw -> {amount_tax_ai_raw or '(empty)'}")
+                    if tx is not None:
+                        success += 1
+                        _append_demo_log(run_id, f"Saved: vendor={vendor}, amount=${amount:.2f}")
+                    else:
+                        failed += 1
+                        _append_demo_log(run_id, f"Skipped/not saved: vendor={vendor}, amount=${amount:.2f}")
+                else:
+                    failed += 1
+                    _append_demo_log(run_id, "Parse returned no transaction.")
+            except Exception as row_error:
+                failed += 1
+                _append_demo_log(run_id, f"Error: {row_error}")
+            finally:
+                _update_demo_run(run_id, processed=idx, success=success, failed=failed)
+
+        _update_demo_run(run_id, status="completed", finished_at=_now_iso())
+        _append_demo_log(run_id, f"Run complete. success={success}, failed={failed}")
+    except Exception as e:
+        _append_demo_log(run_id, f"Run crashed: {e}")
+        _update_demo_run(run_id, status="failed", finished_at=_now_iso())
+
+def _generate_demo_emails(count: int = 6):
+    """Generate demo receipt emails via Gemini with tax/subtotal/total details."""
+    run_nonce = uuid.uuid4().hex[:8]
+    prompt = f"""Generate {count} fake receipt emails in JSON array format.
+Return ONLY a JSON array with exactly {count} objects and NO extra text.
+
+Each object must include:
+- subject
+- from
+- date (YYYY-MM-DD)
+- vendor
+- subtotal (number)
+- tax (number)
+- total (number)
+- body
+
+Rules:
+1. Choose variety of vendor names. Do not use a fixed repeated list.
+2. Ensure Tax==subtotal*.0625
+3. Ensure total == subtotal + tax.
+4. Make the body messy and realistic: include extra sections like promo text, shipping/tracking, support footer, rewards, partial refunds, and authorization lines.
+5. Include at least 5-10 additional dollar values in each body (item prices, discounts, shipping, credits, prior balance, pending charge), so parser must distinguish the true subtotal/tax/total.
+6. Do NOT format body as a short clean 5-line summary.
+7. For the true amounts section, avoid exact labels like "Tax:" and "Total:"; use less direct wording like "local levy", "merchandise sum", and "balance due now".
+8. Keep vendor name present in body, but not always in the sender domain.
+9. Create a fresh set of vendors and receipts for this run token: {run_nonce}
+"""
+
+    def _safe_float(value, default=0.0):
+        try:
+            return round(float(value), 2)
+        except Exception:
+            return round(float(default), 2)
+
+    def _build_messy_body(vendor: str, date: str, subtotal: float, tax: float, total: float, extra: str = "") -> str:
+        items = []
+        item_count = random.randint(3, 6)
+        running = 0.0
+        for i in range(item_count):
+            price = round(random.uniform(2.5, 45.0), 2)
+            qty = random.randint(1, 3)
+            line_total = round(price * qty, 2)
+            running += line_total
+            items.append(f"Item {i+1} x{qty} ............. ${line_total:.2f}")
+
+        shipping = round(random.uniform(0, 12.99), 2)
+        discount = round(random.uniform(0, 10.0), 2)
+        credit = round(random.uniform(0, 7.5), 2)
+        pending = round(random.uniform(1.0, 30.0), 2)
+        auth_hold = round(random.uniform(total, total + 25), 2)
+        prior_balance = round(random.uniform(0, 80), 2)
+        rewards = random.randint(50, 4000)
+        noise_note = extra.strip()
+        if noise_note:
+            noise_note = f"\nCustomer Note Snippet: {noise_note[:220]}"
+
+        return (
+            f"Subject Thread: Re: order update / invoice copy / receipt confirmation\n"
+            f"Merchant Notice: This receipt may include pending holds and promotional adjustments.\n"
+            f"Order Ref: {uuid.uuid4().hex[:10].upper()}  |  Tracking: 1Z{uuid.uuid4().hex[:14].upper()}\n"
+            f"----- PAYMENT RECONCILIATION BLOCK -----\n"
+            f"Document Date -> {date}\n"
+            f"Merchant Legal Name -> {vendor}\n"
+            f"Merchandise Sum (USD) -> ${subtotal:.2f}\n"
+            f"Local Levy @ 6.25 pct -> ${tax:.2f}\n"
+            f"Balance Due Now (final) -> ${total:.2f}\n"
+            f"--------------------------------\n"
+            f"Auth Hold (temporary): ${auth_hold:.2f}\n"
+            f"Pending Charge (not final): ${pending:.2f}\n"
+            f"Previous Balance: ${prior_balance:.2f}\n"
+            f"Rewards Applied Equivalent: ${credit:.2f} ({rewards} pts)\n"
+            f"Promo Banner: Save 15% on next order over $50.00\n"
+            f"Line Items:\n- " + "\n- ".join(items) + "\n"
+            f"Shipping Est.: ${shipping:.2f}\n"
+            f"Coupon / Promo Deduction: -${discount:.2f}\n"
+            f"Support Plan Offer: $4.99/mo (not included)\n"
+            f"If questions, contact support within 30 days. This message may contain automated text.{noise_note}\n"
         )
-        text = response["message"]["content"].strip()
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
+
+    def _build_organized_body(vendor: str, date: str, subtotal: float, tax: float, total: float) -> str:
+        templates = [
+            (
+                f"Receipt Confirmation\n"
+                f"Date: {date}\n"
+                f"Vendor: {vendor}\n"
+                f"Order Summary\n"
+                f"Subtotal: ${subtotal:.2f}\n"
+                f"Tax: ${tax:.2f}\n"
+                f"Total: ${total:.2f}\n"
+                f"Thank you for your purchase.\n"
+            ),
+            (
+                f"Payment Receipt\n"
+                f"Merchant: {vendor}\n"
+                f"Transaction Date: {date}\n"
+                f"Summary\n"
+                f"Amount Before Tax: ${subtotal:.2f}\n"
+                f"Sales Tax: ${tax:.2f}\n"
+                f"Amount Charged: ${total:.2f}\n"
+                f"We appreciate your business.\n"
+            ),
+            (
+                f"Invoice Paid\n"
+                f"From: {vendor}\n"
+                f"Email Date: {date}\n"
+                f"Charges\n"
+                f"Merchandise Total: ${subtotal:.2f}\n"
+                f"Tax Amount: ${tax:.2f}\n"
+                f"Grand Total: ${total:.2f}\n"
+                f"Keep this email for your records.\n"
+            ),
+            (
+                f"Order Receipt\n"
+                f"Store: {vendor}\n"
+                f"Date: {date}\n"
+                f"Breakdown\n"
+                f"Subtotal Amount: ${subtotal:.2f}\n"
+                f"Tax Collected: ${tax:.2f}\n"
+                f"Total Paid: ${total:.2f}\n"
+                f"Status: Completed\n"
+            ),
+            (
+                f"Purchase Confirmation\n"
+                f"Vendor: {vendor}\n"
+                f"Processed On: {date}\n"
+                f"Receipt Details\n"
+                f"Items Subtotal: ${subtotal:.2f}\n"
+                f"Tax: ${tax:.2f}\n"
+                f"Final Charge: ${total:.2f}\n"
+                f"Thanks for shopping with us.\n"
+            ),
+        ]
+        return random.choice(templates)
+
+    def _normalize_demo_rows(rows):
+        out = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            vendor = (item.get("vendor") or "").strip() or f"Vendor {uuid.uuid4().hex[:6]}"
+            subtotal = _safe_float(item.get("subtotal"), random.uniform(6, 120))
+            tax = round(subtotal * 0.0625, 2)
+            total = round(subtotal + tax, 2)
+
+            date = item.get("date")
+            if not date:
+                days_ago = random.randint(0, 30)
+                date = (datetime.utcnow() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+
+            sender = (item.get("from") or "").strip()
+            if not sender:
+                sender = f"notification-{uuid.uuid4().hex[:6]}@billing-updates.net"
+
+            subject = (item.get("subject") or "").strip() or f"Your receipt from {vendor}"
+            source_body = (item.get("body") or "").strip()
+            clean_target = min(5, count)
+            use_messy = len(out) >= clean_target
+            body = _build_messy_body(vendor, date, subtotal, tax, total, source_body) if use_messy else _build_organized_body(vendor, date, subtotal, tax, total)
+            out.append({
+                "subject": subject,
+                "from": sender,
+                "date": date,
+                "vendor": vendor,
+                "subtotal": subtotal,
+                "tax": tax,
+                "total": total,
+                "body": body,
+            })
+            if len(out) >= count:
+                break
+        return out
+
+    last_error = None
+    for _ in range(2):
+        try:
+            text = generate_text(
+                prompt,
+                temperature=0.8,
+                max_output_tokens=2400,
+            )
+            match = re.search(r'\[.*\]', text, re.DOTALL)
+            if not match:
+                last_error = "No JSON array found in model output"
+                continue
             data = json.loads(match.group(0))
             if isinstance(data, list) and data:
-                return data
-    except Exception as e:
-        print(f"⚠️ Demo generation failed, using templates: {e}")
+                normalized = _normalize_demo_rows(data)
+                if normalized:
+                    return normalized
+            last_error = "Model returned empty/invalid list"
+        except Exception as e:
+            last_error = str(e)
+            continue
 
-    vendors = [
-        ("Fidelity Investments", "noreply@fidelity.com"),
-        ("Chase", "alerts@chase.com"),
-        ("PayPal", "service@paypal.com"),
-        ("American Express", "receipt@americanexpress.com"),
-        ("Starbucks", "store@starbucks.com"),
-        ("Amazon", "auto-confirm@amazon.com"),
+    print(f"⚠️ Demo generation failed, using realistic fallback: {last_error}")
+
+    # Real-world fallback vendor pool (used only when AI generation fails).
+    fallback_vendors = [
+        "Target", "Walmart", "Costco", "Best Buy", "Home Depot", "Lowe's",
+        "Kroger", "Safeway", "Whole Foods Market", "Trader Joe's", "CVS Pharmacy",
+        "Walgreens", "Starbucks", "Dunkin'", "Chipotle", "McDonald's", "Subway",
+        "Panera Bread", "Domino's", "Pizza Hut", "Uber", "Lyft", "Airbnb",
+        "Delta Air Lines", "United Airlines", "American Airlines", "Marriott",
+        "Hilton", "Amazon", "Etsy", "eBay", "Apple", "Microsoft", "Google Store",
+        "AT&T", "Verizon", "T-Mobile", "Netflix", "Spotify", "Adobe",
     ]
+
+    def _sender_from_vendor(vendor_name: str) -> str:
+        return f"notification-{uuid.uuid4().hex[:6]}@billing-updates.net"
+
     out = []
+    sampled_vendors = random.sample(fallback_vendors, k=min(count, len(fallback_vendors)))
+    while len(sampled_vendors) < count:
+        sampled_vendors.append(random.choice(fallback_vendors))
+    clean_target = min(5, count)
     for i in range(count):
-        vendor, from_email = vendors[i % len(vendors)]
-        amount = round(random.uniform(5, 250), 2)
+        vendor = sampled_vendors[i]
+        subtotal = round(random.uniform(8, 160), 2)
+        tax = round(subtotal * 0.0625, 2)
+        total = round(subtotal + tax, 2)
         days_ago = random.randint(0, 30)
         date = (datetime.utcnow() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
         out.append({
-            "subject": f"Your {vendor} receipt",
-            "from": from_email,
+            "subject": f"Your receipt from {vendor}",
+            "from": _sender_from_vendor(vendor),
             "date": date,
-            "body": f"Thanks for your purchase at {vendor}. Total: ${amount:.2f}.",
+            "vendor": vendor,
+            "subtotal": subtotal,
+            "tax": tax,
+            "total": total,
+            "body": _build_messy_body(vendor, date, subtotal, tax, total) if i >= clean_target else _build_organized_body(vendor, date, subtotal, tax, total),
         })
     return out
 
@@ -247,26 +566,52 @@ def demo_sync():
     try:
         from .parser_select import parser_select
         from .data_helper import log_transaction
-        emails = _generate_demo_emails(8)
-        demo_rows = []
-        for e in emails:
-            email_id = uuid.uuid4().hex
-            email = {
-                "id": email_id,
-                "from": e.get("from", "demo@example.com"),
-                "subject": e.get("subject", "Demo receipt"),
-                "date": e.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
-                "body": e.get("body", "Total: $10.00"),
-            }
-            demo_rows.append(email)
-            parsed = parser_select(email)
-            if parsed and isinstance(parsed, dict):
-                log_transaction(parsed)
+        emails = _generate_demo_emails(10)
+        demo_rows = _prepare_demo_emails(emails)
+        for email in demo_rows:
+            email_id = email.get("id")
+            try:
+                parsed = parser_select(email)
+                if parsed and isinstance(parsed, dict):
+                    log_transaction(parsed)
+            except Exception as row_error:
+                print(f"⚠️ Demo parse failed for {email_id}: {row_error}")
+                continue
 
         _demo_emails_path().write_text(json.dumps(demo_rows, indent=2))
         return {"status": "success", "count": len(demo_rows)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Demo sync failed: {e}")
+
+@app.post("/api/demo-generate")
+def demo_generate():
+    """Generate demo emails only (no parsing)."""
+    try:
+        emails = _generate_demo_emails(10)
+        demo_rows = _prepare_demo_emails(emails)
+        _demo_emails_path().write_text(json.dumps(demo_rows, indent=2))
+        return {"status": "success", "count": len(demo_rows)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Demo generation failed: {e}")
+
+@app.post("/api/demo-parse")
+def demo_parse():
+    """Parse existing demo emails in background and expose progress logs."""
+    try:
+        run_id = uuid.uuid4().hex
+        _init_demo_run(run_id)
+        thread = threading.Thread(target=_run_demo_parse, args=(run_id,), daemon=True)
+        thread.start()
+        return {"status": "started", "run_id": run_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Demo parse failed to start: {e}")
+
+@app.get("/api/demo-parse-status")
+def demo_parse_status(run_id: str):
+    run = _get_demo_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
 
 @app.get("/api/demo-emails")
 def demo_emails():

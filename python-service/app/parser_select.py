@@ -3,9 +3,13 @@ from .parsers.amazon_parser import amazon_parser
 from .parsers.generic_parser import generic_parser
 from .database import SessionLocal 
 from .models import Vendor
-import ollama
 import re
 from .vendor_normalize import normalize_vendor_name
+
+def _contains_word(text: str, word: str) -> bool:
+    if not text or not word:
+        return False
+    return re.search(rf"\b{re.escape(word.lower())}\b", text.lower()) is not None
 
 def parser_select(email_data:dict)->dict:
     email_body=email_data.get('body','')
@@ -13,90 +17,144 @@ def parser_select(email_data:dict)->dict:
     email_subject=email_data.get('subject','').lower()
     email_id=email_data.get('id')
     email_date=email_data.get('date')
-
     vendor_name=vendor_search(email_from,email_subject,email_body)
 
     if not vendor_name:
-        print(f"⚠️  Vendor unknown for {email_id}, using AI to identify...")
-        vendor_name = identify_vendor_with_ai(email_body,email_subject)
-        
-        if vendor_name != "Unknown":
-            print(f"AI identified vendor: {vendor_name}")
-        else:
-            print(f"AI could not identify vendor")
-    normalized_vendor=normalize_vendor_name(
-    vendor_name or "Unknown",
-    email_data=email_data
+        vendor_name = vendor_regex_search(email_subject, email_body)
+
+    if not vendor_name:
+        vendor_name = vendor_from_sender_domain(email_from)
+
+    normalized_vendor = (
+        normalize_vendor_name(vendor_name, email_data=email_data)
+        if vendor_name else None
     )
+
     if normalized_vendor == "PayPal":
-        return paypal_parser(email_subject,email_body, email_id,email_date, normalized_vendor)
+        parsed = paypal_parser(email_subject,email_body, email_id,email_date, normalized_vendor)
     elif normalized_vendor == "Amazon":
-        return amazon_parser(email_subject,email_body, email_id,email_date,normalized_vendor)
+        parsed = amazon_parser(email_subject,email_body, email_id,email_date,normalized_vendor)
     else:
-        return generic_parser(email_subject,email_body, email_id,email_date, normalized_vendor)
+        parsed = generic_parser(email_subject,email_body, email_id,email_date, normalized_vendor)
+
+    if isinstance(parsed, dict):
+        meta = parsed.get("_meta") or {}
+        # Vendor AI is now handled in generic_parser as part of one combined AI call.
+        if "vendor_ai_called" not in meta:
+            meta["vendor_ai_called"] = False
+        if "vendor_ai_success" not in meta:
+            meta["vendor_ai_success"] = False
+        if "vendor_ai_raw" not in meta:
+            meta["vendor_ai_raw"] = ""
+        parsed["_meta"] = meta
+    return parsed
 
 def vendor_search(email_from: str, subject: str, body: str) -> str:
-    email_from
     if 'paypal.com' in email_from:
         return 'PayPal'
     elif 'amazon.com' in email_from or "amazon.co" in email_from:
         return 'Amazon'
     elif 'uber.com' in email_from and 'eats' in subject:
         return 'UberEats'
+    elif 'chase.com' in email_from:
+        return 'Chase'
+    elif 'fidelity.com' in email_from:
+        return 'Fidelity Investments'
+    elif 'americanexpress.com' in email_from or 'amex' in email_from:
+        return 'American Express'
+    elif 'starbucks.com' in email_from:
+        return 'Starbucks'
     
-    if 'paypal' in subject:
+    if _contains_word(subject, 'paypal'):
         return "Paypal"
-    elif 'amazon' in subject:
+    elif _contains_word(subject, 'amazon'):
         return "Amazon"
+    elif _contains_word(subject, 'chase'):
+        return "Chase"
+    elif _contains_word(subject, 'fidelity'):
+        return "Fidelity Investments"
+    elif _contains_word(subject, 'american express') or _contains_word(subject, 'amex'):
+        return "American Express"
+    elif _contains_word(subject, 'starbucks'):
+        return "Starbucks"
+    
+    # fallback: try body keywords for common vendors
+    if _contains_word(body, 'paypal'):
+        return "Paypal"
+    elif _contains_word(body, 'amazon'):
+        return "Amazon"
+    elif _contains_word(body, 'chase'):
+        return "Chase"
+    elif _contains_word(body, 'fidelity'):
+        return "Fidelity Investments"
+    elif _contains_word(body, 'american express') or _contains_word(body, 'amex'):
+        return "American Express"
+    elif _contains_word(body, 'starbucks'):
+        return "Starbucks"
     
     return None
 
+def vendor_regex_search(subject: str, body: str) -> str:
+    text = f"{subject or ''}\n{body or ''}"
+    patterns = [
+        r'(?:receipt\s+from|from)\s+([A-Za-z0-9&\'\.\- ]{2,50})',
+        r'(?:vendor|merchant)\s*[:\-]\s*([A-Za-z0-9&\'\.\- ]{2,50})',
+        r'(?:payment\s+to|paid\s+to)\s+([A-Za-z0-9&\'\.\- ]{2,50})',
+    ]
+    stop_tokens = {
+        "you", "your", "purchase", "order", "receipt", "merchant", "vendor",
+        "confirmation", "summary", "support", "service", "account", "payment",
+    }
 
-def identify_vendor_with_ai(email_body: str, email_subject:str) -> str:
-    try:
-        prompt = f"""What is the vendor/store/company name from this receipt or email?
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            candidate = (match.group(1) or "").strip()
+            candidate = re.sub(r'\s+', ' ', candidate).strip(" -:;,.")
+            if not candidate:
+                continue
 
-Reply with ONLY the vendor name (maximum 4 words). Do not include any explanation.
+            # Trim at common delimiters to avoid pulling full sentences.
+            candidate = re.split(r'[\|\n]|(?:\s{2,})', candidate)[0].strip(" -:;,.")
+            if len(candidate) < 2 or len(candidate) > 40:
+                continue
 
-Examples of good responses:
-- "Starbucks"
-- "Blue Mountain Cafe"
-- "Target"
-- "Joe's Pizza"
+            words = candidate.lower().split()
+            if words and all(w in stop_tokens for w in words):
+                continue
 
-Email Subject:
-{email_subject}
-Email text:
-{email_body[:1500]}
+            # Basic sanity: must contain at least one alphabetic character.
+            if not re.search(r'[A-Za-z]', candidate):
+                continue
+            return candidate
 
-Vendor name:"""
-        
-        response = ollama.chat(
-            model='llama3.2:3b',
-            messages=[{'role': 'user', 'content': prompt}],
-            options={
-                'num_predict': 30,      
-                'temperature': 0.1,     
-            }
-        )
-        
-        vendor_name = response['message']['content'].strip()
-        
-        vendor_name = re.sub(r'^(The |A |An )', '', vendor_name, flags=re.IGNORECASE)
-        
-        vendor_name = vendor_name.split('\n')[0].strip()
-        
-        vendor_name = vendor_name.replace('"', '').replace("'", '')
-        
-        vendor_name = vendor_name.rstrip('.,;:')
-        
-        if 2 < len(vendor_name) < 60:  
-            word_count = len(vendor_name.split())
-            if word_count <= 5:  
-                return vendor_name
-        print(f"⚠️  AI returned invalid vendor: '{vendor_name}'")
-        
-    except Exception as e:
-        print(f"AI vendor identification failed: {e}")
-    
-    return "Unknown"
+    return None
+
+def vendor_from_sender_domain(email_from: str) -> str:
+    if not email_from:
+        return None
+    match = re.search(r'@([a-z0-9.-]+\.[a-z]{2,})', email_from.lower())
+    if not match:
+        return None
+    domain = match.group(1)
+    host = domain.split(".")
+    if len(host) < 2:
+        return None
+    core = host[-2]
+    if core in {"co", "com", "org", "net"} and len(host) >= 3:
+        core = host[-3]
+    core = re.sub(r"[^a-z0-9-]", "", core)
+    generic_sender_tokens = {
+        "gmail", "google", "outlook", "yahoo", "hotmail", "mail",
+        "receipt", "receipts", "billing", "invoice", "invoices",
+        "notification", "notifications", "noreply", "no-reply",
+        "updates", "alerts", "support", "service", "message", "messages",
+        "mailer", "mailers", "transactions", "transaction", "pay", "payments",
+    }
+    if not core:
+        return None
+    core_tokens = [t for t in core.split("-") if t]
+    if core in generic_sender_tokens:
+        return None
+    if core_tokens and all(t in generic_sender_tokens for t in core_tokens):
+        return None
+    return core.replace("-", " ").title()

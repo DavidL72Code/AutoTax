@@ -13,22 +13,16 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Check if Ollama is installed
-if ! command -v ollama &> /dev/null; then
-    echo "⚠️  Warning: Ollama is not installed. AI features will not work."
-    echo "Install from: https://ollama.ai"
-fi
-
 # Check if dependencies are installed
 echo "📦 Checking dependencies..."
-if ! python3 -c "import fastapi" 2>/dev/null; then
+if ! python3 -c "import fastapi, google.generativeai" 2>/dev/null; then
     echo "📥 Installing dependencies..."
     pip3 install -r requirements.txt
 fi
 
 # Start API server in background
 echo "🔧 Starting API server on http://localhost:8000..."
-python3 api.py &
+PYTHONPATH=python-service python3 -m uvicorn app.api:app --host 0.0.0.0 --port 8000 &
 API_PID=$!
 
 # Wait for API to start

@@ -1,7 +1,7 @@
-from amazon_parser import amazon_parser
+from .amazon_parser import amazon_parser
 
 test_email = """
-PayPal Receipt
+Amazon Receipt
 
 Transaction date: Jan 4, 2026
 Order Total: $49.99
@@ -10,5 +10,5 @@ Tax: $4.50
 Thank you for your purchase!
 """
 
-result = amazon_parser(test_email, "test_123")
+result = amazon_parser("Amazon package",test_email, "45673","Amazon")
 print(result)
