@@ -491,10 +491,11 @@ async function loadDashboardData() {
         console.log('Dashboard data loaded successfully');
     } catch (error) {
         console.error('Error loading dashboard:', error);
+        if (DEMO_MODE) {
+            return;
+        }
         const base = API_BASE_URL || 'the API';
-        const message = DEMO_MODE
-            ? `Failed to load demo data. Make sure the API is running at ${base}.`
-            : `Failed to load dashboard data. Make sure the API is running at ${base}.`;
+        const message = `Failed to load dashboard data. Make sure the API is running at ${base}.`;
         showError(message);
     }
 }
