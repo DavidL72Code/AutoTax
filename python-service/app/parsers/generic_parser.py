@@ -2,7 +2,66 @@ import re
 from datetime import datetime
 from dateutil import parser as date_parser
 import json
+from typing import Optional
 from ..ai_client import generate_text
+
+
+def _parse_currency_value(raw_value: str) -> Optional[float]:
+    try:
+        return float(str(raw_value).replace(',', '').strip())
+    except Exception:
+        return None
+
+
+def _extract_amount_value(email_text: str) -> Optional[float]:
+    amount_patterns = [
+        r'^\s*(?:grand\s+total|order\s+total|total\s+amount|amount\s+charged|amount\s+due|balance\s+due(?:\s+now)?|charged|charge|total)\s*[:\-]\s*\$?([\d,]+\.\d{2})\b',
+        r'^\s*(?:grand\s+total|order\s+total|total\s+amount|amount\s+charged|amount\s+due|balance\s+due(?:\s+now)?|charged|charge|total)\s+\$?([\d,]+\.\d{2})\b',
+        r'^\s*\$?\s*([\d,]+\.\d{2})\s*(?:grand\s+total|order\s+total|total|charged)\b',
+    ]
+    ignored_amount_context = re.compile(r'\b(?:subtotal|sub\s+total|before\s+tax|pre[-\s]?tax)\b', re.IGNORECASE)
+
+    for raw_line in email_text.splitlines():
+        line = raw_line.strip()
+        if not line or ignored_amount_context.search(line):
+            continue
+        for pattern in amount_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if not match:
+                continue
+            parsed_value = _parse_currency_value(match.group(1))
+            if parsed_value is not None:
+                return parsed_value
+    return None
+
+
+def _extract_tax_value(email_text: str) -> Optional[float]:
+    tax_patterns = [
+        r'^\s*(?:sales\s+tax|estimated\s+tax|tax\s+amount|tax\s+collected|local\s+levy(?:\s*@[^:]+)?|vat|gst|hst|tax)\s*[:\-]\s*\$?([\d,]+\.\d{2})\b',
+        r'^\s*(?:sales\s+tax|estimated\s+tax|tax\s+amount|tax\s+collected|local\s+levy(?:\s*@[^:]+)?|vat|gst|hst|tax)\s+\$?([\d,]+\.\d{2})\b',
+    ]
+    ignored_tax_context = re.compile(r'\b(?:before\s+tax|pre[-\s]?tax)\b', re.IGNORECASE)
+
+    for raw_line in email_text.splitlines():
+        line = raw_line.strip()
+        if not line or ignored_tax_context.search(line):
+            continue
+        for pattern in tax_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if not match:
+                continue
+            parsed_value = _parse_currency_value(match.group(1))
+            if parsed_value is not None:
+                return parsed_value
+
+    fallback_match = re.search(
+        r'(?<!before )(?<!pre )\btax[:\s\-]+\$?([\d,]+\.\d{2})\b',
+        email_text,
+        re.IGNORECASE,
+    )
+    if fallback_match:
+        return _parse_currency_value(fallback_match.group(1))
+    return None
 
 def generic_parser(email_subject:str ,email_text:str,email_id:str,email_date:str,vendor_name:str)-> dict:
     result={
@@ -70,25 +129,14 @@ def generic_parser(email_subject:str ,email_text:str,email_id:str,email_date:str
 
 def regex_parsing(email_text:str)->dict:
     regex_info={}
-    ##regex match for amount
-    amount_patterns = [
-    r'(?:total|amount|charge)[:\s]+\$?([\d,]+\.\d{2})',
-    r'\$\s*([\d,]+\.\d{2})\s*(?:total|charged)',
-    r'(?:grand|order)\s+total[:\s]+\$?([\d,]+\.\d{2})',
-    ]
-    for pattern in amount_patterns:
-        match = re.search(pattern, email_text, re.IGNORECASE)
-        if match:
-            try:
-                regex_info['amount'] = float(match.group(1).replace(',', ''))
-            except:
-                continue
-            break
+    amount_value = _extract_amount_value(email_text)
+    if amount_value is not None:
+        regex_info['amount'] = amount_value
 
     #regex match for tax
-    tax_match=re.search(r'tax[:\s]+\$?([\d,]+\.\d{2})',email_text,re.IGNORECASE)
-    if tax_match:
-        regex_info["tax"]=float(tax_match.group(1).replace(',',''))
+    tax_value = _extract_tax_value(email_text)
+    if tax_value is not None:
+        regex_info["tax"] = tax_value
     return regex_info
 def ai_search(email_subject:str,email_text:str,missing_fields:list)->dict:
     ai_text = ""
