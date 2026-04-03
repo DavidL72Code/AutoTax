@@ -6,6 +6,6 @@ if not api_key:
     raise RuntimeError("Set GOOGLE_API_KEY before running this test.")
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash"))
+model = genai.GenerativeModel(os.getenv("GEMINI_MODEL", "models/gemma-3-27b-it"))
 response = model.generate_content("Hello!")
 print((response.text or "").strip())

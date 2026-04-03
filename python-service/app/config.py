@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{_DEFAULT_DB}"
     google_api_key: Optional[str] = None
     gemini_model: str = "models/gemma-3-27b-it"
-    openai_api_key: Optional[str] = None  # reserved for future fallback provider support
     google_oauth_client_id: Optional[str] = None
     google_oauth_client_secret: Optional[str] = None
     google_oauth_redirect_uri: Optional[str] = None

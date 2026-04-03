@@ -6,16 +6,17 @@
     <title>ReceiptAuto - Demo</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="demo-page">
+<body>
     <nav class="top-nav">
         <div class="nav-container">
             <a class="logo" href="index.html">
-                <div class="logo-icon">💸</div>
+                <div class="logo-icon">RA</div>
                 <h1>Receipt<span>Auto</span></h1>
             </a>
             <div class="nav-links">
+                <a href="index.html">Dashboard</a>
+                <a href="index.html#csv-insights">Insights</a>
                 <a href="index.html#dashboard">Transactions</a>
-                <a href="index.html#top-vendors">Top Vendors</a>
                 <a href="demo.html">Demo</a>
             </div>
             <div class="nav-actions">
@@ -25,116 +26,196 @@
         </div>
     </nav>
 
-    <section class="dashboard-section" id="demo">
-        <div class="section-container">
-            <div class="section-header-main">
-                <div>
-                    <h2 class="section-title">Demo Parser</h2>
-                    <p class="section-subtitle">Generate demo receipts and watch the parser output live.</p>
+    <main class="dashboard-shell">
+        <section class="hero demo-hero">
+            <div class="section-container hero-shell">
+                <div class="hero-meta">
+                    <p class="hero-kicker">Demo Lab</p>
+                    <h1 class="hero-value">Parser Sandbox</h1>
+                    <p class="demo-hero-copy">Generate sample receipts, run the parser pipeline, and inspect exactly what gets saved before you connect a real inbox.</p>
                 </div>
-                <div class="section-actions">
-                    <button id="export-csv" class="btn-action">
-                        <span>📥</span> Export CSV
-                    </button>
-                    <button class="btn-action btn-demo-generate">
-                        <span>🧪</span> Generate Demo
-                    </button>
-                    <button class="btn-action btn-demo-parse">
-                        <span>⚙️</span> Parse Demo
-                    </button>
-                    <button class="btn-action btn-clear">
-                        <span>🧹</span> Clear Demo
-                    </button>
-                </div>
-            </div>
 
-            <div class="demo-run-panel">
-                <div class="demo-run-header">
-                    <h3 class="demo-run-title">Parser Log</h3>
-                    <p class="demo-run-subtitle">Live parser output from the current demo run.</p>
-                </div>
-                <div class="demo-run-controls">
-                    <label class="demo-toggle">
-                        <input type="checkbox" id="demo-force-reprocess">
-                        <span>Force reprocess (uses extra AI calls)</span>
-                    </label>
-                    <div class="demo-run-stats">
-                        <span><strong id="demo-run-processed">0</strong> processed</span>
-                        <span><strong id="demo-run-success">0</strong> saved</span>
-                        <span><strong id="demo-run-skipped">0</strong> skipped</span>
-                        <span><strong id="demo-run-failed">0</strong> failed</span>
-                    </div>
-                </div>
-                <pre id="demo-run-log" class="demo-run-log">No demo parse run yet.</pre>
-            </div>
-
-            <div class="table-wrapper">
-                <table class="transactions-table">
-                    <thead>
-                        <tr>
-                            <th class="sortable sortable-date" data-sort="date" title="Click to sort">
-                                <div class="th-content">
-                                    <span>📅</span>
-                                    <span>Date</span>
-                                    <span class="sort-arrow" aria-hidden="true"></span>
-                                </div>
-                            </th>
-                            <th>
-                                <div class="th-content">
-                                    <span>🏪</span>
-                                    <span>Vendor</span>
-                                </div>
-                            </th>
-                            <th class="sortable sortable-amount" data-sort="amount" title="Click to sort">
-                                <div class="th-content">
-                                    <span>💵</span>
-                                    <span>Amount</span>
-                                    <span class="sort-arrow" aria-hidden="true"></span>
-                                </div>
-                            </th>
-                            <th>
-                                <div class="th-content">
-                                    <span>🧾</span>
-                                    <span>Tax</span>
-                                </div>
-                            </th>
-                            <th>
-                                <div class="th-content">
-                                    <span>⚙️</span>
-                                    <span>Parser Type</span>
-                                </div>
-                            </th>
-                            <th>
-                                <div class="th-content">
-                                    <span>📊</span>
-                                    <span>Status</span>
-                                </div>
-                            </th>
-                            <th>
-                                <div class="th-content">
-                                    <span>✏️</span>
-                                    <span>Edit</span>
-                                </div>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
-            <section class="demo-section">
-                <div class="section-container">
-                    <div class="section-header-main">
-                        <div>
-                            <h2 class="section-title">Example Demo Emails</h2>
-                            <p class="section-subtitle">Generated receipts used for the demo parser.</p>
+                <div class="hero-panels">
+                    <article class="panel-card demo-command-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="panel-eyebrow">Demo Controls</p>
+                                <h2>Run a full fake inbox cycle</h2>
+                            </div>
+                            <span class="panel-period">No login required</span>
                         </div>
-                    </div>
-                    <div id="demo-grid" class="demo-grid"></div>
+
+                        <div class="demo-action-grid">
+                            <button id="export-csv" class="btn-action" type="button">Export CSV</button>
+                            <button class="btn-action btn-demo-generate" type="button">Generate Demo</button>
+                            <button class="btn-action btn-demo-parse" type="button">Parse Demo</button>
+                            <button class="btn-action btn-clear" type="button">Clear Demo</button>
+                        </div>
+
+                        <p class="demo-action-note">Generate creates sample emails, Parse sends them through the parser, and Clear resets the demo dataset so you can rerun the whole flow.</p>
+
+                        <div class="demo-flow-list">
+                            <div class="demo-flow-item">
+                                <span class="demo-flow-index">01</span>
+                                <div class="demo-flow-copy">
+                                    <strong>Seed sample receipts</strong>
+                                    <p>Create realistic receipt emails and populate the inbox fixture.</p>
+                                </div>
+                            </div>
+                            <div class="demo-flow-item">
+                                <span class="demo-flow-index">02</span>
+                                <div class="demo-flow-copy">
+                                    <strong>Run parser pass</strong>
+                                    <p>Route each email through vendor detection, extraction, and persistence.</p>
+                                </div>
+                            </div>
+                            <div class="demo-flow-item">
+                                <span class="demo-flow-index">03</span>
+                                <div class="demo-flow-copy">
+                                    <strong>Inspect outputs</strong>
+                                    <p>Review the console log, generated table rows, and rendered demo email bodies.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <aside class="panel-card demo-status-panel">
+                        <div class="panel-heading panel-heading-stack">
+                            <div>
+                                <p class="panel-eyebrow">Run Snapshot</p>
+                                <h2 class="panel-side-title">Current parser status</h2>
+                            </div>
+                        </div>
+
+                        <div class="stats-grid-hero demo-metrics-grid">
+                            <div class="stat-card-hero">
+                                <div class="stat-content">
+                                    <div class="stat-label-large">Processed</div>
+                                    <div id="demo-run-processed" class="stat-value-large">0</div>
+                                    <div class="stat-change-neutral">Emails scanned this run</div>
+                                </div>
+                            </div>
+                            <div class="stat-card-hero">
+                                <div class="stat-content">
+                                    <div class="stat-label-large">Saved</div>
+                                    <div id="demo-run-success" class="stat-value-large">0</div>
+                                    <div class="stat-change-positive">Transactions written</div>
+                                </div>
+                            </div>
+                            <div class="stat-card-hero">
+                                <div class="stat-content">
+                                    <div class="stat-label-large">Skipped</div>
+                                    <div id="demo-run-skipped" class="stat-value-large">0</div>
+                                    <div class="stat-change-neutral">Duplicates or ignored</div>
+                                </div>
+                            </div>
+                            <div class="stat-card-hero">
+                                <div class="stat-content">
+                                    <div class="stat-label-large">Failed</div>
+                                    <div id="demo-run-failed" class="stat-value-large">0</div>
+                                    <div class="stat-change-negative">Items needing attention</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="demo-toggle-card">
+                            <label class="demo-toggle">
+                                <input type="checkbox" id="demo-force-reprocess">
+                                <span>Force reprocess</span>
+                            </label>
+                            <p class="demo-toggle-copy">Ignores cached vendor decisions and spends extra Gemini calls so you can test the full parsing path again.</p>
+                        </div>
+
+                        <div class="panel-status">
+                            <div class="panel-status-avatar">DL</div>
+                            <div>
+                                <strong>Live parser log below</strong>
+                                <p>Run a demo parse to watch the output stream into the console and table in real time.</p>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
-            </section>
-        </div>
-    </section>
+            </div>
+        </section>
+
+        <section class="dashboard-section" id="demo">
+            <div class="section-container">
+                <div class="section-header-main">
+                    <div>
+                        <h2 class="section-title">Parser Console</h2>
+                        <p class="section-subtitle">Live output from the current demo run, followed by the generated transactions that landed in the dashboard table.</p>
+                    </div>
+                </div>
+
+                <div class="demo-run-panel">
+                    <div class="demo-run-header">
+                        <h3 class="demo-run-title">Parser Log</h3>
+                        <p class="demo-run-subtitle">Live parser output from the current demo run.</p>
+                    </div>
+                    <pre id="demo-run-log" class="demo-run-log">No demo parse run yet.</pre>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="transactions-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable sortable-date" data-sort="date" title="Click to sort">
+                                    <div class="th-content">
+                                        <span>Date</span>
+                                        <span class="sort-arrow" aria-hidden="true"></span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="th-content">
+                                        <span>Vendor</span>
+                                    </div>
+                                </th>
+                                <th class="sortable sortable-amount" data-sort="amount" title="Click to sort">
+                                    <div class="th-content">
+                                        <span>Amount</span>
+                                        <span class="sort-arrow" aria-hidden="true"></span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="th-content">
+                                        <span>Tax</span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="th-content">
+                                        <span>Parser Type</span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="th-content">
+                                        <span>Status</span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="th-content">
+                                        <span>Edit</span>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="demo-section">
+            <div class="section-container">
+                <div class="section-header-main">
+                    <div>
+                        <h2 class="section-title">Example Demo Emails</h2>
+                        <p class="section-subtitle">The generated receipt emails used as input for the parser sandbox.</p>
+                    </div>
+                </div>
+                <div id="demo-grid" class="demo-grid"></div>
+            </div>
+        </section>
+    </main>
 
     <div id="auth-modal" class="modal-overlay" aria-hidden="true" style="display:none;" hidden>
         <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">

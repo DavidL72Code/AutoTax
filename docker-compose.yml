@@ -17,7 +17,7 @@ services:
       LOG_LEVEL: info
       SYNC_API_KEY: ${SYNC_API_KEY}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-models/gemma-3-27b-it}
     volumes:
       - receipts_data:/data
       - ./python-service/app:/app/app
