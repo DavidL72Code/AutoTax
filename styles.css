@@ -678,105 +678,6 @@ nav,
     font-size: 0.92rem;
 }
 
-.demo-hero-copy {
-    margin-top: 14px;
-    max-width: 680px;
-    color: var(--text-soft);
-    font-size: 1.05rem;
-}
-
-.demo-command-panel .panel-heading h2,
-.demo-status-panel .panel-side-title {
-    max-width: 14ch;
-}
-
-.demo-action-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    margin-bottom: 18px;
-}
-
-.demo-action-grid .btn-action,
-.demo-action-grid .btn-action-primary {
-    width: 100%;
-}
-
-.demo-action-note {
-    color: var(--text-muted);
-    font-size: 0.96rem;
-    margin-bottom: 24px;
-}
-
-.demo-flow-list {
-    display: grid;
-    gap: 12px;
-}
-
-.demo-flow-item {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 14px;
-    align-items: start;
-    padding: 16px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.demo-flow-item:first-child {
-    border-top: 0;
-}
-
-.demo-flow-index {
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--accent-lime);
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-}
-
-.demo-flow-copy {
-    display: grid;
-    gap: 4px;
-}
-
-.demo-flow-copy strong {
-    color: var(--text);
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.demo-flow-copy p {
-    color: var(--text-muted);
-    font-size: 0.92rem;
-}
-
-.demo-status-panel .stats-grid-hero {
-    margin-bottom: 24px;
-}
-
-.demo-toggle-card {
-    margin-bottom: 24px;
-    padding: 18px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.demo-toggle-card .demo-toggle {
-    color: var(--text);
-}
-
-.demo-toggle-copy {
-    margin-top: 8px;
-    color: var(--text-muted);
-    font-size: 0.92rem;
-}
-
 .dashboard-section,
 .csv-section,
 .vendors-section,
@@ -1613,9 +1514,6 @@ nav,
         align-items: flex-start;
     }
 
-    .demo-action-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 @media (max-width: 560px) {

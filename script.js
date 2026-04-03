@@ -1132,6 +1132,27 @@ function appendDemoRunLog(line) {
     demoRunLogEl.scrollTop = demoRunLogEl.scrollHeight;
 }
 
+function startButtonDotAnimation(button, baseLabel) {
+    if (!button) {
+        return function noop() {};
+    }
+
+    let dots = 1;
+    button.textContent = `${baseLabel}${'.'.repeat(dots)}`;
+
+    const timer = setInterval(function() {
+        dots = dots % 3 + 1;
+        button.textContent = `${baseLabel}${'.'.repeat(dots)}`;
+    }, 350);
+
+    return function stopAnimation(nextLabel) {
+        clearInterval(timer);
+        if (typeof nextLabel === 'string') {
+            button.textContent = nextLabel;
+        }
+    };
+}
+
 function renderDemoRunStatus(status) {
     if (!demoRunLogEl || !status) return;
     const skipped = status.skipped || 0;
@@ -1177,7 +1198,7 @@ async function loadDemoEmails() {
 async function runDemoGenerate() {
     if (!demoGenerateBtn) return;
     const originalHTML = demoGenerateBtn.innerHTML;
-    demoGenerateBtn.textContent = 'Generating...';
+    const stopGeneratingDots = startButtonDotAnimation(demoGenerateBtn, 'Generating');
     demoGenerateBtn.disabled = true;
     try {
         const response = await fetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
@@ -1185,7 +1206,7 @@ async function runDemoGenerate() {
         if (!response.ok) {
             throw new Error(result.detail || 'Demo generation failed');
         }
-        demoGenerateBtn.textContent = 'Demo Emails Ready';
+        stopGeneratingDots('Demo Emails Ready');
         appendDemoRunLog(`Generated ${result.count || 0} demo emails.`);
         if (DEMO_MODE) {
             await loadDemoEmails();
@@ -1195,7 +1216,7 @@ async function runDemoGenerate() {
             demoGenerateBtn.disabled = false;
         }, 1500);
     } catch (error) {
-        demoGenerateBtn.textContent = 'Failed';
+        stopGeneratingDots('Failed');
         setTimeout(() => {
             demoGenerateBtn.innerHTML = originalHTML;
             demoGenerateBtn.disabled = false;
