@@ -99,6 +99,24 @@
                                 <span id="expense-budget-current">$4,892</span>
                                 <span id="expense-budget-target">$6,800</span>
                             </div>
+                            <div class="budget-editor" role="group" aria-label="Monthly budget controls">
+                                <label class="budget-input-shell" for="expense-budget-input">
+                                    <span class="budget-currency">$</span>
+                                    <input
+                                        id="expense-budget-input"
+                                        class="budget-input"
+                                        type="number"
+                                        min="1"
+                                        step="50"
+                                        inputmode="numeric"
+                                        placeholder="Set budget"
+                                        aria-label="Monthly budget amount"
+                                    >
+                                </label>
+                                <button id="expense-budget-save" class="budget-button" type="button">Set</button>
+                                <button id="expense-budget-reset" class="budget-button budget-button-secondary" type="button">Auto</button>
+                            </div>
+                            <p id="expense-budget-note" class="budget-note">Auto target based on current spend.</p>
                         </div>
                     </article>
 

@@ -11,6 +11,7 @@ const API_BASE_URL = (() => {
     return 'https://autotax-xwly.onrender.com';
 })();
 const DEMO_MODE = Boolean(window.DEMO_MODE);
+const MONTHLY_BUDGET_STORAGE_KEY = 'MONTHLY_BUDGET_TARGET';
 
 // DOM Elements
 let searchInput;
@@ -52,6 +53,10 @@ let expenseBudgetUsedEl;
 let expenseBudgetCurrentEl;
 let expenseBudgetTargetEl;
 let expenseBudgetFillEl;
+let expenseBudgetInputEl;
+let expenseBudgetSaveBtn;
+let expenseBudgetResetBtn;
+let expenseBudgetNoteEl;
 let heroVendorListEl;
 let syncStatusTitleEl;
 let syncStatusMetaEl;
@@ -74,6 +79,7 @@ let sortDirection = 'desc'; // 'asc' = least to greatest, 'desc' = greatest to l
 let syncPollTimer = null;
 let demoParsePollTimer = null;
 let activeDemoRunId = null;
+let currentBudgetSpend = 0;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
@@ -115,6 +121,10 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseBudgetCurrentEl = document.querySelector('#expense-budget-current');
     expenseBudgetTargetEl = document.querySelector('#expense-budget-target');
     expenseBudgetFillEl = document.querySelector('#expense-budget-fill');
+    expenseBudgetInputEl = document.querySelector('#expense-budget-input');
+    expenseBudgetSaveBtn = document.querySelector('#expense-budget-save');
+    expenseBudgetResetBtn = document.querySelector('#expense-budget-reset');
+    expenseBudgetNoteEl = document.querySelector('#expense-budget-note');
     heroVendorListEl = document.querySelector('#hero-vendor-list');
     syncStatusTitleEl = document.querySelector('#sync-status-title');
     syncStatusMetaEl = document.querySelector('#sync-status-meta');
@@ -134,6 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup event listeners
     setupEventListeners();
+    refreshBudgetEditor();
     
     // Load real data from API
     bootstrapAuth().then(() => {
@@ -187,6 +198,32 @@ function setupEventListeners() {
     if (exportBtn) {
         exportBtn.addEventListener('click', function() {
             exportToCSV();
+        });
+    }
+
+    if (expenseBudgetSaveBtn) {
+        expenseBudgetSaveBtn.addEventListener('click', function() {
+            saveMonthlyBudget();
+        });
+    }
+
+    if (expenseBudgetResetBtn) {
+        expenseBudgetResetBtn.addEventListener('click', function() {
+            resetMonthlyBudget();
+        });
+    }
+
+    if (expenseBudgetInputEl) {
+        expenseBudgetInputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveMonthlyBudget();
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                refreshBudgetEditor();
+                expenseBudgetInputEl.blur();
+            }
         });
     }
 
@@ -640,11 +677,15 @@ function renderExpensePreview(transactions) {
 
 function updateBudgetSummary(totalSpend) {
     const spend = Math.max(0, Number(totalSpend) || 0);
-    const target = spend > 0 ? Math.ceil((spend * 1.35) / 500) * 500 : 1500;
-    const ratio = target > 0 ? Math.min(spend / target, 1) : 0;
+    const storedTarget = getStoredMonthlyBudget();
+    const target = storedTarget || getAutomaticBudgetTarget(spend);
+    const usageRatio = target > 0 ? spend / target : 0;
+    const progressRatio = Math.max(0, Math.min(usageRatio, 1));
+    currentBudgetSpend = spend;
 
     if (expenseBudgetUsedEl) {
-        expenseBudgetUsedEl.textContent = `${Math.round(ratio * 100)}% used`;
+        expenseBudgetUsedEl.textContent = `${Math.round(Math.max(usageRatio, 0) * 100)}% used`;
+        expenseBudgetUsedEl.classList.toggle('budget-over', usageRatio > 1);
     }
     if (expenseBudgetCurrentEl) {
         expenseBudgetCurrentEl.textContent = formatCurrency(spend, { whole: true });
@@ -653,9 +694,82 @@ function updateBudgetSummary(totalSpend) {
         expenseBudgetTargetEl.textContent = formatCurrency(target, { whole: true });
     }
     if (expenseBudgetFillEl) {
-        const width = spend > 0 ? Math.max(ratio * 100, 8) : 0;
+        const width = spend > 0 ? Math.max(progressRatio * 100, 8) : 0;
         expenseBudgetFillEl.style.width = `${width}%`;
+        expenseBudgetFillEl.classList.toggle('budget-fill-over', usageRatio > 1);
     }
+    refreshBudgetEditor({ preserveInput: true });
+}
+
+function getAutomaticBudgetTarget(spend) {
+    return spend > 0 ? Math.ceil((spend * 1.35) / 500) * 500 : 1500;
+}
+
+function getStoredMonthlyBudget() {
+    try {
+        const rawValue = localStorage.getItem(MONTHLY_BUDGET_STORAGE_KEY);
+        const parsedValue = Number(rawValue);
+        if (!rawValue || !Number.isFinite(parsedValue) || parsedValue <= 0) {
+            return null;
+        }
+        return Math.round(parsedValue);
+    } catch (error) {
+        return null;
+    }
+}
+
+function setStoredMonthlyBudget(amount) {
+    try {
+        localStorage.setItem(MONTHLY_BUDGET_STORAGE_KEY, String(Math.round(amount)));
+    } catch (error) {
+        // Ignore storage write failures and keep the dashboard usable.
+    }
+}
+
+function clearStoredMonthlyBudget() {
+    try {
+        localStorage.removeItem(MONTHLY_BUDGET_STORAGE_KEY);
+    } catch (error) {
+        // Ignore storage removal failures and keep the dashboard usable.
+    }
+}
+
+function refreshBudgetEditor(options = {}) {
+    const preserveInput = Boolean(options.preserveInput);
+    const storedTarget = getStoredMonthlyBudget();
+
+    if (expenseBudgetInputEl) {
+        const shouldPreserveValue = preserveInput && document.activeElement === expenseBudgetInputEl;
+        if (!shouldPreserveValue) {
+            expenseBudgetInputEl.value = storedTarget ? String(storedTarget) : '';
+        }
+        expenseBudgetInputEl.placeholder = String(getAutomaticBudgetTarget(currentBudgetSpend));
+    }
+
+    if (expenseBudgetNoteEl) {
+        expenseBudgetNoteEl.textContent = storedTarget
+            ? 'Manual budget saved on this device.'
+            : 'Auto target based on current spend.';
+    }
+}
+
+function saveMonthlyBudget() {
+    if (!expenseBudgetInputEl) return;
+    if (!expenseBudgetInputEl.reportValidity()) return;
+
+    const nextValue = Number(expenseBudgetInputEl.value);
+    if (!Number.isFinite(nextValue) || nextValue <= 0) {
+        refreshBudgetEditor();
+        return;
+    }
+
+    setStoredMonthlyBudget(nextValue);
+    updateBudgetSummary(currentBudgetSpend);
+}
+
+function resetMonthlyBudget() {
+    clearStoredMonthlyBudget();
+    updateBudgetSummary(currentBudgetSpend);
 }
 
 function updateHeroVendors(vendors) {

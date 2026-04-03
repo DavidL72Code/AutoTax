@@ -492,6 +492,92 @@ nav,
     font-size: 0.95rem;
 }
 
+.budget-over {
+    color: var(--accent-red);
+}
+
+.budget-editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.budget-input-shell {
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.budget-input-shell:focus-within {
+    border-color: rgba(217, 246, 103, 0.34);
+    background: rgba(255, 255, 255, 0.055);
+    box-shadow: 0 0 0 4px rgba(217, 246, 103, 0.08);
+}
+
+.budget-currency {
+    color: var(--text-faint);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+}
+
+.budget-input {
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+    color: var(--text);
+}
+
+.budget-input::placeholder {
+    color: var(--text-faint);
+}
+
+.budget-button {
+    min-height: 46px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease,
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.budget-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.budget-button-secondary {
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.budget-button-secondary:hover {
+    color: var(--text);
+}
+
+.budget-note {
+    color: var(--text-faint);
+    font-size: 0.82rem;
+}
+
+.budget-fill-over {
+    background: linear-gradient(90deg, #fb923c, #f87171 72%);
+    box-shadow: 0 0 16px rgba(248, 113, 113, 0.28);
+}
+
 .insights-panel {
     display: flex;
     flex-direction: column;
@@ -1535,6 +1621,14 @@ nav,
     .budget-footer {
         font-size: 0.78rem;
         letter-spacing: 0.12em;
+    }
+
+    .budget-editor {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .budget-input-shell {
+        grid-column: 1 / -1;
     }
 
     .csv-controls,
