@@ -14,7 +14,13 @@ _APP_DIR = Path(__file__).resolve().parent
 _TOKEN_PATH = _APP_DIR / "token.json"
 _CREDENTIALS_PATH = _APP_DIR / "credentials.json"
 
-def get_gmail_service():
+def _build_gmail_service(creds: Credentials):
+    return build('gmail','v1',credentials=creds)
+
+def get_gmail_service(creds: Credentials | None = None):
+    if creds is not None:
+        return _build_gmail_service(creds)
+
     creds=None
     if _TOKEN_PATH.exists():
         creds=Credentials.from_authorized_user_file(str(_TOKEN_PATH),SCOPES)
@@ -31,16 +37,29 @@ def get_gmail_service():
         with open(_TOKEN_PATH,'w') as token:
             token.write(creds.to_json())
         print("Authentication saved")
-    return build('gmail','v1',credentials=creds)
+    return _build_gmail_service(creds)
 
-def fetch_receipt_emails(max_results=15, days_back=60, existing_ids=None):
+def credentials_from_refresh_token(refresh_token: str, client_id: str, client_secret: str) -> Credentials:
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=SCOPES,
+    )
+    if not creds.valid and creds.refresh_token:
+        creds.refresh(Request())
+    return creds
+
+def fetch_receipt_emails(max_results=15, days_back=60, existing_ids=None, creds: Credentials | None = None):
     """
     Fetch receipt-like emails from Gmail.
     existing_ids: optional set of Gmail message ids already in DB; we skip fetching/parsing those to save time and AI.
     """
     try:
         print("Connecting to Gmail...")
-        service = get_gmail_service()
+        service = get_gmail_service(creds)
 
         query_parts = [
             '(subject:"confirmation" OR subject:"receipt" OR OR subject:"payment" OR subject:"order summary") -subject:"shipping" -subject:"delivered" -subject:"sale" -subject:"deals"',

@@ -3,10 +3,10 @@ from .parser_select import parser_select
 from .data_helper import log_transaction, get_existing_email_ids
 from .database import SessionLocal
 
-def main(user_id: int | None = None):
+def main(user_id: int | None = None, gmail_creds=None):
     # Only fetch/parse emails we don't already have (saves parsing and AI)
     existing_ids = get_existing_email_ids(user_id=user_id)
-    emails = fetch_receipt_emails(existing_ids=existing_ids)
+    emails = fetch_receipt_emails(existing_ids=existing_ids, creds=gmail_creds)
     db = SessionLocal()
     try:
         for email in emails:

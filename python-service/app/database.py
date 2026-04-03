@@ -2,7 +2,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from .config import settings
-from .models import Base, Vendor, User, AuthToken, Transaction
+from .models import Base, Vendor, User, AuthToken, Transaction, GoogleCredential
 
 # Create engine
 engine = create_engine(settings.database_url)

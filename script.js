@@ -43,6 +43,18 @@ let demoRunSkippedEl;
 let demoRunFailedEl;
 let loginBtn;
 let signupBtn;
+let connectGoogleBtn;
+let heroTotalSpentEl;
+let heroSummaryLineEl;
+let expensePreviewListEl;
+let expensePeriodLabelEl;
+let expenseBudgetUsedEl;
+let expenseBudgetCurrentEl;
+let expenseBudgetTargetEl;
+let expenseBudgetFillEl;
+let heroVendorListEl;
+let syncStatusTitleEl;
+let syncStatusMetaEl;
 let authModal;
 let authCloseBtn;
 let authTabLogin;
@@ -66,7 +78,7 @@ let activeDemoRunId = null;
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
     searchInput = document.querySelector('.search-input');
-    syncBtn = document.querySelector('.btn-action-primary');
+    syncBtn = document.querySelector('#sync-emails');
     exportBtn = document.querySelector('#export-csv');
     tableBody = document.querySelector('.transactions-table tbody');
     csvGroupSelect = document.querySelector('#csv-group');
@@ -94,6 +106,18 @@ document.addEventListener('DOMContentLoaded', function() {
     demoRunFailedEl = document.querySelector('#demo-run-failed');
     loginBtn = document.querySelector('.btn-login');
     signupBtn = document.querySelector('.btn-signup');
+    connectGoogleBtn = document.querySelector('.btn-connect-google');
+    heroTotalSpentEl = document.querySelector('#hero-total-spent');
+    heroSummaryLineEl = document.querySelector('#hero-summary-line');
+    expensePreviewListEl = document.querySelector('#expense-preview-list');
+    expensePeriodLabelEl = document.querySelector('#expense-period-label');
+    expenseBudgetUsedEl = document.querySelector('#expense-budget-used');
+    expenseBudgetCurrentEl = document.querySelector('#expense-budget-current');
+    expenseBudgetTargetEl = document.querySelector('#expense-budget-target');
+    expenseBudgetFillEl = document.querySelector('#expense-budget-fill');
+    heroVendorListEl = document.querySelector('#hero-vendor-list');
+    syncStatusTitleEl = document.querySelector('#sync-status-title');
+    syncStatusMetaEl = document.querySelector('#sync-status-meta');
     authModal = document.querySelector('#auth-modal');
     authCloseBtn = document.querySelector('#auth-close');
     authTabLogin = document.querySelector('#auth-tab-login');
@@ -266,6 +290,29 @@ function setupEventListeners() {
             submitSignup();
         });
     }
+
+    if (connectGoogleBtn) {
+        connectGoogleBtn.addEventListener('click', function() {
+            connectGoogle();
+        });
+    }
+}
+
+async function connectGoogle() {
+    if (!localStorage.getItem('AUTH_TOKEN')) {
+        handleAuthRequired();
+        return;
+    }
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/google/auth-url`, { cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.auth_url) {
+            throw new Error(result.detail || 'Failed to start Google OAuth');
+        }
+        window.location.href = result.auth_url;
+    } catch (error) {
+        showError(error.message || 'Could not start Google OAuth.');
+    }
 }
 
 function openAuthModal(mode) {
@@ -301,6 +348,11 @@ function setAuthState(user) {
     }
     if (signupBtn) {
         signupBtn.textContent = currentUser ? 'Log out' : 'Get Started';
+    }
+    if (currentUser) {
+        setSyncStatus('Inbox sync ready', 'Run Sync Emails below to refresh your latest receipts.');
+    } else {
+        setSyncStatus('Secure inbox connection', 'Log in to connect Gmail and unlock live receipt sync.');
     }
 }
 
@@ -389,7 +441,7 @@ async function logoutUser() {
 
 // Load all dashboard data from API
 async function loadDashboardData() {
-    console.log('📊 Loading dashboard data from API...');
+    console.log('Loading dashboard data from API...');
     
     try {
         // Load transactions, stats, and top vendors in parallel
@@ -399,9 +451,9 @@ async function loadDashboardData() {
             loadTopVendors()
         ]);
         
-        console.log('✅ Dashboard data loaded successfully');
+        console.log('Dashboard data loaded successfully');
     } catch (error) {
-        console.error('❌ Error loading dashboard:', error);
+        console.error('Error loading dashboard:', error);
         const base = API_BASE_URL || 'the API';
         const message = DEMO_MODE
             ? `Failed to load demo data. Make sure the API is running at ${base}.`
@@ -427,12 +479,14 @@ async function loadTransactions() {
             return t.amount != null && !Number.isNaN(amt) && amt !== 0 && Math.abs(amt) >= 0.0001;
         });
         
-        console.log(`📧 Loaded ${allTransactions.length} transactions`);
+        console.log(`Loaded ${allTransactions.length} transactions`);
         
         if (tableBody) {
             renderTransactionsTable();
             updateSortArrows();
         }
+
+        renderExpensePreview(allTransactions);
         
         return allTransactions;
     } catch (error) {
@@ -453,10 +507,11 @@ async function loadStats() {
         
         const stats = await response.json();
         
-        console.log('📊 Stats loaded:', stats);
+        console.log('Stats loaded:', stats);
         
         // Update stat cards
         updateStatCards(stats);
+        updateHeroSummary(stats);
         
         return stats;
     } catch (error) {
@@ -477,10 +532,11 @@ async function loadTopVendors() {
         
         const vendors = await response.json();
         
-        console.log('🏪 Top vendors loaded:', vendors);
+        console.log('Top vendors loaded:', vendors);
         
         // Update vendor cards
         updateVendorCards(vendors);
+        updateHeroVendors(vendors);
         
         return vendors;
     } catch (error) {
@@ -497,7 +553,7 @@ function updateStatCards(stats) {
         // Total Spent
         const totalSpentValue = statCards[0].querySelector('.stat-value-large');
         if (totalSpentValue) {
-            totalSpentValue.textContent = `$${stats.total_spent.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            totalSpentValue.textContent = formatCurrency(stats.total_spent || 0);
         }
         
         // Total Receipts
@@ -515,9 +571,203 @@ function updateStatCards(stats) {
         // Average Transaction
         const avgTransactionValue = statCards[3].querySelector('.stat-value-large');
         if (avgTransactionValue) {
-            avgTransactionValue.textContent = `$${stats.avg_transaction.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            avgTransactionValue.textContent = formatCurrency(stats.avg_transaction || 0);
         }
     }
+}
+
+function updateHeroSummary(stats) {
+    if (heroTotalSpentEl) {
+        heroTotalSpentEl.textContent = formatCurrency(stats.total_spent || 0);
+    }
+    if (heroSummaryLineEl) {
+        const receiptCount = Number(stats.total_receipts) || 0;
+        const vendorCount = Number(stats.unique_vendors) || 0;
+        const average = formatCurrency(stats.avg_transaction || 0);
+        heroSummaryLineEl.textContent = `${receiptCount} receipt${receiptCount === 1 ? '' : 's'} across ${vendorCount} vendor${vendorCount === 1 ? '' : 's'}. Average ticket ${average}.`;
+    }
+    updateBudgetSummary(Number(stats.total_spent) || 0);
+}
+
+function renderExpensePreview(transactions) {
+    if (!expensePreviewListEl) return;
+
+    const sorted = [...(transactions || [])].sort(compareTransactionsByNewest);
+    const previewItems = sorted.slice(0, 5);
+
+    if (!previewItems.length) {
+        expensePreviewListEl.innerHTML = '<div class="expense-empty">No synced receipts yet. Connect Gmail and run a sync to populate this feed.</div>';
+        if (expensePeriodLabelEl) {
+            expensePeriodLabelEl.textContent = formatMonthLabel();
+        }
+        updateBudgetSummary(0);
+        return;
+    }
+
+    expensePreviewListEl.innerHTML = previewItems.map(function(transaction) {
+        const vendorInfo = getVendorInfo(transaction.vendor);
+        const amount = Number(transaction.amount) || 0;
+        const absoluteAmount = Math.abs(amount);
+        const isCredit = amount < 0;
+        const amountClass = isCredit ? 'positive' : 'negative';
+        const amountPrefix = isCredit ? '+' : '-';
+        const meta = transaction.category
+            ? `${transaction.category} • ${formatIsoDateForEasternDisplay(transaction.date).dateFormatted}`
+            : `${getParserLabelText(transaction.vendor)} • ${formatIsoDateForEasternDisplay(transaction.date).dateFormatted}`;
+
+        return `
+            <div class="expense-item">
+                <div class="expense-avatar">${escapeHtml(vendorInfo.icon)}</div>
+                <div class="expense-copy">
+                    <div class="expense-name">${escapeHtml(transaction.vendor || 'Unknown vendor')}</div>
+                    <div class="expense-meta">${escapeHtml(meta)}</div>
+                </div>
+                <div class="expense-amount ${amountClass}">${amountPrefix}${formatCurrency(absoluteAmount)}</div>
+            </div>
+        `;
+    }).join('');
+
+    if (expensePeriodLabelEl) {
+        expensePeriodLabelEl.textContent = formatMonthLabel(previewItems[0].date);
+    }
+
+    const totalSpend = sorted.reduce(function(sum, transaction) {
+        const amount = Number(transaction.amount) || 0;
+        return amount > 0 ? sum + amount : sum;
+    }, 0);
+    updateBudgetSummary(totalSpend);
+}
+
+function updateBudgetSummary(totalSpend) {
+    const spend = Math.max(0, Number(totalSpend) || 0);
+    const target = spend > 0 ? Math.ceil((spend * 1.35) / 500) * 500 : 1500;
+    const ratio = target > 0 ? Math.min(spend / target, 1) : 0;
+
+    if (expenseBudgetUsedEl) {
+        expenseBudgetUsedEl.textContent = `${Math.round(ratio * 100)}% used`;
+    }
+    if (expenseBudgetCurrentEl) {
+        expenseBudgetCurrentEl.textContent = formatCurrency(spend, { whole: true });
+    }
+    if (expenseBudgetTargetEl) {
+        expenseBudgetTargetEl.textContent = formatCurrency(target, { whole: true });
+    }
+    if (expenseBudgetFillEl) {
+        const width = spend > 0 ? Math.max(ratio * 100, 8) : 0;
+        expenseBudgetFillEl.style.width = `${width}%`;
+    }
+}
+
+function updateHeroVendors(vendors) {
+    if (!heroVendorListEl) return;
+
+    const topVendors = (vendors || []).slice(0, 2);
+    if (!topVendors.length) {
+        heroVendorListEl.innerHTML = '<div class="hero-vendor-empty">Top merchants will appear here after your first successful sync.</div>';
+        return;
+    }
+
+    heroVendorListEl.innerHTML = topVendors.map(function(vendor, index) {
+        const dotClass = index === 0 ? 'hero-vendor-dot' : 'hero-vendor-dot hero-vendor-dot-secondary';
+        return `
+            <div class="hero-vendor-item">
+                <span class="${dotClass}"></span>
+                <div class="hero-vendor-copy">
+                    <div class="hero-vendor-name">${escapeHtml(vendor.vendor || 'Unknown vendor')}</div>
+                    <div class="hero-vendor-meta">${escapeHtml(buildVendorDescriptor(vendor, index))}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function compareTransactionsByNewest(a, b) {
+    return toComparableDateValue(b.date) - toComparableDateValue(a.date);
+}
+
+function toComparableDateValue(dateStr) {
+    const parts = parseIsoDateParts(dateStr);
+    if (parts) {
+        return Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+    }
+    const date = new Date(dateStr);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function formatMonthLabel(dateStr) {
+    const value = dateStr ? toComparableDateValue(dateStr) : Date.now();
+    const safeValue = value > 0 ? value : Date.now();
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'America/New_York'
+    }).format(new Date(safeValue));
+}
+
+function formatCurrency(value, options = {}) {
+    const whole = Boolean(options.whole);
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: whole ? 0 : 2,
+        maximumFractionDigits: whole ? 0 : 2
+    }).format(Number(value) || 0);
+}
+
+function getParserLabelText(vendor) {
+    const vendorLower = String(vendor || '').toLowerCase();
+    if (vendorLower.includes('amazon')) {
+        return 'Amazon Parser';
+    }
+    if (vendorLower.includes('paypal')) {
+        return 'PayPal Parser';
+    }
+    return 'Auto classified';
+}
+
+function buildVendorDescriptor(vendor, index) {
+    const count = Number(vendor.count) || 0;
+    const detail = index === 0 ? 'Highest spend' : 'Consistent volume';
+    return count
+        ? `${count} receipt${count === 1 ? '' : 's'} • ${detail}`
+        : detail;
+}
+
+function buildVendorCategoryLabel(vendor, index) {
+    const count = Number(vendor.count) || 0;
+    const total = Number(vendor.total) || 0;
+    if (index === 0) return 'Top spend contributor';
+    if (count >= 10) return 'High-frequency merchant';
+    if (total >= 500) return 'High-value merchant';
+    return 'Tracked merchant';
+}
+
+function buildVendorFooterLabel(vendor, index) {
+    const count = Number(vendor.count) || 0;
+    if (index === 0) return 'Largest contributor this cycle';
+    if (count >= 10) return 'Frequent repeat spend';
+    return 'Steady transaction flow';
+}
+
+function setSyncStatus(title, meta) {
+    if (syncStatusTitleEl) {
+        syncStatusTitleEl.textContent = title;
+    }
+    if (syncStatusMetaEl) {
+        syncStatusMetaEl.textContent = meta;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, function(char) {
+        return ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[char];
+    });
 }
 
 // Sort and render table from cached allTransactions
@@ -639,6 +889,10 @@ function createTransactionRow(transaction) {
     
     // Determine parser badge
     const parserBadge = getParserBadge(transaction.vendor);
+    const vendorName = escapeHtml(transaction.vendor || 'Unknown vendor');
+    const emailPreview = escapeHtml(String(transaction.email_id || 'manual-entry').slice(0, 20));
+    const amountValue = Number(transaction.amount) || 0;
+    const taxValue = Number(transaction.tax) || 0;
     
     row.innerHTML = `
         <td>
@@ -653,23 +907,23 @@ function createTransactionRow(transaction) {
                     <span class="vendor-icon">${vendorInfo.icon}</span>
                 </div>
                 <div class="vendor-info">
-                    <span class="vendor-name">${transaction.vendor}</span>
-                    <span class="vendor-email">${transaction.email_id.substring(0, 20)}...</span>
+                    <span class="vendor-name">${vendorName}</span>
+                    <span class="vendor-email">${emailPreview}...</span>
                 </div>
             </div>
         </td>
         <td>
-            <div class="amount-value">$${transaction.amount.toFixed(2)}</div>
+            <div class="amount-value">${formatCurrency(amountValue)}</div>
         </td>
         <td>
-            <span class="tax-value">$${(Number(transaction.tax) || 0).toFixed(2)}</span>
+            <span class="tax-value">${formatCurrency(taxValue)}</span>
         </td>
         <td>
             ${parserBadge}
         </td>
         <td>
             <span class="status status-success">
-                <span class="status-icon">✓</span>
+                <span class="status-icon">OK</span>
                 Processed
             </span>
         </td>
@@ -683,28 +937,16 @@ function createTransactionRow(transaction) {
 
 // Get vendor icon and color class
 function getVendorInfo(vendor) {
-    const vendorLower = vendor.toLowerCase();
-    
-    if (vendorLower.includes('amazon')) {
-        return { icon: '🛒', colorClass: 'amazon-color' };
-    } else if (vendorLower.includes('uber') || vendorLower.includes('eats')) {
-        return { icon: '🍕', colorClass: 'ubereats-color' };
-    } else if (vendorLower.includes('starbucks')) {
-        return { icon: '☕', colorClass: 'starbucks-color' };
-    } else if (vendorLower.includes('best buy') || vendorLower.includes('bestbuy')) {
-        return { icon: '🏬', colorClass: 'bestbuy-color' };
-    } else if (vendorLower.includes('mcdonald')) {
-        return { icon: '🍔', colorClass: 'mcdonalds-color' };
-    } else if (vendorLower.includes('paypal')) {
-        return { icon: '💳', colorClass: 'bestbuy-color' };
-    } else {
-        return { icon: '🏪', colorClass: 'amazon-color' };
-    }
+    const name = (vendor || '').trim();
+    const initials = name
+        ? name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
+        : 'V';
+    return { icon: initials, colorClass: 'amazon-color' };
 }
 
 // Get parser badge based on vendor
 function getParserBadge(vendor) {
-    const vendorLower = vendor.toLowerCase();
+    const vendorLower = String(vendor || '').toLowerCase();
     
     if (vendorLower.includes('amazon')) {
         return `
@@ -732,19 +974,11 @@ function getParserBadge(vendor) {
 
 // Update vendor cards with real data
 function updateVendorCards(vendors) {
+    vendors = vendors || [];
     const vendorCards = document.querySelectorAll('.vendor-card-new');
-    
-    // Get emoji map
-    const vendorEmojis = {
-        'amazon': '🛒',
-        'ubereats': '🍕',
-        'uber eats': '🍕',
-        'starbucks': '☕',
-        'best buy': '🏬',
-        'bestbuy': '🏬',
-        'paypal': '💳',
-        'mcdonald': '🍔'
-    };
+    const maxTotal = Math.max.apply(null, [1].concat((vendors || []).map(function(vendor) {
+        return Number(vendor.total) || 0;
+    })));
     
     vendorCards.forEach((card, index) => {
         if (index >= vendors.length) {
@@ -753,31 +987,45 @@ function updateVendorCards(vendors) {
         }
         card.classList.remove('vendor-card-empty');
         const vendor = vendors[index];
-
-        // Find emoji
-        let emoji = '🏪';
-        for (const [key, value] of Object.entries(vendorEmojis)) {
-            if (vendor.vendor.toLowerCase().includes(key)) {
-                emoji = value;
-                break;
-            }
-        }
+        const name = (vendor.vendor || '').trim();
+        const initials = name
+            ? name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
+            : 'V';
 
         // Update vendor name
         const nameEl = card.querySelector('.vendor-card-name');
         if (nameEl) nameEl.textContent = vendor.vendor;
 
-        // Update emoji
+        // Update category label
+        const categoryEl = card.querySelector('.vendor-card-category');
+        if (categoryEl) categoryEl.textContent = buildVendorCategoryLabel(vendor, index);
+
+        // Update initials
         const emojiEl = card.querySelector('.vendor-logo-large');
-        if (emojiEl) emojiEl.textContent = emoji;
+        if (emojiEl) emojiEl.textContent = initials;
 
         // Update amount
         const amountEl = card.querySelector('.vendor-card-amount');
-        if (amountEl) amountEl.textContent = `$${vendor.total.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+        if (amountEl) amountEl.textContent = formatCurrency(vendor.total || 0);
 
         // Update transaction count
         const countEl = card.querySelector('.vendor-card-transactions');
         if (countEl) countEl.textContent = `${vendor.count} transaction${vendor.count !== 1 ? 's' : ''}`;
+
+        const progressEl = card.querySelector('.progress-fill-new');
+        if (progressEl) {
+            const width = Math.max(12, Math.round(((Number(vendor.total) || 0) / maxTotal) * 100));
+            progressEl.style.width = `${width}%`;
+        }
+
+        const footerEl = card.querySelector('.vendor-card-footer');
+        if (footerEl) {
+            footerEl.innerHTML = '';
+            const footerCopy = document.createElement('span');
+            footerCopy.className = index === 0 ? 'trend-up' : 'trend-neutral';
+            footerCopy.textContent = buildVendorFooterLabel(vendor, index);
+            footerEl.appendChild(footerCopy);
+        }
     });
 }
 
@@ -811,11 +1059,12 @@ async function syncEmails() {
     const originalHTML = syncBtn.innerHTML;
     const previousSignature = buildTransactionSignature(allTransactions);
     
-    syncBtn.innerHTML = '<span>⏳</span> Starting sync...';
+    syncBtn.textContent = 'Starting sync...';
     syncBtn.disabled = true;
+    setSyncStatus('Sync requested', 'Polling Gmail for fresh receipt activity.');
     
     try {
-        console.log('🔄 Starting email sync...');
+        console.log('Starting email sync...');
         
         const response = await fetch(`${API_BASE_URL}/api/sync`, {
             method: 'POST',
@@ -829,14 +1078,15 @@ async function syncEmails() {
             throw new Error(detail);
         }
         
-        console.log('✅ Sync started:', result);
+        console.log('Sync started:', result);
         
-        syncBtn.innerHTML = '<span>⏳</span> Syncing...';
+        syncBtn.textContent = 'Syncing...';
         startSyncRefreshLoop(previousSignature, originalHTML);
         
     } catch (error) {
-        console.error('❌ Sync failed:', error);
-        syncBtn.innerHTML = '<span>⚠</span> Sync Failed';
+        console.error('Sync failed:', error);
+        syncBtn.textContent = 'Sync Failed';
+        setSyncStatus('Sync failed', error.message || 'Email sync failed.');
         
         setTimeout(() => {
             syncBtn.innerHTML = originalHTML;
@@ -927,7 +1177,7 @@ async function loadDemoEmails() {
 async function runDemoGenerate() {
     if (!demoGenerateBtn) return;
     const originalHTML = demoGenerateBtn.innerHTML;
-    demoGenerateBtn.innerHTML = '<span>⏳</span> Generating...';
+    demoGenerateBtn.textContent = 'Generating...';
     demoGenerateBtn.disabled = true;
     try {
         const response = await fetch(`${API_BASE_URL}/api/demo-generate`, { method: 'POST' });
@@ -935,7 +1185,7 @@ async function runDemoGenerate() {
         if (!response.ok) {
             throw new Error(result.detail || 'Demo generation failed');
         }
-        demoGenerateBtn.innerHTML = '<span>✓</span> Demo Emails Ready';
+        demoGenerateBtn.textContent = 'Demo Emails Ready';
         appendDemoRunLog(`Generated ${result.count || 0} demo emails.`);
         if (DEMO_MODE) {
             await loadDemoEmails();
@@ -945,7 +1195,7 @@ async function runDemoGenerate() {
             demoGenerateBtn.disabled = false;
         }, 1500);
     } catch (error) {
-        demoGenerateBtn.innerHTML = '<span>⚠</span> Failed';
+        demoGenerateBtn.textContent = 'Failed';
         setTimeout(() => {
             demoGenerateBtn.innerHTML = originalHTML;
             demoGenerateBtn.disabled = false;
@@ -957,7 +1207,7 @@ async function runDemoGenerate() {
 async function runDemoParse() {
     if (!demoParseBtn) return;
     const originalHTML = demoParseBtn.innerHTML;
-    demoParseBtn.innerHTML = '<span>⏳</span> Starting Parse...';
+    demoParseBtn.textContent = 'Starting Parse...';
     demoParseBtn.disabled = true;
 
     if (demoParsePollTimer) {
@@ -973,11 +1223,11 @@ async function runDemoParse() {
             throw new Error(result.detail || 'Demo parse failed to start');
         }
         activeDemoRunId = result.run_id;
-        demoParseBtn.innerHTML = '<span>⏳</span> Parsing...';
+        demoParseBtn.textContent = 'Parsing...';
         appendDemoRunLog(`Started demo parse run ${activeDemoRunId}.`);
         startDemoParsePolling(originalHTML);
     } catch (error) {
-        demoParseBtn.innerHTML = '<span>⚠</span> Failed';
+        demoParseBtn.textContent = 'Failed';
         setTimeout(() => {
             demoParseBtn.innerHTML = originalHTML;
             demoParseBtn.disabled = false;
@@ -1002,13 +1252,13 @@ function startDemoParsePolling(originalHTML) {
                 clearInterval(demoParsePollTimer);
                 demoParsePollTimer = null;
                 if (result.status === 'completed') {
-                    demoParseBtn.innerHTML = '<span>✓</span> Parse Complete';
+                    demoParseBtn.textContent = 'Parse Complete';
                     await loadDashboardData();
                     if (DEMO_MODE) {
                         await loadDemoEmails();
                     }
                 } else {
-                    demoParseBtn.innerHTML = '<span>⚠</span> Parse Failed';
+                    demoParseBtn.textContent = 'Parse Failed';
                 }
                 setTimeout(() => {
                     if (!demoParseBtn) return;
@@ -1020,7 +1270,7 @@ function startDemoParsePolling(originalHTML) {
             clearInterval(demoParsePollTimer);
             demoParsePollTimer = null;
             if (demoParseBtn) {
-                demoParseBtn.innerHTML = '<span>⚠</span> Poll Failed';
+                demoParseBtn.textContent = 'Poll Failed';
                 setTimeout(() => {
                     demoParseBtn.innerHTML = originalHTML;
                     demoParseBtn.disabled = false;
@@ -1041,7 +1291,7 @@ async function clearAllTransactions() {
         return;
     }
     const originalHTML = clearBtn.innerHTML;
-    clearBtn.innerHTML = '<span>⏳</span> Clearing...';
+    clearBtn.textContent = 'Clearing...';
     clearBtn.disabled = true;
     try {
         const endpoint = DEMO_MODE ? '/api/demo/clear' : '/api/transactions/clear';
@@ -1053,14 +1303,16 @@ async function clearAllTransactions() {
         if (!response.ok) {
             throw new Error(result.detail || 'Clear failed');
         }
-        clearBtn.innerHTML = '<span>✓</span> Cleared';
+        clearBtn.textContent = 'Cleared';
         await loadDashboardData();
+        setSyncStatus('Transactions cleared', 'The dashboard is empty until the next sync.');
         setTimeout(() => {
             clearBtn.innerHTML = originalHTML;
             clearBtn.disabled = false;
         }, 2000);
     } catch (error) {
-        clearBtn.innerHTML = '<span>⚠</span> Failed';
+        clearBtn.textContent = 'Failed';
+        setSyncStatus('Clear failed', error.message || 'Could not clear transactions.');
         setTimeout(() => {
             clearBtn.innerHTML = originalHTML;
             clearBtn.disabled = false;
@@ -1089,7 +1341,8 @@ function startSyncRefreshLoop(previousSignature, originalHTML) {
             if (nextSignature !== previousSignature) {
                 clearInterval(syncPollTimer);
                 syncPollTimer = null;
-                syncBtn.innerHTML = '<span>✓</span> Updated';
+                syncBtn.textContent = 'Updated';
+                setSyncStatus('New receipts loaded', `${allTransactions.length} receipts are ready in the transaction console.`);
                 setTimeout(() => {
                     syncBtn.innerHTML = originalHTML;
                     syncBtn.disabled = false;
@@ -1099,7 +1352,8 @@ function startSyncRefreshLoop(previousSignature, originalHTML) {
             if (Date.now() - start > 90000) {
                 clearInterval(syncPollTimer);
                 syncPollTimer = null;
-                syncBtn.innerHTML = '<span>✓</span> Sync complete';
+                syncBtn.textContent = 'Sync complete';
+                setSyncStatus('Sync complete', 'No new receipts were detected during the polling window.');
                 setTimeout(() => {
                     syncBtn.innerHTML = originalHTML;
                     syncBtn.disabled = false;
@@ -1360,7 +1614,7 @@ function exportToCSV() {
     // Show feedback
     if (exportBtn) {
         const originalText = exportBtn.innerHTML;
-        exportBtn.innerHTML = '<span>✓</span> Exported!';
+        exportBtn.textContent = 'Exported';
         setTimeout(() => {
             exportBtn.innerHTML = originalText;
         }, 2000);
@@ -1472,7 +1726,7 @@ function showError(message) {
         max-width: 400px;
         font-weight: 600;
     `;
-    notification.textContent = `⚠️ ${message}`;
+    notification.textContent = `Notice: ${message}`;
     
     document.body.appendChild(notification);
     

@@ -13,7 +13,11 @@ from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .data_helper import get_all_transactions, delete_zero_amount_transactions, get_existing_email_ids
 from .database import SessionLocal
-from .models import Transaction, User, AuthToken
+from .models import Transaction, User, AuthToken, GoogleCredential
+from .config import settings
+from cryptography.fernet import Fernet, InvalidToken
+from google_auth_oauthlib.flow import Flow
+from .email_scraper import credentials_from_refresh_token
 from datetime import datetime, timedelta
 import uvicorn
 from dateutil import parser as date_parser
@@ -116,6 +120,20 @@ def _require_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user
 
+def _get_fernet() -> Fernet:
+    key = settings.fernet_key or ""
+    if not key:
+        raise HTTPException(status_code=500, detail="FERNET_KEY is not configured")
+    return Fernet(key.encode("utf-8"))
+
+def _encrypt_token(raw: str) -> str:
+    f = _get_fernet()
+    return f.encrypt(raw.encode("utf-8")).decode("utf-8")
+
+def _decrypt_token(enc: str) -> str:
+    f = _get_fernet()
+    return f.decrypt(enc.encode("utf-8")).decode("utf-8")
+
 def _get_demo_user() -> User:
     """Ensure a shared demo user exists and return it."""
     db = SessionLocal()
@@ -128,6 +146,19 @@ def _get_demo_user() -> User:
         db.commit()
         db.refresh(demo)
         return demo
+    finally:
+        db.close()
+
+def _get_google_refresh_token_for_user(user_id: int) -> str | None:
+    db = SessionLocal()
+    try:
+        row = db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
+        if not row:
+            return None
+        try:
+            return _decrypt_token(row.refresh_token_enc)
+        except InvalidToken:
+            return None
     finally:
         db.close()
 
@@ -196,6 +227,88 @@ def logout(request: Request):
 def auth_me(request: Request):
     user = _require_user(request)
     return {"id": user.id, "username": user.username}
+
+@app.get("/api/google/auth-url")
+def google_auth_url(request: Request):
+    user = _require_user(request)
+    client_id = settings.google_oauth_client_id or ""
+    client_secret = settings.google_oauth_client_secret or ""
+    redirect_uri = settings.google_oauth_redirect_uri or ""
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(status_code=500, detail="Google OAuth config missing")
+
+    state_payload = {
+        "user_id": user.id,
+        "nonce": secrets.token_urlsafe(12),
+        "ts": datetime.utcnow().isoformat() + "Z",
+    }
+    state = _encrypt_token(json.dumps(state_payload))
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+        redirect_uri=redirect_uri,
+    )
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+        state=state,
+    )
+    return {"auth_url": auth_url}
+
+@app.get("/api/google/callback")
+def google_oauth_callback(code: str, state: str):
+    client_id = settings.google_oauth_client_id or ""
+    client_secret = settings.google_oauth_client_secret or ""
+    redirect_uri = settings.google_oauth_redirect_uri or ""
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(status_code=500, detail="Google OAuth config missing")
+
+    try:
+        state_data = json.loads(_decrypt_token(state))
+        user_id = int(state_data.get("user_id"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid state")
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+        redirect_uri=redirect_uri,
+    )
+    flow.fetch_token(code=code)
+    creds = flow.credentials
+    if not creds or not creds.refresh_token:
+        raise HTTPException(status_code=400, detail="No refresh token returned")
+
+    enc_refresh = _encrypt_token(creds.refresh_token)
+    db = SessionLocal()
+    try:
+        row = db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
+        if row:
+            row.refresh_token_enc = enc_refresh
+        else:
+            row = GoogleCredential(user_id=user_id, refresh_token_enc=enc_refresh)
+            db.add(row)
+        db.commit()
+    finally:
+        db.close()
+
+    return {"status": "success"}
 
 def _nonzero_transactions(transactions):
     """Filter out transactions with amount 0 or None (no expenditure)."""
@@ -304,8 +417,18 @@ def _run_sync(user_id: int):
     """Run email sync in background (avoids request timeouts). Auto-removes $0 transactions after sync."""
     try:
         from .main import main
+        refresh_token = _get_google_refresh_token_for_user(user_id)
+        if not refresh_token:
+            print("❌ No Google OAuth token found for user.")
+            return
+        client_id = settings.google_oauth_client_id or ""
+        client_secret = settings.google_oauth_client_secret or ""
+        if not client_id or not client_secret:
+            print("❌ Google OAuth client config missing.")
+            return
+        gmail_creds = credentials_from_refresh_token(refresh_token, client_id, client_secret)
         print("🔄 Starting email sync...")
-        main(user_id=user_id)
+        main(user_id=user_id, gmail_creds=gmail_creds)
         deleted = delete_zero_amount_transactions(user_id=user_id)
         if deleted:
             print(f"🧹 Removed {deleted} zero-amount transaction(s) after sync.")
@@ -740,6 +863,8 @@ def sync_emails(request: Request):
     """Start email scraper in background; returns immediately so the request doesn't timeout."""
     try:
         user = _require_user(request)
+        if not _get_google_refresh_token_for_user(user.id):
+            raise HTTPException(status_code=400, detail="Google OAuth not connected for this user.")
         thread = threading.Thread(target=_run_sync, args=(user.id,), daemon=True)
         thread.start()
         return {"status": "success", "message": "Sync started. Fetching and parsing emails in the background—refresh in a minute to see new receipts."}

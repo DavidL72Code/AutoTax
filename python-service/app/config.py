@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     google_api_key: Optional[str] = None
     gemini_model: str = "models/gemma-3-27b-it"
     openai_api_key: Optional[str] = None  # reserved for future fallback provider support
+    google_oauth_client_id: Optional[str] = None
+    google_oauth_client_secret: Optional[str] = None
+    google_oauth_redirect_uri: Optional[str] = None
+    fernet_key: Optional[str] = None
 
     # gets mode and log should be string in env if not defaults to dev and info
     app_env: str = "development"
