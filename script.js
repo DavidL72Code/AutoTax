@@ -69,6 +69,7 @@ let authFormSignup;
 let authLoginUsername;
 let authLoginPassword;
 let authSignupUsername;
+let authSignupEmail;
 let authSignupPassword;
 let currentUser = null;
 
@@ -137,6 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
     authLoginUsername = document.querySelector('#auth-login-username');
     authLoginPassword = document.querySelector('#auth-login-password');
     authSignupUsername = document.querySelector('#auth-signup-username');
+    authSignupEmail = document.querySelector('#auth-signup-email');
     authSignupPassword = document.querySelector('#auth-signup-password');
     
     // Initialize animations
@@ -327,6 +329,11 @@ function setupEventListeners() {
             submitSignup();
         });
     }
+    if (authSignupPassword) {
+        authSignupPassword.addEventListener('input', function() {
+            updatePasswordRequirementState(authSignupPassword.value);
+        });
+    }
 
     if (connectGoogleBtn) {
         connectGoogleBtn.addEventListener('click', function() {
@@ -358,6 +365,12 @@ function openAuthModal(mode) {
     authModal.classList.add('show');
     authModal.hidden = false;
     authModal.style.display = 'flex';
+    const firstField = mode === 'signup' ? authSignupUsername : authLoginUsername;
+    if (firstField) {
+        setTimeout(function() {
+            firstField.focus();
+        }, 0);
+    }
 }
 
 function closeAuthModal() {
@@ -373,9 +386,12 @@ function setAuthMode(mode) {
     if (authTabSignup) authTabSignup.classList.toggle('auth-tab-active', !isLogin);
     if (authFormLogin) authFormLogin.hidden = !isLogin;
     if (authFormSignup) authFormSignup.hidden = isLogin;
-    const title = isLogin ? 'Log in' : 'Sign up';
+    const title = isLogin ? 'Login' : 'Sign up';
     const titleEl = document.querySelector('#auth-modal-title');
     if (titleEl) titleEl.textContent = title;
+    if (!isLogin) {
+        updatePasswordRequirementState(authSignupPassword ? authSignupPassword.value : '');
+    }
 }
 
 function setAuthState(user) {
@@ -384,7 +400,7 @@ function setAuthState(user) {
         loginBtn.textContent = currentUser ? currentUser.username : 'Log in';
     }
     if (signupBtn) {
-        signupBtn.textContent = currentUser ? 'Log out' : 'Get Started';
+        signupBtn.textContent = currentUser ? 'Log out' : 'Sign up';
     }
     if (currentUser) {
         setSyncStatus('Inbox sync ready', 'Run Sync Emails below to refresh your latest receipts.');
@@ -418,7 +434,7 @@ async function submitLogin() {
     const username = authLoginUsername.value.trim();
     const password = authLoginPassword.value;
     if (!username || !password) {
-        showError('Enter your username and password.');
+        showError('Enter your username or email and password.');
         return;
     }
     try {
@@ -441,18 +457,28 @@ async function submitLogin() {
 }
 
 async function submitSignup() {
-    if (!authSignupUsername || !authSignupPassword) return;
+    if (!authSignupUsername || !authSignupEmail || !authSignupPassword) return;
     const username = authSignupUsername.value.trim();
+    const email = authSignupEmail.value.trim().toLowerCase();
     const password = authSignupPassword.value;
-    if (!username || !password) {
-        showError('Enter a username and password.');
+    if (!username || !email || !password) {
+        showError('Enter a username, email, and password.');
+        return;
+    }
+    if (!isValidEmail(email)) {
+        showError('Enter a valid email address.');
+        return;
+    }
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+        showError(passwordValidation.message);
         return;
     }
     try {
         const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, email, password })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -461,6 +487,7 @@ async function submitSignup() {
         localStorage.setItem('AUTH_TOKEN', result.token);
         setAuthState(result.user);
         closeAuthModal();
+        showSuccess('Signed up successfully. You are now logged in.');
         loadDashboardData();
     } catch (error) {
         showError(error.message || 'Signup failed.');
@@ -771,6 +798,42 @@ function saveMonthlyBudget() {
 function resetMonthlyBudget() {
     clearStoredMonthlyBudget();
     updateBudgetSummary(currentBudgetSpend);
+}
+
+function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function validatePasswordStrength(password) {
+    const value = String(password || '');
+    const checks = {
+        length: value.length >= 8,
+        uppercase: /[A-Z]/.test(value),
+        number: /\d/.test(value),
+        special: /[^A-Za-z0-9]/.test(value)
+    };
+    const valid = Object.values(checks).every(Boolean);
+    const requirements = [];
+    if (!checks.length) requirements.push('at least 8 characters');
+    if (!checks.uppercase) requirements.push('1 uppercase letter');
+    if (!checks.number) requirements.push('1 number');
+    if (!checks.special) requirements.push('1 special character');
+    return {
+        valid,
+        checks,
+        message: valid
+            ? ''
+            : `Password not strong enough. It needs ${requirements.join(', ')}.`
+    };
+}
+
+function updatePasswordRequirementState(password) {
+    const validation = validatePasswordStrength(password);
+    document.querySelectorAll('[data-password-rule]').forEach(function(rule) {
+        const key = rule.getAttribute('data-password-rule');
+        const satisfied = Boolean(validation.checks[key]);
+        rule.classList.toggle('password-rule-valid', satisfied);
+    });
 }
 
 function updateHeroVendors(vendors) {
@@ -1845,24 +1908,36 @@ async function deleteTransaction() {
 
 // Show error message
 function showError(message) {
-    console.error(message);
-    
-    // Create error notification
+    showNotification(message, 'error');
+}
+
+function showSuccess(message) {
+    showNotification(message, 'success');
+}
+
+function showNotification(message, variant) {
+    const isSuccess = variant === 'success';
+    if (isSuccess) {
+        console.log(message);
+    } else {
+        console.error(message);
+    }
+
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        background: linear-gradient(135deg, #ef4444, #dc2626);
+        background: ${isSuccess ? 'linear-gradient(135deg, #22c55e, #15803d)' : 'linear-gradient(135deg, #ef4444, #dc2626)'};
         color: white;
         padding: 1rem 1.5rem;
         border-radius: 12px;
-        box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+        box-shadow: ${isSuccess ? '0 8px 25px rgba(34, 197, 94, 0.3)' : '0 8px 25px rgba(239, 68, 68, 0.3)'};
         z-index: 10000;
         max-width: 400px;
         font-weight: 600;
     `;
-    notification.textContent = `Notice: ${message}`;
+    notification.textContent = `${isSuccess ? 'Success' : 'Notice'}: ${message}`;
     
     document.body.appendChild(notification);
     

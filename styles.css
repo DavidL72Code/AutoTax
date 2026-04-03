@@ -1466,6 +1466,54 @@ nav,
     font-weight: 600;
 }
 
+.auth-helper {
+    margin-top: -2px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auth-helper-title {
+    color: var(--text-soft);
+    font-size: 0.86rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.password-rules {
+    display: grid;
+    gap: 8px;
+}
+
+.password-rule {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-faint);
+    font-size: 0.84rem;
+    line-height: 1.4;
+}
+
+.password-rule::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(248, 113, 113, 0.9);
+    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+    flex: 0 0 auto;
+}
+
+.password-rule-valid {
+    color: var(--accent-green);
+}
+
+.password-rule-valid::before {
+    background: var(--accent-green);
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.16);
+}
+
 .modal-actions {
     display: flex;
     justify-content: flex-end;

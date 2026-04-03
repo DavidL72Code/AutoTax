@@ -27,6 +27,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from sqlalchemy import or_
 from .ai_client import generate_text
 
 app = FastAPI()
@@ -44,6 +45,7 @@ app.add_middleware(
 
 PASSWORD_ITERATIONS = 120_000
 TOKEN_TTL_DAYS = 30
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 def _hash_password(password: str) -> str:
     salt = os.urandom(16)
@@ -70,6 +72,24 @@ def _create_token(user_id: int) -> str:
         return token
     finally:
         db.close()
+
+def _normalize_username(value: str) -> str:
+    return (value or "").strip().lower()
+
+def _normalize_email(value: str) -> str:
+    return (value or "").strip().lower()
+
+def _validate_password(password: str) -> list[str]:
+    requirements = []
+    if len(password) < 8:
+        requirements.append("at least 8 characters")
+    if not re.search(r"[A-Z]", password):
+        requirements.append("1 uppercase letter")
+    if not re.search(r"\d", password):
+        requirements.append("1 number")
+    if not re.search(r"[^A-Za-z0-9]", password):
+        requirements.append("1 special character")
+    return requirements
 
 def _claim_legacy_transactions(user_id: int):
     """Assign legacy transactions (user_id is NULL) to the only user in the system."""
@@ -168,40 +188,52 @@ def root():
 
 @app.post("/api/auth/register")
 def register(payload: dict = Body(...)):
-    username = (payload.get("username") or "").strip().lower()
+    username = _normalize_username(payload.get("username") or "")
+    email = _normalize_email(payload.get("email") or "")
     password = payload.get("password") or ""
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters.")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+    if not EMAIL_REGEX.match(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    password_requirements = _validate_password(password)
+    if password_requirements:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password not strong enough. It needs {', '.join(password_requirements)}."
+        )
 
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.username == username).first()
         if existing:
             raise HTTPException(status_code=400, detail="Username already exists.")
-        user = User(username=username, password_hash=_hash_password(password))
+        existing_email = db.query(User).filter(User.email == email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists.")
+        user = User(username=username, email=email, password_hash=_hash_password(password))
         db.add(user)
         db.commit()
         db.refresh(user)
         _claim_legacy_transactions(user.id)
         token = _create_token(user.id)
-        return {"token": token, "user": {"id": user.id, "username": user.username}}
+        return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
     finally:
         db.close()
 
 @app.post("/api/auth/login")
 def login(payload: dict = Body(...)):
-    username = (payload.get("username") or "").strip().lower()
+    username = _normalize_username(payload.get("username") or payload.get("email") or "")
     password = payload.get("password") or ""
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.username == username).first()
+        user = db.query(User).filter(or_(User.username == username, User.email == username)).first()
         if not user or not _verify_password(password, user.password_hash):
-            raise HTTPException(status_code=401, detail="Invalid username or password.")
+            raise HTTPException(status_code=401, detail="Invalid username/email or password.")
         _claim_legacy_transactions(user.id)
         token = _create_token(user.id)
-        return {"token": token, "user": {"id": user.id, "username": user.username}}
+        return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
     finally:
         db.close()
 
@@ -226,7 +258,7 @@ def logout(request: Request):
 @app.get("/api/auth/me")
 def auth_me(request: Request):
     user = _require_user(request)
-    return {"id": user.id, "username": user.username}
+    return {"id": user.id, "username": user.username, "email": user.email}
 
 @app.get("/api/google/auth-url")
 def google_auth_url(request: Request):

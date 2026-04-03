@@ -22,7 +22,7 @@
             </div>
             <div class="nav-actions">
                 <button class="btn-login">Log in</button>
-                <button class="btn-signup">Get Started</button>
+                <button class="btn-signup">Sign up</button>
             </div>
         </div>
     </nav>
@@ -390,16 +390,16 @@
     <div id="auth-modal" class="modal-overlay" aria-hidden="true" style="display:none;" hidden>
         <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
             <div class="auth-header">
-                <h3 id="auth-modal-title" class="auth-title">Log in</h3>
+                <h3 id="auth-modal-title" class="auth-title">Login</h3>
                 <button id="auth-close" class="modal-close" type="button" aria-label="Close">×</button>
             </div>
             <div class="auth-tabs">
-                <button id="auth-tab-login" class="auth-tab auth-tab-active" type="button">Log in</button>
+                <button id="auth-tab-login" class="auth-tab auth-tab-active" type="button">Login</button>
                 <button id="auth-tab-signup" class="auth-tab" type="button">Sign up</button>
             </div>
             <form id="auth-form-login" class="auth-form">
-                <label class="modal-label" for="auth-login-username">Username</label>
-                <input id="auth-login-username" class="modal-input" type="text" autocomplete="username" />
+                <label class="modal-label" for="auth-login-username">Login Username</label>
+                <input id="auth-login-username" class="modal-input" type="text" autocomplete="username" placeholder="Username or email" />
                 <label class="modal-label" for="auth-login-password">Password</label>
                 <input id="auth-login-password" class="modal-input" type="password" autocomplete="current-password" />
                 <button id="auth-login-submit" class="btn-action-primary" type="submit">Log in</button>
@@ -407,9 +407,20 @@
             <form id="auth-form-signup" class="auth-form" hidden>
                 <label class="modal-label" for="auth-signup-username">Username</label>
                 <input id="auth-signup-username" class="modal-input" type="text" autocomplete="username" />
+                <label class="modal-label" for="auth-signup-email">Email</label>
+                <input id="auth-signup-email" class="modal-input" type="email" autocomplete="email" placeholder="you@example.com" />
                 <label class="modal-label" for="auth-signup-password">Password</label>
                 <input id="auth-signup-password" class="modal-input" type="password" autocomplete="new-password" />
-                <button id="auth-signup-submit" class="btn-action-primary" type="submit">Create account</button>
+                <div id="auth-password-helper" class="auth-helper" aria-live="polite">
+                    <p class="auth-helper-title">Password requirements</p>
+                    <div class="password-rules">
+                        <span class="password-rule" data-password-rule="length">At least 8 characters</span>
+                        <span class="password-rule" data-password-rule="uppercase">1 uppercase letter</span>
+                        <span class="password-rule" data-password-rule="number">1 number</span>
+                        <span class="password-rule" data-password-rule="special">1 special character</span>
+                    </div>
+                </div>
+                <button id="auth-signup-submit" class="btn-action-primary" type="submit">Sign up</button>
             </form>
         </div>
     </div>
