@@ -104,6 +104,10 @@ select {
     outline: 0;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 main,
 section,
 nav,
