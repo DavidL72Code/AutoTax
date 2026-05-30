@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     firebase_web_auth_domain: Optional[str] = None
     firebase_web_app_id: Optional[str] = None
     firebase_web_measurement_id: Optional[str] = None
+    firebase_users_collection: str = "users"
+    firebase_transactions_collection: str = "transactions"
+    firebase_vendors_collection: str = "vendors"
 
     # gets mode and log should be string in env if not defaults to dev and info
     app_env: str = "development"

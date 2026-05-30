@@ -2,6 +2,17 @@ from .database import SessionLocal
 from .models import Transaction
 from datetime import datetime
 from dateutil import parser as date_parser
+from .firestore_store import (
+    clear_transactions as clear_firestore_transactions,
+    delete_transaction as delete_firestore_transaction,
+    delete_zero_amount_transactions as delete_zero_firestore_transactions,
+    firestore_enabled,
+    get_all_transactions as get_all_firestore_transactions,
+    get_existing_email_ids as get_existing_firestore_email_ids,
+    get_transaction_by_id as get_firestore_transaction_by_id,
+    save_transaction_record,
+    update_transaction as update_firestore_transaction,
+)
 
 def _normalize_amount(value):
     if value is None:
@@ -29,7 +40,7 @@ def _normalize_date(value):
         except Exception:
             return None
     return None
-def log_transaction(parsed_data:dict, user_id: int | None = None):
+def log_transaction(parsed_data:dict, user_id: str | int | None = None):
     """Save transaction to DB. Skips if amount is 0 (no expenditure)."""
     if not parsed_data:
         return None
@@ -50,6 +61,16 @@ def log_transaction(parsed_data:dict, user_id: int | None = None):
     
     tax = _normalize_amount(parsed_data.get('tax'))
     date_val = _normalize_date(parsed_data.get('date')) or datetime.utcnow()
+    if firestore_enabled():
+        parsed_copy = dict(parsed_data)
+        parsed_copy["amount"] = amount
+        parsed_copy["tax"] = tax
+        parsed_copy["date"] = date_val
+        saved = save_transaction_record(parsed_copy, user_id=user_id)
+        if saved is not None:
+            print(f"Saved: {saved.vendor} ${saved.amount}")
+        return saved
+
     db=SessionLocal()
     try:
         existing=db.query(Transaction).filter(
@@ -83,8 +104,10 @@ def log_transaction(parsed_data:dict, user_id: int | None = None):
     finally:
         db.close()
 
-def get_all_transactions(user_id: int | None = None):
+def get_all_transactions(user_id: str | int | None = None):
     """Get all transactions from database"""
+    if firestore_enabled():
+        return get_all_firestore_transactions(user_id=user_id)
     db = SessionLocal()
     try:
         query = db.query(Transaction)
@@ -96,8 +119,10 @@ def get_all_transactions(user_id: int | None = None):
         db.close()
 
 
-def get_existing_email_ids(user_id: int | None = None):
+def get_existing_email_ids(user_id: str | int | None = None):
     """Return set of Gmail message ids we already have as transactions. Use before fetch/parse to skip duplicates."""
+    if firestore_enabled():
+        return get_existing_firestore_email_ids(user_id=user_id)
     db = SessionLocal()
     try:
         query = db.query(Transaction.email_id)
@@ -109,8 +134,10 @@ def get_existing_email_ids(user_id: int | None = None):
         db.close()
 
 
-def delete_zero_amount_transactions(user_id: int | None = None):
+def delete_zero_amount_transactions(user_id: str | int | None = None):
     """Remove all transactions with amount 0 or None from the database. Returns count deleted."""
+    if firestore_enabled():
+        return delete_zero_firestore_transactions(user_id=user_id)
     db = SessionLocal()
     try:
         query = db.query(Transaction).filter(
@@ -131,13 +158,73 @@ def delete_zero_amount_transactions(user_id: int | None = None):
         db.close()
 
 
-def get_transaction_by_id(transaction_id: int):
+def get_transaction_by_id(transaction_id: str | int):
     """Get a specific transaction by ID"""
+    if firestore_enabled():
+        return get_firestore_transaction_by_id(str(transaction_id))
     db = SessionLocal()
     try:
         transaction = db.query(Transaction).filter(
             Transaction.id == transaction_id
         ).first()
         return transaction
+    finally:
+        db.close()
+
+
+def clear_transactions_for_user(user_id: str | int | None):
+    if firestore_enabled():
+        return clear_firestore_transactions(user_id=user_id)
+    db = SessionLocal()
+    try:
+        return db.query(Transaction).filter(Transaction.user_id == user_id).delete()
+    finally:
+        db.commit()
+        db.close()
+
+
+def update_transaction_for_user(transaction_id: str | int, payload: dict, user_id: str | int | None):
+    if firestore_enabled():
+        return update_firestore_transaction(str(transaction_id), user_id=user_id, payload=payload)
+    db = SessionLocal()
+    try:
+        transaction = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user_id,
+        ).first()
+        if not transaction:
+            return None
+        if "vendor" in payload:
+            vendor = (payload.get("vendor") or "").strip()
+            if vendor:
+                transaction.vendor = vendor
+        if "amount" in payload:
+            transaction.amount = float(str(payload["amount"]).replace("$", "").replace(",", "").strip())
+        if "tax" in payload:
+            raw_tax = str(payload["tax"]).replace("$", "").replace(",", "").strip()
+            transaction.tax = float(raw_tax) if raw_tax else None
+        if "date" in payload and payload.get("date"):
+            transaction.date = date_parser.parse(str(payload["date"]))
+        db.commit()
+        db.refresh(transaction)
+        return transaction
+    finally:
+        db.close()
+
+
+def delete_transaction_for_user(transaction_id: str | int, user_id: str | int | None):
+    if firestore_enabled():
+        return delete_firestore_transaction(str(transaction_id), user_id=user_id)
+    db = SessionLocal()
+    try:
+        transaction = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user_id,
+        ).first()
+        if not transaction:
+            return False
+        db.delete(transaction)
+        db.commit()
+        return True
     finally:
         db.close()

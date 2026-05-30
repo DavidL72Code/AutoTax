@@ -11,7 +11,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from .data_helper import get_all_transactions, delete_zero_amount_transactions, get_existing_email_ids
+from .data_helper import (
+    clear_transactions_for_user,
+    delete_transaction_for_user,
+    delete_zero_amount_transactions,
+    get_all_transactions,
+    get_existing_email_ids,
+    update_transaction_for_user,
+)
 from .database import SessionLocal
 from .models import Transaction, User, AuthToken, GoogleCredential
 from .config import settings
@@ -29,6 +36,21 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sqlalchemy import or_
 from .ai_client import generate_text
+from .firestore_store import (
+    count_users as count_firestore_users,
+    create_user_record,
+    ensure_demo_user,
+    firestore_enabled,
+    get_all_transactions as get_all_firestore_transactions,
+    get_firestore_client,
+    get_transaction_by_id as get_firestore_transaction_by_id,
+    get_user_by_email,
+    get_user_by_firebase_uid,
+    get_user_by_id,
+    get_user_by_username,
+    next_available_username as next_firestore_username,
+    save_user_record,
+)
 
 try:
     import firebase_admin
@@ -112,6 +134,8 @@ def _validate_password(password: str) -> list[str]:
 
 def _claim_legacy_transactions(user_id: int):
     """Assign legacy transactions (user_id is NULL) to the only user in the system."""
+    if firestore_enabled():
+        return
     db = SessionLocal()
     try:
         user_count = db.query(User).count()
@@ -188,6 +212,8 @@ def _get_firestore_client():
     return firebase_firestore.client(app=app)
 
 def _next_available_username(db, preferred: str, exclude_user_id: int | None = None) -> str:
+    if firestore_enabled():
+        return next_firestore_username(preferred, exclude_user_id=str(exclude_user_id) if exclude_user_id is not None else None)
     base = _sanitize_username(preferred)
     candidate = base
     suffix = 1
@@ -206,6 +232,36 @@ def _upsert_user_from_firebase_claims(claims: dict) -> User:
     display_name = (claims or {}).get("name") or (email.split("@")[0] if email else "")
     if not firebase_uid:
         raise HTTPException(status_code=401, detail="Invalid Firebase token")
+
+    if firestore_enabled():
+        user = get_user_by_firebase_uid(firebase_uid)
+        if not user and email:
+            user = get_user_by_email(email)
+        if user:
+            updated = False
+            if user.firebase_uid != firebase_uid:
+                user.firebase_uid = firebase_uid
+                updated = True
+            if email and user.email != email:
+                user.email = email
+                updated = True
+            preferred_username = _sanitize_username(display_name or user.username or email or "user")
+            if user.username != preferred_username:
+                user.username = _next_available_username(None, preferred_username, exclude_user_id=user.id)
+                updated = True
+            if updated:
+                user = save_user_record(user)
+            _claim_legacy_transactions(user.id)
+            return user
+
+        user = create_user_record(
+            username=_next_available_username(None, display_name or email or "user"),
+            email=email or None,
+            firebase_uid=firebase_uid,
+            password_hash=_hash_password(secrets.token_urlsafe(32)),
+        )
+        _claim_legacy_transactions(user.id)
+        return user
 
     db = SessionLocal()
     try:
@@ -250,6 +306,30 @@ def _firebase_doc_id_for_user(user: User) -> str:
     return user.firebase_uid or f"local-user-{user.id}"
 
 def _save_google_refresh_token_for_user(user_id: int, email: str | None, enc_refresh: str):
+    if firestore_enabled():
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        firestore_client = _get_firestore_client()
+        if firestore_client is None:
+            raise HTTPException(status_code=500, detail="Firestore is not available")
+        doc_ref = (
+            firestore_client
+            .collection(settings.firebase_firestore_tokens_collection)
+            .document(_firebase_doc_id_for_user(user))
+        )
+        doc_ref.set(
+            {
+                "user_id": user.id,
+                "firebase_uid": user.firebase_uid,
+                "email": email or user.email,
+                "refresh_token_enc": enc_refresh,
+                "updated_at": datetime.utcnow(),
+            },
+            merge=True,
+        )
+        return
+
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -339,6 +419,8 @@ def _decrypt_token(enc: str) -> str:
 
 def _get_demo_user() -> User:
     """Ensure a shared demo user exists and return it."""
+    if firestore_enabled():
+        return ensure_demo_user(_hash_password(secrets.token_urlsafe(16)))
     db = SessionLocal()
     try:
         demo = db.query(User).filter(User.username == "demo").first()
@@ -353,6 +435,24 @@ def _get_demo_user() -> User:
         db.close()
 
 def _get_google_refresh_token_for_user(user_id: int) -> str | None:
+    if firestore_enabled():
+        user = get_user_by_id(user_id)
+        firestore_client = _get_firestore_client()
+        if user and firestore_client is not None:
+            doc = (
+                firestore_client
+                .collection(settings.firebase_firestore_tokens_collection)
+                .document(_firebase_doc_id_for_user(user))
+                .get()
+            )
+            if doc.exists:
+                payload = doc.to_dict() or {}
+                enc_value = payload.get("refresh_token_enc")
+                if enc_value:
+                    try:
+                        return _decrypt_token(enc_value)
+                    except InvalidToken:
+                        return None
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -410,6 +510,18 @@ def register(payload: dict = Body(...)):
             detail=f"Password not strong enough. It needs {', '.join(password_requirements)}."
         )
 
+    if firestore_enabled():
+        existing = get_user_by_username(username)
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists.")
+        existing_email = get_user_by_email(email)
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists.")
+        user = create_user_record(username=username, email=email, password_hash=_hash_password(password))
+        _claim_legacy_transactions(user.id)
+        token = _create_token(user.id)
+        return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
+
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.username == username).first()
@@ -432,6 +544,15 @@ def register(payload: dict = Body(...)):
 def login(payload: dict = Body(...)):
     username = _normalize_username(payload.get("username") or payload.get("email") or "")
     password = payload.get("password") or ""
+
+    if firestore_enabled():
+        user = get_user_by_username(username) or get_user_by_email(username)
+        if not user or not _verify_password(password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid username/email or password.")
+        _claim_legacy_transactions(user.id)
+        token = _create_token(user.id)
+        return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
+
     db = SessionLocal()
     try:
         user = db.query(User).filter(or_(User.username == username, User.email == username)).first()
@@ -512,7 +633,7 @@ def google_oauth_callback(code: str, state: str):
 
     try:
         state_data = json.loads(_decrypt_token(state))
-        user_id = int(state_data.get("user_id"))
+        user_id = str(state_data.get("user_id"))
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid state")
 
@@ -1067,25 +1188,18 @@ Rules:
         })
     return out
 
-def _print_db_snapshot(limit: int = 50, user_id: int | None = None):
+def _print_db_snapshot(limit: int = 50, user_id: str | int | None = None):
     """Print a snapshot of the latest transactions (date, vendor, amount)."""
-    db = SessionLocal()
-    try:
-        query = db.query(Transaction)
-        if user_id is not None:
-            query = query.filter(Transaction.user_id == user_id)
-        rows = query.order_by(Transaction.id.desc()).limit(limit).all()
-        print("🧾 DB Snapshot (latest transactions):")
-        if not rows:
-            print("  (no rows found)")
-            return
-        for t in reversed(rows):
-            date = t.date.strftime('%Y-%m-%d') if hasattr(t.date, "strftime") else str(t.date)
-            vendor = (t.vendor or "Unknown").strip()
-            amount = t.amount if t.amount is not None else 0
-            print(f"  {date} | {vendor} | ${float(amount):.2f}")
-    finally:
-        db.close()
+    rows = get_all_transactions(user_id=user_id)[:limit]
+    print("🧾 DB Snapshot (latest transactions):")
+    if not rows:
+        print("  (no rows found)")
+        return
+    for t in reversed(rows):
+        date = t.date.strftime('%Y-%m-%d') if hasattr(t.date, "strftime") else str(t.date)
+        vendor = (t.vendor or "Unknown").strip()
+        amount = t.amount if t.amount is not None else 0
+        print(f"  {date} | {vendor} | ${float(amount):.2f}")
 
 @app.post("/api/sync")
 def sync_emails(request: Request):
@@ -1239,82 +1353,36 @@ def get_demo_top_vendors(request: Request):
 def clear_demo_transactions(request: Request):
     """Clear all demo transactions."""
     demo_user = _get_demo_user()
-    db = SessionLocal()
-    try:
-        deleted = db.query(Transaction).filter(Transaction.user_id == demo_user.id).delete()
-        db.commit()
-        return {"status": "success", "deleted": deleted}
-    finally:
-        db.close()
+    deleted = clear_transactions_for_user(demo_user.id)
+    return {"status": "success", "deleted": deleted}
 
 @app.put("/api/demo/transactions/{transaction_id}")
-def update_demo_transaction(transaction_id: int, payload: dict = Body(...)):
+def update_demo_transaction(transaction_id: str, payload: dict = Body(...)):
     """Update a demo transaction without auth."""
     demo_user = _get_demo_user()
-    db = SessionLocal()
     try:
-        tx = db.query(Transaction).filter(
-            Transaction.id == transaction_id,
-            Transaction.user_id == demo_user.id
-        ).first()
-        if not tx:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-
-        if "vendor" in payload:
-            vendor = (payload.get("vendor") or "").strip()
-            if vendor:
-                tx.vendor = vendor
-        if "amount" in payload:
-            try:
-                tx.amount = float(str(payload["amount"]).replace("$", "").replace(",", "").strip())
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid amount")
-        if "tax" in payload:
-            try:
-                tx.tax = float(str(payload["tax"]).replace("$", "").replace(",", "").strip())
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid tax")
-        if "date" in payload:
-            try:
-                tx.date = date_parser.parse(str(payload["date"]))
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid date")
-
-        db.commit()
-        db.refresh(tx)
-        return {"status": "success", "id": tx.id}
-    finally:
-        db.close()
+        tx = update_transaction_for_user(str(transaction_id), payload, demo_user.id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"status": "success", "id": tx.id}
 
 @app.delete("/api/demo/transactions/{transaction_id}")
-def delete_demo_transaction(transaction_id: int):
+def delete_demo_transaction(transaction_id: str):
     """Delete a demo transaction without auth."""
     demo_user = _get_demo_user()
-    db = SessionLocal()
-    try:
-        tx = db.query(Transaction).filter(
-            Transaction.id == transaction_id,
-            Transaction.user_id == demo_user.id
-        ).first()
-        if not tx:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        db.delete(tx)
-        db.commit()
-        return {"status": "success", "id": transaction_id}
-    finally:
-        db.close()
+    deleted = delete_transaction_for_user(str(transaction_id), demo_user.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"status": "success", "id": str(transaction_id)}
 
 @app.delete("/api/transactions/clear")
 def clear_transactions(request: Request):
     """Delete all transactions for the current user."""
     user = _require_user(request)
-    db = SessionLocal()
-    try:
-        deleted = db.query(Transaction).filter(Transaction.user_id == user.id).delete()
-        db.commit()
-        return {"status": "success", "deleted": deleted}
-    finally:
-        db.close()
+    deleted = clear_transactions_for_user(user.id)
+    return {"status": "success", "deleted": deleted}
 
 @app.post("/api/vendor-pie")
 async def vendor_pie(request: Request):
@@ -1388,61 +1456,25 @@ async def vendor_pie(request: Request):
         raise HTTPException(status_code=500, detail=f"Chart generation failed: {e}")
 
 @app.put("/api/transactions/{transaction_id}")
-def update_transaction(request: Request, transaction_id: int, payload: dict = Body(...)):
+def update_transaction(request: Request, transaction_id: str, payload: dict = Body(...)):
     """Update a transaction's vendor, amount, tax, or date."""
     user = _require_user(request)
-    db = SessionLocal()
     try:
-        tx = db.query(Transaction).filter(
-            Transaction.id == transaction_id,
-            Transaction.user_id == user.id
-        ).first()
-        if not tx:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-
-        if "vendor" in payload:
-            vendor = (payload.get("vendor") or "").strip()
-            if vendor:
-                tx.vendor = vendor
-        if "amount" in payload:
-            try:
-                tx.amount = float(str(payload["amount"]).replace("$", "").replace(",", "").strip())
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid amount")
-        if "tax" in payload:
-            try:
-                tx.tax = float(str(payload["tax"]).replace("$", "").replace(",", "").strip())
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid tax")
-        if "date" in payload:
-            try:
-                tx.date = date_parser.parse(str(payload["date"]))
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid date")
-
-        db.commit()
-        db.refresh(tx)
-        return {"status": "success", "id": tx.id}
-    finally:
-        db.close()
+        tx = update_transaction_for_user(str(transaction_id), payload, user.id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"status": "success", "id": tx.id}
 
 @app.delete("/api/transactions/{transaction_id}")
-def delete_transaction(request: Request, transaction_id: int):
+def delete_transaction(request: Request, transaction_id: str):
     """Delete a transaction by ID."""
     user = _require_user(request)
-    db = SessionLocal()
-    try:
-        tx = db.query(Transaction).filter(
-            Transaction.id == transaction_id,
-            Transaction.user_id == user.id
-        ).first()
-        if not tx:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        db.delete(tx)
-        db.commit()
-        return {"status": "success", "id": transaction_id}
-    finally:
-        db.close()
+    deleted = delete_transaction_for_user(str(transaction_id), user.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"status": "success", "id": str(transaction_id)}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

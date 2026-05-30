@@ -1,8 +1,18 @@
 from .database import SessionLocal
 from .models import Vendor
 import re
+from .firestore_store import firestore_enabled, get_all_vendors
 
 def normalize_vendor_name(raw_vendor:str, email_data:dict=None)->str:
+    if firestore_enabled():
+        if not raw_vendor:
+            return "Unknown"
+        if email_data:
+            vendor_from_content = search_email_for_vendor(email_data, None)
+            if vendor_from_content:
+                return vendor_from_content
+        return raw_vendor
+
     db = None
     try:
         if not raw_vendor:
@@ -31,7 +41,7 @@ def search_email_for_vendor(email_data:dict,db)->str:
     sender=email_data.get('from','').lower()
 
     email_info=f"{sender}{subject}{body}"
-    vendors=db.query(Vendor).all()
+    vendors = get_all_vendors() if firestore_enabled() else db.query(Vendor).all()
     if not vendors:
         return None
 

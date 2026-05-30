@@ -1173,7 +1173,7 @@ function renderTransactionsTable() {
     tableBody.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            const id = Number(this.getAttribute('data-id'));
+            const id = this.getAttribute('data-id');
             if (!id) return;
             const row = this.closest('tr');
             if (row) {
@@ -1734,8 +1734,10 @@ async function clearAllTransactions() {
 function buildTransactionSignature(transactions) {
     if (!transactions || !transactions.length) return '0:0';
     const count = transactions.length;
-    const maxId = Math.max.apply(null, transactions.map(t => Number(t.id) || 0));
-    return `${count}:${maxId}`;
+    const ids = transactions.map(function(t) {
+        return String(t.id || '');
+    }).sort();
+    return `${count}:${ids[ids.length - 1] || ''}`;
 }
 
 function startSyncRefreshLoop(previousSignature, originalHTML) {
@@ -2033,9 +2035,9 @@ function exportToCSV() {
 
 function openEditModal(row) {
     if (!editModal) return;
-    const id = Number(row.dataset.transactionId);
+    const id = String(row.dataset.transactionId || '');
     if (!id) return;
-    const tx = allTransactions.find(t => Number(t.id) === id);
+    const tx = allTransactions.find(t => String(t.id) === id);
     if (!tx) return;
     activeTransactionId = id;
 
