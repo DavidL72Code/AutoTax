@@ -135,8 +135,8 @@
                 <button id="auth-tab-signup" class="auth-tab" type="button">Sign up</button>
             </div>
             <form id="auth-form-login" class="auth-form">
-                <label class="modal-label" for="auth-login-username">Username or email</label>
-                <input id="auth-login-username" class="modal-input" type="text" autocomplete="username" placeholder="Username or email" />
+                <label class="modal-label" for="auth-login-username">Email</label>
+                <input id="auth-login-username" class="modal-input" type="email" autocomplete="email" placeholder="you@example.com" />
                 <label class="modal-label" for="auth-login-password">Password</label>
                 <input id="auth-login-password" class="modal-input" type="password" autocomplete="current-password" />
                 <button id="auth-login-submit" class="btn-action-primary" type="submit">Log in</button>
@@ -188,6 +188,8 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script>window.DEMO_MODE = true;</script>
     <script src="script.js"></script>
 </body>

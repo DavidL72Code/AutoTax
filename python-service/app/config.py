@@ -15,11 +15,19 @@ class Settings(BaseSettings):
     # Required settings :str must be string and gets value from .env using pydantic
     database_url: str = f"sqlite:///{_DEFAULT_DB}"
     google_api_key: Optional[str] = None
-    gemini_model: str = "models/gemma-3-27b-it"
+    gemini_model: str = "gemini-2.5-flash-lite"
     google_oauth_client_id: Optional[str] = None
     google_oauth_client_secret: Optional[str] = None
     google_oauth_redirect_uri: Optional[str] = None
     fernet_key: Optional[str] = None
+    firebase_project_id: Optional[str] = None
+    firebase_service_account_path: Optional[str] = None
+    firebase_service_account_json: Optional[str] = None
+    firebase_firestore_tokens_collection: str = "google_credentials"
+    firebase_web_api_key: Optional[str] = None
+    firebase_web_auth_domain: Optional[str] = None
+    firebase_web_app_id: Optional[str] = None
+    firebase_web_measurement_id: Optional[str] = None
 
     # gets mode and log should be string in env if not defaults to dev and info
     app_env: str = "development"

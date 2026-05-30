@@ -48,3 +48,5 @@ reports/*.pdf
 # API Keys (safety check)
 *_api_key*
 *secret*
+token.json
+credentials.json

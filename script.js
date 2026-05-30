@@ -12,6 +12,7 @@ const API_BASE_URL = (() => {
 })();
 const DEMO_MODE = Boolean(window.DEMO_MODE);
 const MONTHLY_BUDGET_STORAGE_KEY = 'MONTHLY_BUDGET_TARGET';
+let firebaseConfig = null;
 
 // DOM Elements
 let searchInput;
@@ -72,6 +73,8 @@ let authSignupUsername;
 let authSignupEmail;
 let authSignupPassword;
 let currentUser = null;
+let firebaseAuth = null;
+let firebaseReadyPromise = Promise.resolve();
 
 // Cached transactions and sort state (so we can re-sort without re-fetching)
 let allTransactions = [];
@@ -81,6 +84,7 @@ let syncPollTimer = null;
 let demoParsePollTimer = null;
 let activeDemoRunId = null;
 let currentBudgetSpend = 0;
+let latestTopVendors = [];
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
@@ -148,14 +152,19 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     refreshBudgetEditor();
     
-    // Load real data from API
-    bootstrapAuth().then(() => {
+    loadRuntimeConfig().then(() => {
+        initializeFirebaseAuth();
+        return bootstrapAuth();
+    }).then(() => {
         if (DEMO_MODE || currentUser) {
             loadDashboardData();
             if (DEMO_MODE) {
                 loadDemoEmails();
             }
         }
+    }).catch((error) => {
+        console.error('Runtime config bootstrap failed:', error);
+        setAuthState(null);
     });
     
     // Auto-refresh table and stats every 10s so new syncs show up without manual refresh
@@ -342,8 +351,26 @@ function setupEventListeners() {
     }
 }
 
+async function loadRuntimeConfig() {
+    if (firebaseConfig) {
+        return firebaseConfig;
+    }
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/public-config`, { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`Config request failed with ${response.status}`);
+        }
+        const payload = await response.json().catch(() => ({}));
+        firebaseConfig = payload && payload.firebase ? payload.firebase : null;
+    } catch (error) {
+        console.warn('Could not load runtime config from API:', error);
+        firebaseConfig = null;
+    }
+    return firebaseConfig;
+}
+
 async function connectGoogle() {
-    if (!localStorage.getItem('AUTH_TOKEN')) {
+    if (!await hasActiveAuthSession()) {
         handleAuthRequired();
         return;
     }
@@ -409,50 +436,102 @@ function setAuthState(user) {
     }
 }
 
+function hasUsableFirebaseConfig() {
+    if (!firebaseConfig) return false;
+    return Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId);
+}
+
+function initializeFirebaseAuth() {
+    if (!window.firebase || !hasUsableFirebaseConfig()) {
+        return;
+    }
+    if (!window.firebase.apps.length) {
+        window.firebase.initializeApp(firebaseConfig);
+    }
+    firebaseAuth = window.firebase.auth();
+    firebaseReadyPromise = new Promise(function(resolve) {
+        let resolved = false;
+        firebaseAuth.onIdTokenChanged(async function(user) {
+            if (user) {
+                try {
+                    const token = await user.getIdToken();
+                    localStorage.setItem('AUTH_TOKEN', token);
+                } catch (error) {
+                    console.error('Failed to refresh Firebase ID token:', error);
+                }
+            } else {
+                localStorage.removeItem('AUTH_TOKEN');
+                setAuthState(null);
+            }
+            if (!resolved) {
+                resolved = true;
+                resolve();
+            }
+        });
+    });
+}
+
+async function getAuthToken() {
+    if (!DEMO_MODE) {
+        await firebaseReadyPromise;
+    }
+    if (firebaseAuth && firebaseAuth.currentUser) {
+        const token = await firebaseAuth.currentUser.getIdToken();
+        localStorage.setItem('AUTH_TOKEN', token);
+        return token;
+    }
+    return localStorage.getItem('AUTH_TOKEN');
+}
+
+async function hasActiveAuthSession() {
+    return Boolean(await getAuthToken());
+}
+
+async function fetchCurrentUserProfile() {
+    const response = await authFetch(`${API_BASE_URL}/api/auth/me`, { cache: 'no-store' });
+    if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.detail || 'Could not load account');
+    }
+    return response.json();
+}
+
 async function bootstrapAuth() {
-    const token = localStorage.getItem('AUTH_TOKEN');
+    await firebaseReadyPromise;
+    const token = await getAuthToken();
     if (!token) {
         setAuthState(null);
         return;
     }
     try {
-        const response = await authFetch(`${API_BASE_URL}/api/auth/me`, { cache: 'no-store' });
-        if (!response.ok) {
-            localStorage.removeItem('AUTH_TOKEN');
-            setAuthState(null);
-            return;
-        }
-        const user = await response.json();
+        const user = await fetchCurrentUserProfile();
         setAuthState(user);
     } catch (error) {
+        localStorage.removeItem('AUTH_TOKEN');
         setAuthState(null);
     }
 }
 
 async function submitLogin() {
     if (!authLoginUsername || !authLoginPassword) return;
-    const username = authLoginUsername.value.trim();
+    const email = authLoginUsername.value.trim().toLowerCase();
     const password = authLoginPassword.value;
-    if (!username || !password) {
-        showError('Enter your username or email and password.');
+    if (!email || !password) {
+        showError('Enter your email and password.');
+        return;
+    }
+    if (!firebaseAuth || !hasUsableFirebaseConfig()) {
+        showError('Firebase Auth is not configured yet.');
         return;
     }
     try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(result.detail || 'Login failed');
-        }
-        localStorage.setItem('AUTH_TOKEN', result.token);
-        setAuthState(result.user);
+        await firebaseAuth.signInWithEmailAndPassword(email, password);
+        const user = await fetchCurrentUserProfile();
+        setAuthState(user);
         closeAuthModal();
         loadDashboardData();
     } catch (error) {
-        showError(error.message || 'Login failed.');
+        showError(error.message || 'Firebase login failed.');
     }
 }
 
@@ -474,30 +553,32 @@ async function submitSignup() {
         showError(passwordValidation.message);
         return;
     }
+    if (!firebaseAuth || !hasUsableFirebaseConfig()) {
+        showError('Firebase Auth is not configured yet.');
+        return;
+    }
     try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, email, password })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(result.detail || 'Signup failed');
+        const credential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+        if (credential.user) {
+            await credential.user.updateProfile({ displayName: username });
         }
-        localStorage.setItem('AUTH_TOKEN', result.token);
-        setAuthState(result.user);
+        const user = await fetchCurrentUserProfile();
+        setAuthState(user);
         closeAuthModal();
         showSuccess('Signed up successfully. You are now logged in.');
         loadDashboardData();
     } catch (error) {
-        showError(error.message || 'Signup failed.');
+        showError(error.message || 'Firebase signup failed.');
     }
 }
 
 async function logoutUser() {
-    const token = localStorage.getItem('AUTH_TOKEN');
+    const token = await getAuthToken();
     if (token) {
         await authFetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST' });
+    }
+    if (firebaseAuth) {
+        await firebaseAuth.signOut();
     }
     localStorage.removeItem('AUTH_TOKEN');
     setAuthState(null);
@@ -552,6 +633,7 @@ async function loadTransactions() {
         }
 
         renderExpensePreview(allTransactions);
+        refreshVendorInsights();
         
         return allTransactions;
     } catch (error) {
@@ -598,12 +680,12 @@ async function loadTopVendors() {
         const vendors = await response.json();
         
         console.log('Top vendors loaded:', vendors);
+        latestTopVendors = Array.isArray(vendors) ? vendors : [];
         
         // Update vendor cards
-        updateVendorCards(vendors);
-        updateHeroVendors(vendors);
+        refreshVendorInsights();
         
-        return vendors;
+        return latestTopVendors;
     } catch (error) {
         console.error('Error loading top vendors:', error);
         throw error;
@@ -836,8 +918,16 @@ function updatePasswordRequirementState(password) {
     });
 }
 
-function updateHeroVendors(vendors) {
+function refreshVendorInsights() {
+    const insights = buildVendorInsights(allTransactions);
+    updateVendorCards(latestTopVendors, insights);
+    updateHeroVendors(latestTopVendors, insights);
+    updateInsightVisual(latestTopVendors, allTransactions);
+}
+
+function updateHeroVendors(vendors, insights) {
     if (!heroVendorListEl) return;
+    insights = insights || {};
 
     const topVendors = (vendors || []).slice(0, 2);
     if (!topVendors.length) {
@@ -846,17 +936,50 @@ function updateHeroVendors(vendors) {
     }
 
     heroVendorListEl.innerHTML = topVendors.map(function(vendor, index) {
+        const insight = insights[normalizeVendorKey(vendor.vendor)] || null;
         const dotClass = index === 0 ? 'hero-vendor-dot' : 'hero-vendor-dot hero-vendor-dot-secondary';
         return `
             <div class="hero-vendor-item">
                 <span class="${dotClass}"></span>
                 <div class="hero-vendor-copy">
                     <div class="hero-vendor-name">${escapeHtml(vendor.vendor || 'Unknown vendor')}</div>
-                    <div class="hero-vendor-meta">${escapeHtml(buildVendorDescriptor(vendor, index))}</div>
+                    <div class="hero-vendor-meta">${escapeHtml(buildVendorDescriptor(vendor, insight, index))}</div>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+function updateInsightVisual(vendors, transactions) {
+    const bars = document.querySelectorAll('.insight-bar');
+    if (!bars.length) return;
+
+    const topVendors = (vendors || []).slice(0, bars.length);
+    const spendTotal = getPositiveSpendTotal(transactions);
+    const maxTotal = Math.max.apply(null, [1].concat(topVendors.map(function(vendor) {
+        return Math.max(Number(vendor.total) || 0, 0);
+    })));
+
+    bars.forEach(function(bar, index) {
+        const vendor = topVendors[index];
+        if (!vendor) {
+            bar.style.height = '18%';
+            bar.dataset.label = 'No data';
+            bar.dataset.value = '';
+            bar.title = 'No synced vendor data yet';
+            bar.classList.add('insight-bar-empty');
+            return;
+        }
+
+        const total = Math.max(Number(vendor.total) || 0, 0);
+        const share = spendTotal > 0 ? total / spendTotal : 0;
+        const height = Math.max(22, Math.round((total / maxTotal) * 100));
+        bar.style.height = `${height}%`;
+        bar.dataset.label = abbreviateVendorLabel(vendor.vendor);
+        bar.dataset.value = `${formatCurrency(total, { whole: total >= 100 })} • ${formatPercent(share)}`;
+        bar.title = `${vendor.vendor || 'Unknown vendor'}: ${formatCurrency(total)} across ${vendor.count || 0} receipt${Number(vendor.count) === 1 ? '' : 's'}`;
+        bar.classList.remove('insight-bar-empty');
+    });
 }
 
 function compareTransactionsByNewest(a, b) {
@@ -903,28 +1026,118 @@ function getParserLabelText(vendor) {
     return 'Auto classified';
 }
 
-function buildVendorDescriptor(vendor, index) {
-    const count = Number(vendor.count) || 0;
-    const detail = index === 0 ? 'Highest spend' : 'Consistent volume';
-    return count
-        ? `${count} receipt${count === 1 ? '' : 's'} • ${detail}`
-        : detail;
+function buildVendorDescriptor(vendor, insight) {
+    if (!insight) {
+        const count = Number(vendor.count) || 0;
+        return count
+            ? `${count} receipt${count === 1 ? '' : 's'} • awaiting spend breakdown`
+            : 'Awaiting spend breakdown';
+    }
+    const parts = [];
+    if (Number.isFinite(insight.share) && insight.share > 0) {
+        parts.push(`${formatPercent(insight.share)} of synced spend`);
+    }
+    if (Number.isFinite(insight.average) && insight.average > 0) {
+        parts.push(`avg ${formatCurrency(insight.average)}`);
+    }
+    if (parts.length) {
+        return parts.join(' • ');
+    }
+    return `${insight.count} receipt${insight.count === 1 ? '' : 's'}`;
 }
 
-function buildVendorCategoryLabel(vendor, index) {
-    const count = Number(vendor.count) || 0;
+function buildVendorCategoryLabel(vendor, insight) {
+    if (insight && Number.isFinite(insight.average) && insight.average > 0) {
+        return `Avg ticket ${formatCurrency(insight.average)}`;
+    }
     const total = Number(vendor.total) || 0;
-    if (index === 0) return 'Top spend contributor';
-    if (count >= 10) return 'High-frequency merchant';
-    if (total >= 500) return 'High-value merchant';
-    return 'Tracked merchant';
+    return total > 0 ? `Spend ${formatCurrency(total)}` : 'Spend data unavailable';
 }
 
-function buildVendorFooterLabel(vendor, index) {
-    const count = Number(vendor.count) || 0;
-    if (index === 0) return 'Largest contributor this cycle';
-    if (count >= 10) return 'Frequent repeat spend';
-    return 'Steady transaction flow';
+function buildVendorFooterLabel(vendor, insight) {
+    if (!insight) {
+        const count = Number(vendor.count) || 0;
+        return `${count} synced receipt${count === 1 ? '' : 's'}`;
+    }
+    const parts = [];
+    if (Number.isFinite(insight.share) && insight.share > 0) {
+        parts.push(`${formatPercent(insight.share)} of spend`);
+    }
+    if (insight.latestDateLabel) {
+        parts.push(`last receipt ${insight.latestDateLabel}`);
+    }
+    return parts.join(' • ') || `${insight.count} synced receipt${insight.count === 1 ? '' : 's'}`;
+}
+
+function buildVendorInsights(transactions) {
+    const summary = {};
+    const spendTotal = getPositiveSpendTotal(transactions);
+
+    (transactions || []).forEach(function(transaction) {
+        const key = normalizeVendorKey(transaction.vendor);
+        if (!key) return;
+
+        if (!summary[key]) {
+            summary[key] = {
+                count: 0,
+                positiveCount: 0,
+                total: 0,
+                latestDateValue: 0,
+                latestDateLabel: '',
+                latestAmount: 0
+            };
+        }
+
+        const insight = summary[key];
+        const amount = Number(transaction.amount) || 0;
+        const dateValue = toComparableDateValue(transaction.date);
+        insight.count += 1;
+
+        if (amount > 0) {
+            insight.total += amount;
+            insight.positiveCount += 1;
+        }
+
+        if (dateValue >= insight.latestDateValue) {
+            const dateDisplay = formatIsoDateForEasternDisplay(transaction.date);
+            insight.latestDateValue = dateValue;
+            insight.latestDateLabel = dateDisplay.dateFormatted;
+            insight.latestAmount = amount;
+        }
+    });
+
+    Object.keys(summary).forEach(function(key) {
+        const insight = summary[key];
+        insight.average = insight.positiveCount > 0 ? insight.total / insight.positiveCount : 0;
+        insight.share = spendTotal > 0 ? insight.total / spendTotal : 0;
+    });
+
+    return summary;
+}
+
+function getPositiveSpendTotal(transactions) {
+    return (transactions || []).reduce(function(sum, transaction) {
+        const amount = Number(transaction.amount) || 0;
+        return amount > 0 ? sum + amount : sum;
+    }, 0);
+}
+
+function normalizeVendorKey(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function formatPercent(value) {
+    const ratio = Number(value) || 0;
+    if (ratio <= 0) return '0%';
+    if (ratio < 0.1) return `${ratio * 100 < 1 ? '<1' : Math.round(ratio * 100)}%`;
+    return `${Math.round(ratio * 100)}%`;
+}
+
+function abbreviateVendorLabel(value) {
+    const text = String(value || '').trim();
+    if (!text) return 'Unknown';
+    const compact = text.split(/\s+/).slice(0, 2).join(' ');
+    return compact.length > 14 ? `${compact.slice(0, 13)}…` : compact;
 }
 
 function setSyncStatus(title, meta) {
@@ -1151,8 +1364,9 @@ function getParserBadge(vendor) {
 }
 
 // Update vendor cards with real data
-function updateVendorCards(vendors) {
+function updateVendorCards(vendors, insights) {
     vendors = vendors || [];
+    insights = insights || {};
     const vendorCards = document.querySelectorAll('.vendor-card-new');
     const maxTotal = Math.max.apply(null, [1].concat((vendors || []).map(function(vendor) {
         return Number(vendor.total) || 0;
@@ -1165,6 +1379,7 @@ function updateVendorCards(vendors) {
         }
         card.classList.remove('vendor-card-empty');
         const vendor = vendors[index];
+        const insight = insights[normalizeVendorKey(vendor.vendor)] || null;
         const name = (vendor.vendor || '').trim();
         const initials = name
             ? name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
@@ -1176,7 +1391,7 @@ function updateVendorCards(vendors) {
 
         // Update category label
         const categoryEl = card.querySelector('.vendor-card-category');
-        if (categoryEl) categoryEl.textContent = buildVendorCategoryLabel(vendor, index);
+        if (categoryEl) categoryEl.textContent = buildVendorCategoryLabel(vendor, insight);
 
         // Update initials
         const emojiEl = card.querySelector('.vendor-logo-large');
@@ -1201,7 +1416,7 @@ function updateVendorCards(vendors) {
             footerEl.innerHTML = '';
             const footerCopy = document.createElement('span');
             footerCopy.className = index === 0 ? 'trend-up' : 'trend-neutral';
-            footerCopy.textContent = buildVendorFooterLabel(vendor, index);
+            footerCopy.textContent = buildVendorFooterLabel(vendor, insight);
             footerEl.appendChild(footerCopy);
         }
     });
@@ -1229,7 +1444,7 @@ async function syncEmails() {
     if (DEMO_MODE) {
         return;
     }
-    if (!localStorage.getItem('AUTH_TOKEN')) {
+    if (!await hasActiveAuthSession()) {
         handleAuthRequired();
         return;
     }
@@ -1244,10 +1459,7 @@ async function syncEmails() {
     try {
         console.log('Starting email sync...');
         
-        const response = await fetch(`${API_BASE_URL}/api/sync`, {
-            method: 'POST',
-            headers: buildAuthHeaders()
-        });
+        const response = await authFetch(`${API_BASE_URL}/api/sync`, { method: 'POST' });
         
         const result = await response.json().catch(() => ({}));
         
@@ -1276,9 +1488,9 @@ async function syncEmails() {
     }
 }
 
-function buildAuthHeaders() {
+async function buildAuthHeaders() {
     const headers = {};
-    const token = localStorage.getItem('AUTH_TOKEN');
+    const token = await getAuthToken();
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
@@ -1295,7 +1507,7 @@ function handleAuthRequired() {
 }
 
 async function authFetch(url, options = {}) {
-    const headers = Object.assign({}, options.headers || {}, buildAuthHeaders());
+    const headers = Object.assign({}, options.headers || {}, await buildAuthHeaders());
     const response = await fetch(url, Object.assign({}, options, { headers }));
     if (response.status === 401) {
         handleAuthRequired();
@@ -1482,7 +1694,7 @@ function startDemoParsePolling(originalHTML) {
 
 async function clearAllTransactions() {
     if (!clearBtn) return;
-    if (!DEMO_MODE && !localStorage.getItem('AUTH_TOKEN')) {
+    if (!DEMO_MODE && !await hasActiveAuthSession()) {
         handleAuthRequired();
         return;
     }
@@ -1495,8 +1707,7 @@ async function clearAllTransactions() {
     try {
         const endpoint = DEMO_MODE ? '/api/demo/clear' : '/api/transactions/clear';
         const response = await authFetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'DELETE',
-            headers: buildAuthHeaders()
+            method: 'DELETE'
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -1873,7 +2084,7 @@ async function saveTransactionEdits() {
         const endpoint = DEMO_MODE ? `/api/demo/transactions/${activeTransactionId}` : `/api/transactions/${activeTransactionId}`;
         const response = await (DEMO_MODE ? fetch : authFetch)(`${API_BASE_URL}${endpoint}`, {
             method: 'PUT',
-            headers: Object.assign({ 'Content-Type': 'application/json' }, DEMO_MODE ? {} : buildAuthHeaders()),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const result = await response.json().catch(() => ({}));
@@ -1892,8 +2103,7 @@ async function deleteTransaction() {
     try {
         const endpoint = DEMO_MODE ? `/api/demo/transactions/${activeTransactionId}` : `/api/transactions/${activeTransactionId}`;
         const response = await (DEMO_MODE ? fetch : authFetch)(`${API_BASE_URL}${endpoint}`, {
-            method: 'DELETE',
-            headers: DEMO_MODE ? {} : buildAuthHeaders()
+            method: 'DELETE'
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {

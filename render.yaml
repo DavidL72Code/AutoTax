@@ -17,7 +17,21 @@ services:
       - key: GOOGLE_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: models/gemma-3-27b-it
+        value: gemini-2.5-flash-lite
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FIREBASE_FIRESTORE_TOKENS_COLLECTION
+        value: google_credentials
+      - key: FIREBASE_WEB_API_KEY
+        sync: false
+      - key: FIREBASE_WEB_AUTH_DOMAIN
+        sync: false
+      - key: FIREBASE_WEB_APP_ID
+        sync: false
+      - key: FIREBASE_WEB_MEASUREMENT_ID
+        sync: false
 
 databases:
   - name: receipt-automation-db

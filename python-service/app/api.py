@@ -30,6 +30,17 @@ import matplotlib.pyplot as plt
 from sqlalchemy import or_
 from .ai_client import generate_text
 
+try:
+    import firebase_admin
+    from firebase_admin import auth as firebase_auth
+    from firebase_admin import credentials as firebase_credentials
+    from firebase_admin import firestore as firebase_firestore
+except Exception:
+    firebase_admin = None
+    firebase_auth = None
+    firebase_credentials = None
+    firebase_firestore = None
+
 app = FastAPI()
 DEMO_PARSE_RUNS = {}
 DEMO_PARSE_LOCK = threading.Lock()
@@ -46,6 +57,7 @@ app.add_middleware(
 PASSWORD_ITERATIONS = 120_000
 TOKEN_TTL_DAYS = 30
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_FIREBASE_APP = None
 
 def _hash_password(password: str) -> str:
     salt = os.urandom(16)
@@ -79,6 +91,13 @@ def _normalize_username(value: str) -> str:
 def _normalize_email(value: str) -> str:
     return (value or "").strip().lower()
 
+def _sanitize_username(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "_", _normalize_username(value))
+    cleaned = cleaned.strip("_")
+    if len(cleaned) < 3:
+        cleaned = f"user_{secrets.token_hex(3)}"
+    return cleaned[:150]
+
 def _validate_password(password: str) -> list[str]:
     requirements = []
     if len(password) < 8:
@@ -108,6 +127,165 @@ def _claim_legacy_transactions(user_id: int):
     finally:
         db.close()
 
+def _firebase_enabled() -> bool:
+    return bool(
+        settings.firebase_service_account_json
+        or settings.firebase_service_account_path
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    )
+
+def _get_public_firebase_web_config() -> dict:
+    config = {
+        "apiKey": settings.firebase_web_api_key or "",
+        "authDomain": settings.firebase_web_auth_domain or "",
+        "projectId": settings.firebase_project_id or "",
+        "appId": settings.firebase_web_app_id or "",
+    }
+    if settings.firebase_web_measurement_id:
+        config["measurementId"] = settings.firebase_web_measurement_id
+    return config
+
+def _get_firebase_app():
+    global _FIREBASE_APP
+    if _FIREBASE_APP is not None:
+        return _FIREBASE_APP
+    if not _firebase_enabled():
+        return None
+    if firebase_admin is None or firebase_credentials is None:
+        raise HTTPException(status_code=500, detail="firebase-admin is not installed")
+
+    options = {}
+    if settings.firebase_project_id:
+        options["projectId"] = settings.firebase_project_id
+
+    if settings.firebase_service_account_json:
+        cred = firebase_credentials.Certificate(json.loads(settings.firebase_service_account_json))
+    elif settings.firebase_service_account_path:
+        cred = firebase_credentials.Certificate(settings.firebase_service_account_path)
+    else:
+        cred = firebase_credentials.ApplicationDefault()
+
+    _FIREBASE_APP = firebase_admin.initialize_app(cred, options or None)
+    return _FIREBASE_APP
+
+def _verify_firebase_token(token: str) -> dict | None:
+    if not token or not _firebase_enabled() or firebase_auth is None:
+        return None
+    try:
+        app = _get_firebase_app()
+        if app is None:
+            return None
+        return firebase_auth.verify_id_token(token, app=app)
+    except Exception:
+        return None
+
+def _get_firestore_client():
+    if firebase_firestore is None:
+        return None
+    app = _get_firebase_app()
+    if app is None:
+        return None
+    return firebase_firestore.client(app=app)
+
+def _next_available_username(db, preferred: str, exclude_user_id: int | None = None) -> str:
+    base = _sanitize_username(preferred)
+    candidate = base
+    suffix = 1
+    while True:
+        query = db.query(User).filter(User.username == candidate)
+        if exclude_user_id is not None:
+            query = query.filter(User.id != exclude_user_id)
+        if not query.first():
+            return candidate
+        suffix += 1
+        candidate = f"{base[:140]}_{suffix}"
+
+def _upsert_user_from_firebase_claims(claims: dict) -> User:
+    firebase_uid = (claims or {}).get("uid")
+    email = _normalize_email((claims or {}).get("email") or "")
+    display_name = (claims or {}).get("name") or (email.split("@")[0] if email else "")
+    if not firebase_uid:
+        raise HTTPException(status_code=401, detail="Invalid Firebase token")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
+        if not user and email:
+            user = db.query(User).filter(User.email == email).first()
+
+        if user:
+            updated = False
+            if user.firebase_uid != firebase_uid:
+                user.firebase_uid = firebase_uid
+                updated = True
+            if email and user.email != email:
+                user.email = email
+                updated = True
+            preferred_username = _sanitize_username(display_name or user.username or email or "user")
+            if user.username != preferred_username:
+                user.username = _next_available_username(db, preferred_username, exclude_user_id=user.id)
+                updated = True
+            if updated:
+                db.commit()
+                db.refresh(user)
+            _claim_legacy_transactions(user.id)
+            return user
+
+        username = _next_available_username(db, display_name or email or "user")
+        user = User(
+            username=username,
+            email=email or None,
+            firebase_uid=firebase_uid,
+            password_hash=_hash_password(secrets.token_urlsafe(32)),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        _claim_legacy_transactions(user.id)
+        return user
+    finally:
+        db.close()
+
+def _firebase_doc_id_for_user(user: User) -> str:
+    return user.firebase_uid or f"local-user-{user.id}"
+
+def _save_google_refresh_token_for_user(user_id: int, email: str | None, enc_refresh: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        firestore_client = _get_firestore_client()
+        if firestore_client is not None:
+            doc_ref = (
+                firestore_client
+                .collection(settings.firebase_firestore_tokens_collection)
+                .document(_firebase_doc_id_for_user(user))
+            )
+            doc_ref.set(
+                {
+                    "user_id": user.id,
+                    "firebase_uid": user.firebase_uid,
+                    "email": email or user.email,
+                    "refresh_token_enc": enc_refresh,
+                    "updated_at": datetime.utcnow(),
+                },
+                merge=True,
+            )
+            return
+
+        row = db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
+        if row:
+            row.refresh_token_enc = enc_refresh
+            row.email = email or row.email
+        else:
+            row = GoogleCredential(user_id=user_id, refresh_token_enc=enc_refresh, email=email)
+            db.add(row)
+        db.commit()
+    finally:
+        db.close()
+
 def _get_user_from_request(request: Request):
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -115,6 +293,11 @@ def _get_user_from_request(request: Request):
     token = auth.split(" ", 1)[1].strip()
     if not token:
         return None
+
+    firebase_claims = _verify_firebase_token(token)
+    if firebase_claims:
+        return _upsert_user_from_firebase_claims(firebase_claims)
+
     db = SessionLocal()
     try:
         row = (
@@ -172,6 +355,23 @@ def _get_demo_user() -> User:
 def _get_google_refresh_token_for_user(user_id: int) -> str | None:
     db = SessionLocal()
     try:
+        user = db.query(User).filter(User.id == user_id).first()
+        firestore_client = _get_firestore_client()
+        if user and firestore_client is not None:
+            doc = (
+                firestore_client
+                .collection(settings.firebase_firestore_tokens_collection)
+                .document(_firebase_doc_id_for_user(user))
+                .get()
+            )
+            if doc.exists:
+                payload = doc.to_dict() or {}
+                enc_value = payload.get("refresh_token_enc")
+                if enc_value:
+                    try:
+                        return _decrypt_token(enc_value)
+                    except InvalidToken:
+                        return None
         row = db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
         if not row:
             return None
@@ -185,6 +385,12 @@ def _get_google_refresh_token_for_user(user_id: int) -> str | None:
 @app.get("/")
 def root():
     return {"message": "Receipt Automation API", "status": "running"}
+
+@app.get("/api/public-config")
+def public_config():
+    return {
+        "firebase": _get_public_firebase_web_config(),
+    }
 
 @app.post("/api/auth/register")
 def register(payload: dict = Body(...)):
@@ -258,7 +464,7 @@ def logout(request: Request):
 @app.get("/api/auth/me")
 def auth_me(request: Request):
     user = _require_user(request)
-    return {"id": user.id, "username": user.username, "email": user.email}
+    return {"id": user.id, "username": user.username, "email": user.email, "firebase_uid": user.firebase_uid}
 
 @app.get("/api/google/auth-url")
 def google_auth_url(request: Request):
@@ -328,17 +534,8 @@ def google_oauth_callback(code: str, state: str):
         raise HTTPException(status_code=400, detail="No refresh token returned")
 
     enc_refresh = _encrypt_token(creds.refresh_token)
-    db = SessionLocal()
-    try:
-        row = db.query(GoogleCredential).filter(GoogleCredential.user_id == user_id).first()
-        if row:
-            row.refresh_token_enc = enc_refresh
-        else:
-            row = GoogleCredential(user_id=user_id, refresh_token_enc=enc_refresh)
-            db.add(row)
-        db.commit()
-    finally:
-        db.close()
+    email = getattr(creds, "account", None)
+    _save_google_refresh_token_for_user(user_id, email, enc_refresh)
 
     return {"status": "success"}
 

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "5a4541025a044db7be704cfbe47a6c4c",
+    "from": "notification-3acd08@billing-updates.net",
+    "subject": "Your receipt from Domino's",
+    "date": "2026-02-27",
+    "body": "Order Receipt\nStore: Domino's\nDate: 2026-02-27\nBreakdown\nSubtotal Amount: $121.36\nTax Collected: $7.58\nTotal Paid: $128.94\nStatus: Completed\n"
+  },
+  {
+    "id": "37dc7c06082c4219aba73518ded634f7",
+    "from": "notification-3cf311@billing-updates.net",
+    "subject": "Your receipt from Safeway",
+    "date": "2026-03-05",
+    "body": "Order Receipt\nStore: Safeway\nDate: 2026-03-05\nBreakdown\nSubtotal Amount: $60.68\nTax Collected: $3.79\nTotal Paid: $64.47\nStatus: Completed\n"
+  },
+  {
+    "id": "84338e3b919c4867afb6cafd487cb69c",
+    "from": "notification-a138d6@billing-updates.net",
+    "subject": "Your receipt from Kroger",
+    "date": "2026-02-13",
+    "body": "Receipt Confirmation\nDate: 2026-02-13\nVendor: Kroger\nOrder Summary\nSubtotal: $103.87\nTax: $6.49\nTotal: $110.36\nThank you for your purchase.\n"
+  },
+  {
+    "id": "5316e4e9f5894558813536db7f400bf3",
+    "from": "notification-f67b0e@billing-updates.net",
+    "subject": "Your receipt from Netflix",
+    "date": "2026-03-08",
+    "body": "Payment Receipt\nMerchant: Netflix\nTransaction Date: 2026-03-08\nSummary\nAmount Before Tax: $106.27\nSales Tax: $6.64\nAmount Charged: $112.91\nWe appreciate your business.\n"
+  },
+  {
+    "id": "6475c62da4a548f89e54770f5af80eed",
+    "from": "notification-e96f80@billing-updates.net",
+    "subject": "Your receipt from Home Depot",
+    "date": "2026-03-07",
+    "body": "Order Receipt\nStore: Home Depot\nDate: 2026-03-07\nBreakdown\nSubtotal Amount: $106.00\nTax Collected: $6.62\nTotal Paid: $112.62\nStatus: Completed\n"
+  },
+  {
+    "id": "3cbebd4dcf7d4283a23dae4120841e5a",
+    "from": "notification-8abac5@billing-updates.net",
+    "subject": "Your receipt from American Airlines",
+    "date": "2026-02-08",
+    "body": "Subject Thread: Re: order update / invoice copy / receipt confirmation\nMerchant Notice: This receipt may include pending holds and promotional adjustments.\nOrder Ref: DD150A9DE1  |  Tracking: 1ZA094055E4B7C43\n----- PAYMENT RECONCILIATION BLOCK -----\nDocument Date -> 2026-02-08\nMerchant Legal Name -> American Airlines\nMerchandise Sum (USD) -> $143.12\nLocal Levy @ 6.25 pct -> $8.95\nBalance Due Now (final) -> $152.07\n--------------------------------\nAuth Hold (temporary): $167.92\nPending Charge (not final): $6.27\nPrevious Balance: $17.10\nRewards Applied Equivalent: $5.45 (3642 pts)\nPromo Banner: Save 15% on next order over $50.00\nLine Items:\n- Item 1 x1 ............. $28.63\n- Item 2 x1 ............. $7.53\n- Item 3 x2 ............. $40.10\n- Item 4 x1 ............. $29.10\nShipping Est.: $6.66\nCoupon / Promo Deduction: -$4.46\nSupport Plan Offer: $4.99/mo (not included)\nIf questions, contact support within 30 days. This message may contain automated text.\n"
+  },
+  {
+    "id": "f13997a3d21b4f00a1f8c8d734dcd9f1",
+    "from": "notification-9fbc53@billing-updates.net",
+    "subject": "Your receipt from Apple",
+    "date": "2026-02-26",
+    "body": "Subject Thread: Re: order update / invoice copy / receipt confirmation\nMerchant Notice: This receipt may include pending holds and promotional adjustments.\nOrder Ref: D894113630  |  Tracking: 1Z1591CB2AB9B747\n----- PAYMENT RECONCILIATION BLOCK -----\nDocument Date -> 2026-02-26\nMerchant Legal Name -> Apple\nMerchandise Sum (USD) -> $97.34\nLocal Levy @ 6.25 pct -> $6.08\nBalance Due Now (final) -> $103.42\n--------------------------------\nAuth Hold (temporary): $116.10\nPending Charge (not final): $9.31\nPrevious Balance: $21.55\nRewards Applied Equivalent: $3.15 (2176 pts)\nPromo Banner: Save 15% on next order over $50.00\nLine Items:\n- Item 1 x1 ............. $16.84\n- Item 2 x2 ............. $11.04\n- Item 3 x3 ............. $27.54\n- Item 4 x3 ............. $56.58\n- Item 5 x1 ............. $34.27\nShipping Est.: $8.99\nCoupon / Promo Deduction: -$8.66\nSupport Plan Offer: $4.99/mo (not included)\nIf questions, contact support within 30 days. This message may contain automated text.\n"
+  },
+  {
+    "id": "fcc1c3c23e01473682e36c67b8fa772e",
+    "from": "notification-7a1fe6@billing-updates.net",
+    "subject": "Your receipt from Best Buy",
+    "date": "2026-03-06",
+    "body": "Subject Thread: Re: order update / invoice copy / receipt confirmation\nMerchant Notice: This receipt may include pending holds and promotional adjustments.\nOrder Ref: AF03E11BA8  |  Tracking: 1ZCFAA6F60E0AB44\n----- PAYMENT RECONCILIATION BLOCK -----\nDocument Date -> 2026-03-06\nMerchant Legal Name -> Best Buy\nMerchandise Sum (USD) -> $117.53\nLocal Levy @ 6.25 pct -> $7.35\nBalance Due Now (final) -> $124.88\n--------------------------------\nAuth Hold (temporary): $134.60\nPending Charge (not final): $13.62\nPrevious Balance: $38.03\nRewards Applied Equivalent: $6.33 (2193 pts)\nPromo Banner: Save 15% on next order over $50.00\nLine Items:\n- Item 1 x2 ............. $10.24\n- Item 2 x3 ............. $30.90\n- Item 3 x1 ............. $17.29\n- Item 4 x1 ............. $30.73\nShipping Est.: $10.39\nCoupon / Promo Deduction: -$5.39\nSupport Plan Offer: $4.99/mo (not included)\nIf questions, contact support within 30 days. This message may contain automated text.\n"
+  },
+  {
+    "id": "c92780579b15486ab567f7823c01d095",
+    "from": "notification-ff2fe2@billing-updates.net",
+    "subject": "Your receipt from Microsoft",
+    "date": "2026-03-07",
+    "body": "Subject Thread: Re: order update / invoice copy / receipt confirmation\nMerchant Notice: This receipt may include pending holds and promotional adjustments.\nOrder Ref: 0F8376E656  |  Tracking: 1ZB747388E296147\n----- PAYMENT RECONCILIATION BLOCK -----\nDocument Date -> 2026-03-07\nMerchant Legal Name -> Microsoft\nMerchandise Sum (USD) -> $49.64\nLocal Levy @ 6.25 pct -> $3.10\nBalance Due Now (final) -> $52.74\n--------------------------------\nAuth Hold (temporary): $76.67\nPending Charge (not final): $22.84\nPrevious Balance: $30.75\nRewards Applied Equivalent: $6.41 (694 pts)\nPromo Banner: Save 15% on next order over $50.00\nLine Items:\n- Item 1 x2 ............. $54.28\n- Item 2 x2 ............. $48.16\n- Item 3 x3 ............. $44.19\nShipping Est.: $11.33\nCoupon / Promo Deduction: -$7.55\nSupport Plan Offer: $4.99/mo (not included)\nIf questions, contact support within 30 days. This message may contain automated text.\n"
+  },
+  {
+    "id": "7fbece4249f14706908a8c89328e0007",
+    "from": "notification-9e5ecf@billing-updates.net",
+    "subject": "Your receipt from Dunkin'",
+    "date": "2026-02-10",
+    "body": "Subject Thread: Re: order update / invoice copy / receipt confirmation\nMerchant Notice: This receipt may include pending holds and promotional adjustments.\nOrder Ref: E19BA3A277  |  Tracking: 1ZD5EFD294708A46\n----- PAYMENT RECONCILIATION BLOCK -----\nDocument Date -> 2026-02-10\nMerchant Legal Name -> Dunkin'\nMerchandise Sum (USD) -> $8.64\nLocal Levy @ 6.25 pct -> $0.54\nBalance Due Now (final) -> $9.18\n--------------------------------\nAuth Hold (temporary): $16.50\nPending Charge (not final): $19.26\nPrevious Balance: $42.08\nRewards Applied Equivalent: $2.58 (1678 pts)\nPromo Banner: Save 15% on next order over $50.00\nLine Items:\n- Item 1 x2 ............. $37.48\n- Item 2 x2 ............. $48.80\n- Item 3 x2 ............. $81.74\n- Item 4 x2 ............. $14.48\n- Item 5 x3 ............. $57.96\n- Item 6 x2 ............. $82.22\nShipping Est.: $6.22\nCoupon / Promo Deduction: -$6.01\nSupport Plan Offer: $4.99/mo (not included)\nIf questions, contact support within 30 days. This message may contain automated text.\n"
+  }
+]

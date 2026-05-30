@@ -21,7 +21,14 @@ def _ensure_users_schema():
             else:
                 conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255)"))
 
+        if "firebase_uid" not in columns:
+            if engine.dialect.name == "sqlite":
+                conn.execute(text("ALTER TABLE users ADD COLUMN firebase_uid VARCHAR(255)"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS firebase_uid VARCHAR(255)"))
+
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_unique ON users (email)"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_firebase_uid_unique ON users (firebase_uid)"))
 
 def _ensure_transactions_schema():
     """Add user_id column and composite uniqueness for transactions when missing (SQLite)."""

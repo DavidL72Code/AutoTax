@@ -12,3 +12,4 @@ pydantic-settings==2.1.0
 matplotlib==3.8.2
 pandas==2.1.4
 cryptography==42.0.8
+firebase-admin==6.5.0
