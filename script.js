@@ -72,6 +72,7 @@ let authLoginPassword;
 let authSignupUsername;
 let authSignupEmail;
 let authSignupPassword;
+let authGoogleBtn;
 let currentUser = null;
 let firebaseAuth = null;
 let firebaseReadyPromise = Promise.resolve();
@@ -144,6 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
     authSignupUsername = document.querySelector('#auth-signup-username');
     authSignupEmail = document.querySelector('#auth-signup-email');
     authSignupPassword = document.querySelector('#auth-signup-password');
+    authGoogleBtn = document.querySelector('#auth-google-btn');
     
     // Initialize animations
     initAnimations();
@@ -336,6 +338,11 @@ function setupEventListeners() {
         authFormSignup.addEventListener('submit', function(e) {
             e.preventDefault();
             submitSignup();
+        });
+    }
+    if (authGoogleBtn) {
+        authGoogleBtn.addEventListener('click', function() {
+            submitGoogleAuth();
         });
     }
     if (authSignupPassword) {
@@ -569,6 +576,25 @@ async function submitSignup() {
         loadDashboardData();
     } catch (error) {
         showError(error.message || 'Firebase signup failed.');
+    }
+}
+
+async function submitGoogleAuth() {
+    if (!firebaseAuth || !hasUsableFirebaseConfig()) {
+        showError('Firebase Auth is not configured yet.');
+        return;
+    }
+    const provider = new window.firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    try {
+        await firebaseAuth.signInWithPopup(provider);
+        const user = await fetchCurrentUserProfile();
+        setAuthState(user);
+        closeAuthModal();
+        showSuccess('Signed in with Google.');
+        loadDashboardData();
+    } catch (error) {
+        showError(error.message || 'Google sign-in failed.');
     }
 }
 
