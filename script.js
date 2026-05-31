@@ -73,6 +73,7 @@ let authSignupUsername;
 let authSignupEmail;
 let authSignupPassword;
 let authGoogleBtn;
+let authFeedbackEl;
 let currentUser = null;
 let firebaseAuth = null;
 let firebaseReadyPromise = Promise.resolve();
@@ -146,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     authSignupEmail = document.querySelector('#auth-signup-email');
     authSignupPassword = document.querySelector('#auth-signup-password');
     authGoogleBtn = document.querySelector('#auth-google-btn');
+    authFeedbackEl = document.querySelector('#auth-feedback');
     
     // Initialize animations
     initAnimations();
@@ -395,6 +397,7 @@ async function connectGoogle() {
 
 function openAuthModal(mode) {
     if (!authModal) return;
+    clearAuthFeedback();
     setAuthMode(mode || 'login');
     authModal.classList.add('show');
     authModal.hidden = false;
@@ -409,6 +412,7 @@ function openAuthModal(mode) {
 
 function closeAuthModal() {
     if (!authModal) return;
+    clearAuthFeedback();
     authModal.classList.remove('show');
     authModal.hidden = true;
     authModal.style.display = 'none';
@@ -416,6 +420,7 @@ function closeAuthModal() {
 
 function setAuthMode(mode) {
     const isLogin = mode === 'login';
+    clearAuthFeedback();
     if (authTabLogin) authTabLogin.classList.toggle('auth-tab-active', isLogin);
     if (authTabSignup) authTabSignup.classList.toggle('auth-tab-active', !isLogin);
     if (authFormLogin) authFormLogin.hidden = !isLogin;
@@ -426,6 +431,50 @@ function setAuthMode(mode) {
     if (!isLogin) {
         updatePasswordRequirementState(authSignupPassword ? authSignupPassword.value : '');
     }
+}
+
+function setAuthFeedback(message, variant = 'error') {
+    if (!authFeedbackEl) {
+        if (variant === 'error') {
+            showError(message);
+        } else {
+            showSuccess(message);
+        }
+        return;
+    }
+    authFeedbackEl.hidden = !message;
+    authFeedbackEl.textContent = message || '';
+    authFeedbackEl.classList.toggle('auth-feedback-success', variant === 'success');
+    authFeedbackEl.classList.toggle('auth-feedback-error', variant !== 'success');
+}
+
+function clearAuthFeedback() {
+    if (!authFeedbackEl) return;
+    authFeedbackEl.hidden = true;
+    authFeedbackEl.textContent = '';
+    authFeedbackEl.classList.remove('auth-feedback-success', 'auth-feedback-error');
+}
+
+function mapFirebaseAuthError(error, mode) {
+    const code = error && error.code ? String(error.code) : '';
+    if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found' || code === 'auth/invalid-login-credentials') {
+        return mode === 'login'
+            ? 'Incorrect email or password.'
+            : 'We could not create your account with those details.';
+    }
+    if (code === 'auth/email-already-in-use') {
+        return 'That email is already in use.';
+    }
+    if (code === 'auth/popup-closed-by-user') {
+        return 'Google sign-in was canceled before it finished.';
+    }
+    if (code === 'auth/popup-blocked') {
+        return 'Your browser blocked the Google sign-in popup.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+        return 'This site is not authorized for Google sign-in in Firebase yet.';
+    }
+    return error && error.message ? error.message : 'Authentication failed.';
 }
 
 function setAuthState(user) {
@@ -520,15 +569,16 @@ async function bootstrapAuth() {
 }
 
 async function submitLogin() {
+    clearAuthFeedback();
     if (!authLoginUsername || !authLoginPassword) return;
     const email = authLoginUsername.value.trim().toLowerCase();
     const password = authLoginPassword.value;
     if (!email || !password) {
-        showError('Enter your email and password.');
+        setAuthFeedback('Enter your email and password.');
         return;
     }
     if (!firebaseAuth || !hasUsableFirebaseConfig()) {
-        showError('Firebase Auth is not configured yet.');
+        setAuthFeedback('Firebase Auth is not configured yet.');
         return;
     }
     try {
@@ -538,30 +588,31 @@ async function submitLogin() {
         closeAuthModal();
         loadDashboardData();
     } catch (error) {
-        showError(error.message || 'Firebase login failed.');
+        setAuthFeedback(mapFirebaseAuthError(error, 'login'));
     }
 }
 
 async function submitSignup() {
+    clearAuthFeedback();
     if (!authSignupUsername || !authSignupEmail || !authSignupPassword) return;
     const username = authSignupUsername.value.trim();
     const email = authSignupEmail.value.trim().toLowerCase();
     const password = authSignupPassword.value;
     if (!username || !email || !password) {
-        showError('Enter a username, email, and password.');
+        setAuthFeedback('Enter a username, email, and password.');
         return;
     }
     if (!isValidEmail(email)) {
-        showError('Enter a valid email address.');
+        setAuthFeedback('Enter a valid email address.');
         return;
     }
     const passwordValidation = validatePasswordStrength(password);
     if (!passwordValidation.valid) {
-        showError(passwordValidation.message);
+        setAuthFeedback(passwordValidation.message);
         return;
     }
     if (!firebaseAuth || !hasUsableFirebaseConfig()) {
-        showError('Firebase Auth is not configured yet.');
+        setAuthFeedback('Firebase Auth is not configured yet.');
         return;
     }
     try {
@@ -575,13 +626,14 @@ async function submitSignup() {
         showSuccess('Signed up successfully. You are now logged in.');
         loadDashboardData();
     } catch (error) {
-        showError(error.message || 'Firebase signup failed.');
+        setAuthFeedback(mapFirebaseAuthError(error, 'signup'));
     }
 }
 
 async function submitGoogleAuth() {
+    clearAuthFeedback();
     if (!firebaseAuth || !hasUsableFirebaseConfig()) {
-        showError('Firebase Auth is not configured yet.');
+        setAuthFeedback('Firebase Auth is not configured yet.');
         return;
     }
     const provider = new window.firebase.auth.GoogleAuthProvider();
@@ -594,7 +646,7 @@ async function submitGoogleAuth() {
         showSuccess('Signed in with Google.');
         loadDashboardData();
     } catch (error) {
-        showError(error.message || 'Google sign-in failed.');
+        setAuthFeedback(mapFirebaseAuthError(error, 'google'));
     }
 }
 

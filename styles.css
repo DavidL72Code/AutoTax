@@ -1570,6 +1570,27 @@ nav,
     background: #10141f;
 }
 
+.auth-feedback {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.auth-feedback-error {
+    color: #fecaca;
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.22);
+}
+
+.auth-feedback-success {
+    color: #bbf7d0;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
 .modal-label {
     color: var(--text-soft);
     font-size: 0.92rem;
