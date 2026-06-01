@@ -66,7 +66,7 @@ def generate_text(
         _LAST_AI_CALL_TS = time.monotonic()
         _AI_CALL_TIMESTAMPS.append(_LAST_AI_CALL_TS)
 
-    model_name = model or settings.gemini_model
+    model_name = (model or settings.gemini_model or "").strip()
     genai.configure(api_key=api_key)
     client = genai.GenerativeModel(model_name)
     attempts = 0

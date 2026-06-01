@@ -178,6 +178,13 @@ def _get_firebase_app():
     if firebase_admin is None or firebase_credentials is None:
         raise HTTPException(status_code=500, detail="firebase-admin is not installed")
 
+    # Reuse an already-initialized default app (e.g. initialized by firestore_store.py)
+    try:
+        _FIREBASE_APP = firebase_admin.get_app()
+        return _FIREBASE_APP
+    except (ValueError, Exception):
+        pass
+
     options = {}
     if settings.firebase_project_id:
         options["projectId"] = settings.firebase_project_id
@@ -869,7 +876,11 @@ def _prepare_demo_emails(emails):
     return demo_rows
 
 def _run_demo_parse(run_id: str, user_id: int, force_reprocess: bool = False):
-    from .parser_select import parser_select
+    from .parser_select import vendor_search, vendor_regex_search, vendor_from_sender_domain
+    from .parsers.generic_parser import parse_generic_emails_batch
+    from .parsers.paypal_parser import paypal_parser
+    from .parsers.amazon_parser import amazon_parser
+    from .vendor_normalize import normalize_vendor_name
     from .data_helper import get_existing_email_ids, log_transaction
 
     try:
@@ -887,69 +898,141 @@ def _run_demo_parse(run_id: str, user_id: int, force_reprocess: bool = False):
             return
 
         existing_ids = get_existing_email_ids(user_id=user_id)
-        _update_demo_run(run_id, total=len(emails), processed=0, success=0, skipped=0, failed=0)
-        _append_demo_log(run_id, f"Loaded {len(emails)} demo emails.")
 
-        success = 0
+        # Separate already-processed from emails that need parsing
+        to_process = []
         skipped = 0
-        failed = 0
-        for idx, email in enumerate(emails, start=1):
-            email_id = email.get("id")
-            if not force_reprocess and email_id in existing_ids:
+        for email in emails:
+            if not force_reprocess and email.get("id") in existing_ids:
                 skipped += 1
-                _append_demo_log(run_id, f"[SKIP] Already processed: {email_id}")
-                _update_demo_run(run_id, processed=idx, success=success, skipped=skipped, failed=failed)
-                continue
-            subject = (email.get("subject") or "Demo receipt")[:80]
-            _append_demo_log(run_id, f"Parsing {idx}/{len(emails)}: {subject}")
+            else:
+                to_process.append(email)
+
+        _update_demo_run(run_id, total=len(emails), processed=skipped, success=0, skipped=skipped, failed=0)
+        _append_demo_log(run_id, f"Loaded {len(emails)} emails. {skipped} already processed, {len(to_process)} to parse.")
+
+        if not to_process:
+            _update_demo_run(run_id, status="completed", finished_at=_now_iso())
+            _append_demo_log(run_id, "Nothing new to parse.")
+            return
+
+        # Route each email: specialized parsers (PayPal/Amazon) vs generic batch
+        specialized: list[tuple[int, dict, str, callable]] = []
+        generic: list[tuple[int, dict, str | None]] = []
+
+        for i, email in enumerate(to_process):
+            email_from = (email.get("from") or "").lower()
+            email_subject = (email.get("subject") or "").lower()
+            email_body = email.get("body") or ""
+
+            vendor_name = vendor_search(email_from, email_subject, email_body)
+            if not vendor_name:
+                vendor_name = vendor_regex_search(email_subject, email_body)
+            if not vendor_name:
+                vendor_name = vendor_from_sender_domain(email_from)
+
+            normalized = normalize_vendor_name(vendor_name, email_data=email) if vendor_name else None
+
+            if normalized == "PayPal":
+                specialized.append((i, email, normalized, paypal_parser))
+            elif normalized == "Amazon":
+                specialized.append((i, email, normalized, amazon_parser))
+            else:
+                generic.append((i, email, normalized))
+
+        _append_demo_log(run_id, f"Routing: {len(generic)} generic (1 batch AI call), {len(specialized)} specialized.")
+
+        # Parse all emails, collecting results by index
+        all_parsed: dict[int, dict | None] = {}
+
+        # Specialized parsers run individually (PayPal/Amazon rarely need AI)
+        for i, email, vendor_name, parser_fn in specialized:
             try:
-                parsed = parser_select(email)
-                if parsed and isinstance(parsed, dict):
-                    tx = log_transaction(parsed, user_id=user_id)
-                    vendor = parsed.get("vendor", "Unknown")
-                    amount = float(parsed.get("amount") or 0.0)
-                    meta = parsed.get("_meta") or {}
-                    vendor_ai_called = bool(meta.get("vendor_ai_called", False))
-                    vendor_ai_success = bool(meta.get("vendor_ai_success", False))
-                    amount_ai_called = bool(meta.get("ai_amount_tax_called", False))
-                    amount_ai_success = bool(meta.get("ai_amount_found", False))
-                    tax_ai_called = bool(meta.get("ai_amount_tax_called", False))
-                    tax_ai_success = bool(meta.get("ai_tax_found", False))
-                    vendor_ai_raw = str(meta.get("vendor_ai_raw", ""))
-                    amount_tax_ai_raw = str(meta.get("ai_amount_tax_raw", ""))
-                    _append_demo_log(
-                        run_id,
-                        "AI indicators -> "
-                        f"vendor_ai_called={vendor_ai_called}, "
-                        f"vendor_ai_success={vendor_ai_success}, "
-                        f"amount_ai_called={amount_ai_called}, "
-                        f"amount_ai_success={amount_ai_success}, "
-                        f"tax_ai_called={tax_ai_called}, "
-                        f"tax_ai_success={tax_ai_success}"
-                    )
-                    if vendor_ai_called:
-                        _append_demo_log(run_id, f"AI vendor raw -> {vendor_ai_raw or '(empty)'}")
-                    if amount_ai_called:
-                        _append_demo_log(run_id, f"AI amount/tax raw -> {amount_tax_ai_raw or '(empty)'}")
-                    if tx is not None:
-                        success += 1
-                        if email_id:
-                            existing_ids.add(email_id)
-                        _append_demo_log(run_id, f"Saved: vendor={vendor}, amount=${amount:.2f}")
-                    else:
-                        failed += 1
-                        _append_demo_log(run_id, f"Skipped/not saved: vendor={vendor}, amount=${amount:.2f}")
+                all_parsed[i] = parser_fn(
+                    email.get("subject") or "",
+                    email.get("body") or "",
+                    email.get("id"),
+                    email.get("date"),
+                    vendor_name,
+                )
+            except Exception as e:
+                all_parsed[i] = None
+                _append_demo_log(run_id, f"Error in specialized parser: {e}")
+
+        # Generic emails: regex on all, then ONE batch AI call for failures
+        if generic:
+            _append_demo_log(run_id, f"Running regex + batch AI on {len(generic)} generic emails...")
+            batch_items = [
+                {
+                    "email_subject": email.get("subject") or "",
+                    "email_text": email.get("body") or "",
+                    "email_id": email.get("id"),
+                    "email_date": email.get("date"),
+                    "vendor_name": vendor_name,
+                }
+                for _, email, vendor_name in generic
+            ]
+            batch_results = parse_generic_emails_batch(batch_items)
+            for (i, _, _), parsed in zip(generic, batch_results):
+                all_parsed[i] = parsed
+
+        # Save results and log per-email outcome
+        success = 0
+        failed = 0
+        processed = skipped
+
+        for i, email in enumerate(to_process):
+            parsed = all_parsed.get(i)
+            email_id = email.get("id")
+            subject = (email.get("subject") or "Demo receipt")[:80]
+            processed += 1
+
+            if not parsed or not isinstance(parsed, dict):
+                failed += 1
+                _append_demo_log(run_id, f"[{i+1}/{len(to_process)}] No result for: {subject}")
+                _update_demo_run(run_id, processed=processed, success=success, skipped=skipped, failed=failed)
+                continue
+
+            meta = parsed.get("_meta") or {}
+            vendor = parsed.get("vendor", "Unknown")
+            amount = float(parsed.get("amount") or 0.0)
+            vendor_ai_called = bool(meta.get("vendor_ai_called", False))
+            amount_ai_called = bool(meta.get("ai_amount_tax_called", False))
+
+            _append_demo_log(
+                run_id,
+                f"[{i+1}/{len(to_process)}] {subject[:60]} → vendor={vendor}, amount=${amount:.2f}"
+            )
+            _append_demo_log(
+                run_id,
+                "AI indicators -> "
+                f"vendor_ai_called={vendor_ai_called}, "
+                f"vendor_ai_success={bool(meta.get('vendor_ai_success'))}, "
+                f"amount_ai_called={amount_ai_called}, "
+                f"amount_ai_success={bool(meta.get('ai_amount_found'))}, "
+                f"tax_ai_success={bool(meta.get('ai_tax_found'))}"
+            )
+            if amount_ai_called:
+                _append_demo_log(run_id, f"AI amount/tax raw -> {str(meta.get('ai_amount_tax_raw', '')) or '(empty)'}")
+
+            try:
+                tx = log_transaction(parsed, user_id=user_id)
+                if tx is not None:
+                    success += 1
+                    if email_id:
+                        existing_ids.add(email_id)
+                    _append_demo_log(run_id, f"Saved: vendor={vendor}, amount=${amount:.2f}")
                 else:
                     failed += 1
-                    _append_demo_log(run_id, "Parse returned no transaction.")
+                    _append_demo_log(run_id, f"Not saved (zero/duplicate): vendor={vendor}, amount=${amount:.2f}")
             except Exception as row_error:
                 failed += 1
-                _append_demo_log(run_id, f"Error: {row_error}")
-            finally:
-                _update_demo_run(run_id, processed=idx, success=success, skipped=skipped, failed=failed)
+                _append_demo_log(run_id, f"Error saving: {row_error}")
+
+            _update_demo_run(run_id, processed=processed, success=success, skipped=skipped, failed=failed)
 
         _update_demo_run(run_id, status="completed", finished_at=_now_iso())
-        _append_demo_log(run_id, f"Run complete. success={success}, failed={failed}")
+        _append_demo_log(run_id, f"Run complete. success={success}, skipped={skipped}, failed={failed}")
     except Exception as e:
         _append_demo_log(run_id, f"Run crashed: {e}")
         _update_demo_run(run_id, status="failed", finished_at=_now_iso())
@@ -1265,6 +1348,12 @@ def demo_parse(request: Request, force_reprocess: bool = False):
         thread.start()
         return {"status": "started", "run_id": run_id}
     except Exception as e:
+        err = str(e)
+        if "403" in err or "insufficient permissions" in err.lower():
+            raise HTTPException(
+                status_code=500,
+                detail="Demo is unavailable: the server's Firestore service account lacks the required permissions. Check that the Firebase service account has the 'Cloud Datastore User' IAM role."
+            )
         raise HTTPException(status_code=500, detail=f"Demo parse failed to start: {e}")
 
 @app.get("/api/demo-parse-status")

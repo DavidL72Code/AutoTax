@@ -78,6 +78,13 @@ def get_firestore_app():
     if not firestore_enabled():
         return None
 
+    # Reuse an already-initialized default app (e.g. initialized by api.py)
+    try:
+        _FIREBASE_APP = firebase_admin.get_app()
+        return _FIREBASE_APP
+    except (ValueError, Exception):
+        pass
+
     options = {}
     if settings.firebase_project_id:
         options["projectId"] = settings.firebase_project_id

@@ -38,6 +38,10 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# Strip whitespace that can sneak in from env var editors (e.g. trailing newlines in Render).
+if settings.gemini_model:
+    settings.gemini_model = settings.gemini_model.strip()
+
 # Defensive: if the DB URL was set as "database_url=sqlite:////path", strip the prefix.
 if settings.database_url.startswith("database_url="):
     settings.database_url = settings.database_url.split("=", 1)[1]
