@@ -66,6 +66,8 @@ except Exception:
 app = FastAPI()
 DEMO_PARSE_RUNS = {}
 DEMO_PARSE_LOCK = threading.Lock()
+SYNC_RUNS = {}
+SYNC_LOCK = threading.Lock()
 
 # Allow your website to call the API
 app.add_middleware(
@@ -698,7 +700,9 @@ def get_transactions(request: Request):
                 "tax": float(t.tax) if t.tax else 0.0,
                 "email_id": t.email_id,
                 "category": t.category,
-                "payment_method": t.payment_method
+                "payment_method": t.payment_method,
+                "items": t.items,
+                "email_body": t.email_body,
             }
             for t in transactions
         ]
@@ -770,28 +774,44 @@ def cleanup_zero_transactions(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
-def _run_sync(user_id: int):
-    """Run email sync in background (avoids request timeouts). Auto-removes $0 transactions after sync."""
+def _update_sync_run(run_id: str, **kwargs):
+    with SYNC_LOCK:
+        run = SYNC_RUNS.get(run_id)
+        if run:
+            run.update(kwargs)
+
+def _run_sync(user_id: int, run_id: str | None = None):
+    """Run email sync in background with optional progress tracking."""
+    def _status(status: str, message: str = ""):
+        if run_id:
+            _update_sync_run(run_id, status=status, message=message, updated_at=_now_iso())
+
     try:
+        _status("running", "Connecting to Gmail…")
         from .main import main
         refresh_token = _get_google_refresh_token_for_user(user_id)
         if not refresh_token:
+            _status("failed", "Google account not connected. Use Connect Gmail to authorise.")
             print("❌ No Google OAuth token found for user.")
             return
         client_id = settings.google_oauth_client_id or ""
         client_secret = settings.google_oauth_client_secret or ""
         if not client_id or not client_secret:
+            _status("failed", "Server OAuth configuration missing.")
             print("❌ Google OAuth client config missing.")
             return
         gmail_creds = credentials_from_refresh_token(refresh_token, client_id, client_secret)
+        _status("running", "Fetching and parsing emails…")
         print("🔄 Starting email sync...")
         main(user_id=user_id, gmail_creds=gmail_creds)
         deleted = delete_zero_amount_transactions(user_id=user_id)
         if deleted:
             print(f"🧹 Removed {deleted} zero-amount transaction(s) after sync.")
         _print_db_snapshot(user_id=user_id)
+        _status("completed", "Sync finished. New receipts are ready.")
         print("✅ Email sync completed")
     except Exception as e:
+        _status("failed", str(e))
         print(f"❌ Sync failed: {e}")
 
 def _require_api_key(request: Request):
@@ -1286,16 +1306,36 @@ def _print_db_snapshot(limit: int = 50, user_id: str | int | None = None):
 
 @app.post("/api/sync")
 def sync_emails(request: Request):
-    """Start email scraper in background; returns immediately so the request doesn't timeout."""
+    """Start email scraper in background; returns a run_id for progress polling."""
     try:
         user = _require_user(request)
         if not _get_google_refresh_token_for_user(user.id):
             raise HTTPException(status_code=400, detail="Google OAuth not connected for this user.")
-        thread = threading.Thread(target=_run_sync, args=(user.id,), daemon=True)
+        run_id = uuid.uuid4().hex
+        with SYNC_LOCK:
+            SYNC_RUNS[run_id] = {
+                "run_id": run_id,
+                "user_id": user.id,
+                "status": "queued",
+                "message": "Queued…",
+                "started_at": _now_iso(),
+                "updated_at": _now_iso(),
+            }
+        thread = threading.Thread(target=_run_sync, args=(user.id, run_id), daemon=True)
         thread.start()
-        return {"status": "success", "message": "Sync started. Fetching and parsing emails in the background—refresh in a minute to see new receipts."}
+        return {"status": "success", "run_id": run_id, "message": "Sync started."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed to start: {str(e)}")
+
+@app.get("/api/sync-status")
+def sync_status(request: Request, run_id: str):
+    """Poll sync progress for a run started by /api/sync."""
+    user = _require_user(request)
+    with SYNC_LOCK:
+        run = SYNC_RUNS.get(run_id)
+    if not run or run.get("user_id") != user.id:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
 
 @app.post("/api/demo-sync")
 def demo_sync(request: Request):
@@ -1392,7 +1432,9 @@ def get_demo_transactions(request: Request):
             "tax": float(t.tax) if t.tax else 0.0,
             "email_id": t.email_id,
             "category": t.category,
-            "payment_method": t.payment_method
+            "payment_method": t.payment_method,
+            "items": t.items,
+            "email_body": t.email_body,
         }
         for t in transactions
     ]
@@ -1546,7 +1588,7 @@ async def vendor_pie(request: Request):
 
 @app.put("/api/transactions/{transaction_id}")
 def update_transaction(request: Request, transaction_id: str, payload: dict = Body(...)):
-    """Update a transaction's vendor, amount, tax, or date."""
+    """Update a transaction's vendor, amount, tax, date, or category."""
     user = _require_user(request)
     try:
         tx = update_transaction_for_user(str(transaction_id), payload, user.id)

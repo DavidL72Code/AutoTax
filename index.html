@@ -21,8 +21,10 @@
                 <a href="demo.html">Demo</a>
             </div>
             <div class="nav-actions">
+                <a href="demo.html" class="btn-action btn-try-demo">Try Demo</a>
                 <button class="btn-login">Log in</button>
                 <button class="btn-signup">Sign up</button>
+                <button id="settings-toggle" class="btn-settings" aria-label="Settings" title="Settings">⚙</button>
             </div>
         </div>
     </nav>
@@ -33,8 +35,12 @@
             <div class="section-container hero-shell">
                 <div class="hero-meta">
                     <p class="hero-kicker">Total Receipt Volume</p>
-                    <h1 id="hero-total-spent" class="hero-value">$4,892.45</h1>
+                    <h1 id="hero-total-spent" class="hero-value skeleton-target">$4,892.45</h1>
                     <p id="hero-summary-line" class="hero-change">247 receipts across 34 vendors. Live sync updates appear below.</p>
+                    <div class="hero-cta">
+                        <a href="demo.html" class="btn-action-primary">Try the Demo</a>
+                        <button class="btn-action btn-connect-google-hero">Connect Gmail</button>
+                    </div>
                 </div>
 
                 <div class="hero-panels">
@@ -156,28 +162,28 @@
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Total Spent</div>
-                                    <div class="stat-value-large">$4,892.45</div>
+                                    <div class="stat-value-large skeleton-target">$4,892.45</div>
                                     <div class="stat-change-positive">Live across synced receipts</div>
                                 </div>
                             </div>
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Receipts</div>
-                                    <div class="stat-value-large">247</div>
+                                    <div class="stat-value-large skeleton-target">247</div>
                                     <div class="stat-change-neutral">Queued and processed</div>
                                 </div>
                             </div>
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Vendors</div>
-                                    <div class="stat-value-large">34</div>
+                                    <div class="stat-value-large skeleton-target">34</div>
                                     <div class="stat-change-neutral">Unique merchants found</div>
                                 </div>
                             </div>
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Avg. Ticket</div>
-                                    <div class="stat-value-large">$162.41</div>
+                                    <div class="stat-value-large skeleton-target">$162.41</div>
                                     <div class="stat-change-negative">Per transaction average</div>
                                 </div>
                             </div>
@@ -204,12 +210,28 @@
                         <p class="section-subtitle">Search, export, sync, and edit every receipt from one dark command surface.</p>
                     </div>
                     <div class="section-actions">
-                        <input type="text" placeholder="Search transactions..." class="search-input">
+                        <div class="search-wrapper">
+                            <input type="text" placeholder="Search transactions..." class="search-input">
+                            <kbd class="search-shortcut">⌘K</kbd>
+                        </div>
                         <button id="export-csv" class="btn-action">Export CSV</button>
                         <button class="btn-action btn-clear">Clear All</button>
                         <button class="btn-action btn-connect-google">Connect Gmail</button>
                         <button id="sync-emails" class="btn-action-primary">Sync Emails</button>
                     </div>
+                </div>
+
+                <div id="duplicate-warning" class="duplicate-warning" hidden>
+                    <span class="duplicate-warning-icon">⚠</span>
+                    <span id="duplicate-warning-text">Possible duplicate transactions detected. Check entries with matching vendor, amount, and date.</span>
+                    <button id="duplicate-dismiss" class="duplicate-dismiss" type="button">Dismiss</button>
+                </div>
+
+                <div class="date-filter-bar">
+                    <button class="date-filter-btn date-filter-active" data-filter="all">All time</button>
+                    <button class="date-filter-btn" data-filter="1y">This year</button>
+                    <button class="date-filter-btn" data-filter="3m">3 months</button>
+                    <button class="date-filter-btn" data-filter="30d">Last 30 days</button>
                 </div>
 
                 <div class="demo-run-panel">
@@ -218,6 +240,38 @@
                         <p class="demo-run-subtitle">Live parser output from the most recent run.</p>
                     </div>
                     <pre id="demo-run-log" class="demo-run-log">No demo parse run yet.</pre>
+                </div>
+
+                <!-- Onboarding card (shown when no transactions exist) -->
+                <div id="onboarding-card" class="onboarding-card" hidden>
+                    <h3 class="onboarding-title">Get started in 3 steps</h3>
+                    <div class="onboarding-steps">
+                        <div class="onboarding-step">
+                            <div class="onboarding-step-num">1</div>
+                            <div>
+                                <div class="onboarding-step-title">Connect Gmail</div>
+                                <div class="onboarding-step-desc">Authorize read-only access so ReceiptAuto can find receipt emails in your inbox.</div>
+                            </div>
+                        </div>
+                        <div class="onboarding-step">
+                            <div class="onboarding-step-num">2</div>
+                            <div>
+                                <div class="onboarding-step-title">Sync Emails</div>
+                                <div class="onboarding-step-desc">Click Sync Emails to scan your inbox and extract transaction data automatically.</div>
+                            </div>
+                        </div>
+                        <div class="onboarding-step">
+                            <div class="onboarding-step-num">3</div>
+                            <div>
+                                <div class="onboarding-step-title">See Your Spending</div>
+                                <div class="onboarding-step-desc">Your transactions, trends, and category breakdown appear here in real time.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="onboarding-actions">
+                        <button class="btn-action-primary btn-connect-google-onboard">Connect Gmail to start</button>
+                        <a href="demo.html" class="btn-action">See a demo first</a>
+                    </div>
                 </div>
 
                 <!-- Transactions Table -->
@@ -250,12 +304,7 @@
                                 </th>
                                 <th>
                                     <div class="th-content">
-                                        <span>Parser Type</span>
-                                    </div>
-                                </th>
-                                <th>
-                                    <div class="th-content">
-                                        <span>Status</span>
+                                        <span>Category</span>
                                     </div>
                                 </th>
                                 <th>
@@ -268,6 +317,21 @@
                         <tbody>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Pagination footer -->
+                <div class="table-footer">
+                    <div id="table-info" class="table-info">No transactions</div>
+                    <div class="pagination" id="pagination">
+                        <button id="prev-page" class="page-btn" type="button" disabled>← Prev</button>
+                        <span id="page-indicator" class="page-indicator">1 / 1</span>
+                        <button id="next-page" class="page-btn" type="button" disabled>Next →</button>
+                    </div>
+                    <select id="page-size-select" class="page-size-select" aria-label="Rows per page">
+                        <option value="25">25 / page</option>
+                        <option value="50">50 / page</option>
+                        <option value="100">100 / page</option>
+                    </select>
                 </div>
             </div>
         </section>
@@ -296,6 +360,22 @@
                         <canvas id="csv-chart" width="360" height="360"></canvas>
                         <div id="csv-legend" class="csv-legend"></div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Spending Trends Section -->
+        <section class="trends-section" id="spending-trends">
+            <div class="section-container">
+                <div class="section-header-main">
+                    <div>
+                        <h2 class="section-title">Monthly Spending Trends</h2>
+                        <p class="section-subtitle">Track how your spend has changed month over month.</p>
+                    </div>
+                </div>
+                <div class="trends-card">
+                    <canvas id="trends-chart" class="trends-canvas"></canvas>
+                    <div id="trends-empty" class="trends-empty">No transaction data yet. Sync emails to see your spending trends.</div>
                 </div>
             </div>
         </section>
@@ -454,10 +534,121 @@
 
                 <label class="modal-label" for="edit-date">Date</label>
                 <input id="edit-date" class="modal-input" type="date" />
+
+                <label class="modal-label" for="edit-category">Category</label>
+                <select id="edit-category" class="modal-input">
+                    <option value="">Auto-detect</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Food Delivery">Food Delivery</option>
+                    <option value="Coffee">Coffee</option>
+                    <option value="Groceries">Groceries</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Subscriptions">Subscriptions</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Health">Health</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Gas">Gas</option>
+                    <option value="Other">Other</option>
+                </select>
             </div>
             <div class="modal-actions">
                 <button id="modal-cancel" class="btn-action" type="button">Cancel</button>
                 <button id="modal-save" class="btn-action-primary" type="button">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Drawer -->
+    <div id="settings-drawer" class="settings-drawer" aria-hidden="true" hidden>
+        <div class="settings-backdrop" id="settings-backdrop"></div>
+        <div class="settings-panel" role="dialog" aria-label="Settings">
+            <div class="settings-header">
+                <h3 class="settings-title">Settings</h3>
+                <button id="settings-close" class="settings-close" type="button" aria-label="Close settings">×</button>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-label">Account</div>
+                <div class="settings-row">
+                    <div class="settings-row-info">
+                        <div class="settings-row-title">Gmail connection</div>
+                        <div id="settings-gmail-status" class="settings-row-desc">Not connected</div>
+                    </div>
+                    <button class="btn-action btn-connect-google settings-connect-btn">Connect</button>
+                </div>
+                <div class="settings-row">
+                    <div class="settings-row-info">
+                        <div class="settings-row-title">Last synced</div>
+                        <div id="settings-last-sync" class="settings-row-desc">Never</div>
+                    </div>
+                    <button id="settings-sync-btn" class="btn-action-primary settings-sync-btn">Sync now</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-label">Display</div>
+                <div class="settings-row">
+                    <div class="settings-row-info">
+                        <div class="settings-row-title">Rows per page</div>
+                        <div class="settings-row-desc">Number of transactions shown per page</div>
+                    </div>
+                    <select id="settings-page-size" class="settings-select">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-label">Budget</div>
+                <div class="settings-row settings-row-stacked">
+                    <div class="settings-row-info">
+                        <div class="settings-row-title">Monthly budget target</div>
+                        <div class="settings-row-desc">Set a spending limit to track against</div>
+                    </div>
+                    <div class="settings-budget-editor">
+                        <label class="budget-input-shell settings-budget-shell" for="settings-budget-input">
+                            <span class="budget-currency">$</span>
+                            <input id="settings-budget-input" class="budget-input" type="number" min="1" step="any" placeholder="e.g. 2000" />
+                        </label>
+                        <button id="settings-budget-save" class="btn-action-primary" type="button">Save</button>
+                        <button id="settings-budget-auto" class="btn-action" type="button">Auto</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-label">Data</div>
+                <div class="settings-row">
+                    <div class="settings-row-info">
+                        <div class="settings-row-title">Export transactions</div>
+                        <div class="settings-row-desc">Download all transactions as CSV</div>
+                    </div>
+                    <button id="settings-export-btn" class="btn-action">Export CSV</button>
+                </div>
+                <div class="settings-row">
+                    <div class="settings-row-info">
+                        <div class="settings-row-title">Clear all transactions</div>
+                        <div class="settings-row-desc">Permanently removes all synced data (5s undo available)</div>
+                    </div>
+                    <button id="settings-clear-btn" class="btn-action btn-danger">Clear All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receipt preview modal -->
+    <div id="receipt-modal" class="modal-overlay" aria-hidden="true" style="display:none;" hidden>
+        <div class="modal-card receipt-modal-card" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title">
+            <div class="modal-header">
+                <h3 id="receipt-modal-title" class="modal-title">Original Receipt</h3>
+                <button id="receipt-modal-close" class="modal-close" type="button" aria-label="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="receipt-items" class="receipt-items" hidden></div>
+                <pre id="receipt-body" class="receipt-body"></pre>
             </div>
         </div>
     </div>

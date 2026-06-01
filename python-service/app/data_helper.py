@@ -88,7 +88,10 @@ def log_transaction(parsed_data:dict, user_id: str | int | None = None):
             amount=amount,
             tax=tax,
             date=date_val,
-            email_body=parsed_data.get('email_body') or parsed_data.get('email body')
+            category=parsed_data.get('category'),
+            payment_method=parsed_data.get('payment_method'),
+            items=parsed_data.get('items'),
+            email_body=parsed_data.get('email_body') or parsed_data.get('email body'),
             )
 
         db.add(transaction)
@@ -205,6 +208,9 @@ def update_transaction_for_user(transaction_id: str | int, payload: dict, user_i
             transaction.tax = float(raw_tax) if raw_tax else None
         if "date" in payload and payload.get("date"):
             transaction.date = date_parser.parse(str(payload["date"]))
+        if "category" in payload:
+            raw_cat = (payload.get("category") or "").strip()
+            transaction.category = raw_cat or None
         db.commit()
         db.refresh(transaction)
         return transaction

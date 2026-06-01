@@ -87,6 +87,13 @@ let demoParsePollTimer = null;
 let activeDemoRunId = null;
 let currentBudgetSpend = 0;
 let latestTopVendors = [];
+let activeDateFilter = 'all';
+let activeSearchTerm = '';
+let currentPage = 1;
+let pageSize = (() => { try { return Number(localStorage.getItem('TABLE_PAGE_SIZE')) || 25; } catch(e) { return 25; } })();
+let idlePollTimer = null;
+let syncRunId = null;
+let editCategoryInput = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
@@ -148,7 +155,14 @@ document.addEventListener('DOMContentLoaded', function() {
     authSignupPassword = document.querySelector('#auth-signup-password');
     authGoogleBtn = document.querySelector('#auth-google-btn');
     authFeedbackEl = document.querySelector('#auth-feedback');
-    
+    editCategoryInput = document.querySelector('#edit-category');
+
+    // Sync page-size select with saved value
+    const pageSizeSelectEl = document.querySelector('#page-size-select');
+    if (pageSizeSelectEl) pageSizeSelectEl.value = String(pageSize);
+    const settingsPageSizeEl = document.querySelector('#settings-page-size');
+    if (settingsPageSizeEl) settingsPageSizeEl.value = String(pageSize);
+
     // Initialize animations
     initAnimations();
     
@@ -171,12 +185,16 @@ document.addEventListener('DOMContentLoaded', function() {
         setAuthState(null);
     });
     
-    // Auto-refresh table and stats every 10s so new syncs show up without manual refresh
-    setInterval(() => {
-        if (currentUser) {
-            loadDashboardData();
+    // Smart idle poll: 30s, paused when tab is hidden
+    startIdlePoll();
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            if (idlePollTimer) { clearInterval(idlePollTimer); idlePollTimer = null; }
+        } else {
+            if (currentUser) { loadDashboardData(); }
+            startIdlePoll();
         }
-    }, 10000);
+    });
 });
 
 // Animations for elements on page load
@@ -195,10 +213,95 @@ function initAnimations() {
 
 // Setup all event listeners
 function setupEventListeners() {
-    // Search input
+    // Search input — feeds unified pipeline, no DOM hiding
     if (searchInput) {
         searchInput.addEventListener('input', function(e) {
-            filterTransactions(e.target.value);
+            activeSearchTerm = e.target.value;
+            currentPage = 1;
+            renderTransactionsTable();
+        });
+    }
+
+    // Pagination
+    const prevPageBtn = document.querySelector('#prev-page');
+    const nextPageBtn = document.querySelector('#next-page');
+    const pageSizeSelectEl = document.querySelector('#page-size-select');
+
+    if (prevPageBtn) {
+        prevPageBtn.addEventListener('click', function() {
+            if (currentPage > 1) { currentPage--; renderTransactionsTable(); }
+        });
+    }
+    if (nextPageBtn) {
+        nextPageBtn.addEventListener('click', function() {
+            const total = getProcessedTransactions().length;
+            if (currentPage < Math.ceil(total / pageSize)) { currentPage++; renderTransactionsTable(); }
+        });
+    }
+    if (pageSizeSelectEl) {
+        pageSizeSelectEl.addEventListener('change', function() {
+            pageSize = Number(this.value) || 25;
+            currentPage = 1;
+            try { localStorage.setItem('TABLE_PAGE_SIZE', String(pageSize)); } catch(e) {}
+            const settingsPS = document.querySelector('#settings-page-size');
+            if (settingsPS) settingsPS.value = String(pageSize);
+            renderTransactionsTable();
+        });
+    }
+
+    // Settings drawer
+    const settingsToggle = document.querySelector('#settings-toggle');
+    const settingsClose = document.querySelector('#settings-close');
+    const settingsBackdrop = document.querySelector('#settings-backdrop');
+    const settingsPageSize = document.querySelector('#settings-page-size');
+    const settingsBudgetSave = document.querySelector('#settings-budget-save');
+    const settingsBudgetAuto = document.querySelector('#settings-budget-auto');
+    const settingsExportBtn = document.querySelector('#settings-export-btn');
+    const settingsClearBtn = document.querySelector('#settings-clear-btn');
+    const settingsSyncBtn = document.querySelector('#settings-sync-btn');
+
+    if (settingsToggle) settingsToggle.addEventListener('click', openSettingsPanel);
+    if (settingsClose) settingsClose.addEventListener('click', closeSettingsPanel);
+    if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsPanel);
+
+    if (settingsPageSize) {
+        settingsPageSize.addEventListener('change', function() {
+            pageSize = Number(this.value) || 25;
+            currentPage = 1;
+            try { localStorage.setItem('TABLE_PAGE_SIZE', String(pageSize)); } catch(e) {}
+            const mainPS = document.querySelector('#page-size-select');
+            if (mainPS) mainPS.value = String(pageSize);
+            renderTransactionsTable();
+        });
+    }
+    if (settingsBudgetSave) {
+        settingsBudgetSave.addEventListener('click', function() {
+            const input = document.querySelector('#settings-budget-input');
+            if (!input) return;
+            const val = Number(input.value);
+            if (Number.isFinite(val) && val > 0) {
+                setStoredMonthlyBudget(val);
+                updateBudgetSummary(currentBudgetSpend);
+                if (expenseBudgetInputEl) expenseBudgetInputEl.value = String(val);
+            }
+        });
+    }
+    if (settingsBudgetAuto) settingsBudgetAuto.addEventListener('click', function() {
+        clearStoredMonthlyBudget();
+        updateBudgetSummary(currentBudgetSpend);
+        const input = document.querySelector('#settings-budget-input');
+        if (input) input.value = '';
+    });
+    if (settingsExportBtn) settingsExportBtn.addEventListener('click', exportToCSV);
+    if (settingsClearBtn) settingsClearBtn.addEventListener('click', clearAllTransactions);
+    if (settingsSyncBtn) settingsSyncBtn.addEventListener('click', syncEmails);
+
+    // Receipt preview modal close
+    const receiptModalClose = document.querySelector('#receipt-modal-close');
+    if (receiptModalClose) {
+        receiptModalClose.addEventListener('click', function() {
+            const m = document.querySelector('#receipt-modal');
+            if (m) { m.classList.remove('show'); m.style.display = 'none'; m.hidden = true; }
         });
     }
 
@@ -261,16 +364,17 @@ function setupEventListeners() {
 
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
-        // Ctrl/Cmd + K for search
         if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
             e.preventDefault();
             if (searchInput) searchInput.focus();
         }
-        
-        // Ctrl/Cmd + S for sync
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
             syncEmails();
+        }
+        if (e.key === 'Escape') {
+            const drawer = document.querySelector('#settings-drawer');
+            if (drawer && !drawer.hidden) closeSettingsPanel();
         }
     });
 
@@ -357,6 +461,47 @@ function setupEventListeners() {
         connectGoogleBtn.addEventListener('click', function() {
             connectGoogle();
         });
+    }
+
+    // Hero and onboarding connect Gmail buttons
+    document.querySelectorAll('.btn-connect-google-hero, .btn-connect-google-onboard').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            connectGoogle();
+        });
+    });
+
+    // Date filter buttons
+    document.querySelectorAll('.date-filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            activeDateFilter = btn.getAttribute('data-filter') || 'all';
+            document.querySelectorAll('.date-filter-btn').forEach(b => b.classList.remove('date-filter-active'));
+            btn.classList.add('date-filter-active');
+            renderTransactionsTable();
+        });
+    });
+
+    // Duplicate warning dismiss
+    const duplicateDismissBtn = document.querySelector('#duplicate-dismiss');
+    if (duplicateDismissBtn) {
+        duplicateDismissBtn.addEventListener('click', function() {
+            const warning = document.querySelector('#duplicate-warning');
+            if (warning) warning.hidden = true;
+        });
+    }
+
+    // Auto-render pie chart when the insights section scrolls into view
+    const csvSection = document.querySelector('#csv-insights');
+    if (csvSection && typeof IntersectionObserver !== 'undefined') {
+        let chartBuilt = false;
+        const chartObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting && !chartBuilt && allTransactions.length) {
+                    chartBuilt = true;
+                    buildChartFromTable();
+                }
+            });
+        }, { threshold: 0.2 });
+        chartObserver.observe(csvSection);
     }
 }
 
@@ -664,25 +809,21 @@ async function logoutUser() {
 
 // Load all dashboard data from API
 async function loadDashboardData() {
-    console.log('Loading dashboard data from API...');
-    
+    setDashboardLoading(true);
     try {
-        // Load transactions, stats, and top vendors in parallel
         await Promise.all([
             loadTransactions(),
             loadStats(),
             loadTopVendors()
         ]);
-        
-        console.log('Dashboard data loaded successfully');
     } catch (error) {
         console.error('Error loading dashboard:', error);
-        if (DEMO_MODE) {
-            return;
+        if (!DEMO_MODE) {
+            const base = API_BASE_URL || 'the API';
+            showError(`Failed to load dashboard data. Make sure the API is running at ${base}.`);
         }
-        const base = API_BASE_URL || 'the API';
-        const message = `Failed to load dashboard data. Make sure the API is running at ${base}.`;
-        showError(message);
+    } finally {
+        setDashboardLoading(false);
     }
 }
 
@@ -712,7 +853,14 @@ async function loadTransactions() {
 
         renderExpensePreview(allTransactions);
         refreshVendorInsights();
-        
+        renderSpendingTrends(allTransactions);
+
+        // Duplicate detection
+        const dupWarning = document.querySelector('#duplicate-warning');
+        if (dupWarning) {
+            dupWarning.hidden = !detectDuplicates(allTransactions);
+        }
+
         return allTransactions;
     } catch (error) {
         console.error('Error loading transactions:', error);
@@ -1204,6 +1352,55 @@ function normalizeVendorKey(value) {
     return String(value || '').trim().toLowerCase();
 }
 
+function getCategoryForVendor(vendor) {
+    const v = (vendor || '').toLowerCase();
+    if (v.includes('amazon')) return 'Shopping';
+    if (v.includes('uber') && (v.includes('eat') || v.includes('eats'))) return 'Food Delivery';
+    if (v.includes('doordash') || v.includes('grubhub') || v.includes('postmates') || v.includes('door dash')) return 'Food Delivery';
+    if (v.includes('uber') || v.includes('lyft')) return 'Transport';
+    if (v.includes('starbucks') || v.includes('coffee') || v.includes('dunkin')) return 'Coffee';
+    if (v.includes('netflix') || v.includes('spotify') || v.includes('hulu') || v.includes('disney') || v.includes('apple music') || v.includes('youtube premium')) return 'Subscriptions';
+    if (v.includes('walmart') || v.includes('target') || v.includes('costco')) return 'Shopping';
+    if (v.includes('best buy') || v.includes('bestbuy')) return 'Electronics';
+    if (v.includes('paypal') || v.includes('venmo') || v.includes('stripe')) return 'Finance';
+    if (v.includes('whole foods') || v.includes('trader joe') || v.includes('kroger') || v.includes('safeway') || v.includes('grocery')) return 'Groceries';
+    if (v.includes('shell') || v.includes('chevron') || v.includes('bp ') || v.includes('exxon') || v.includes(' gas')) return 'Gas';
+    if (v.includes('cvs') || v.includes('walgreens') || v.includes('pharmacy')) return 'Health';
+    if (v.includes('hotel') || v.includes('airbnb') || v.includes('marriott') || v.includes('hilton')) return 'Travel';
+    if (v.includes('delta') || v.includes('united air') || v.includes('southwest') || v.includes('american airlines')) return 'Travel';
+    return 'Other';
+}
+
+function getFilteredTransactions() {
+    if (activeDateFilter === 'all') return allTransactions;
+    const d = new Date();
+    let cutoff;
+    if (activeDateFilter === '30d') {
+        cutoff = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 30).getTime();
+    } else if (activeDateFilter === '3m') {
+        cutoff = new Date(d.getFullYear(), d.getMonth() - 3, d.getDate()).getTime();
+    } else if (activeDateFilter === '1y') {
+        cutoff = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()).getTime();
+    }
+    if (!cutoff) return allTransactions;
+    return allTransactions.filter(function(t) {
+        return toComparableDateValue(t.date) >= cutoff;
+    });
+}
+
+function detectDuplicates(transactions) {
+    const seen = {};
+    let hasDuplicates = false;
+    (transactions || []).forEach(function(t) {
+        const key = `${normalizeVendorKey(t.vendor)}|${Number(t.amount || 0).toFixed(2)}|${t.date || ''}`;
+        if (seen[key]) {
+            hasDuplicates = true;
+        }
+        seen[key] = true;
+    });
+    return hasDuplicates;
+}
+
 function formatPercent(value) {
     const ratio = Number(value) || 0;
     if (ratio <= 0) return '0%';
@@ -1216,6 +1413,134 @@ function abbreviateVendorLabel(value) {
     if (!text) return 'Unknown';
     const compact = text.split(/\s+/).slice(0, 2).join(' ');
     return compact.length > 14 ? `${compact.slice(0, 13)}…` : compact;
+}
+
+function startIdlePoll() {
+    if (idlePollTimer) clearInterval(idlePollTimer);
+    idlePollTimer = setInterval(function() {
+        if (currentUser && !syncPollTimer && !demoParsePollTimer && !document.hidden) {
+            loadDashboardData();
+        }
+    }, 30000);
+}
+
+function getProcessedTransactions() {
+    let result = getFilteredTransactions(); // date filter
+    const term = activeSearchTerm.trim().toLowerCase();
+    if (term) {
+        result = result.filter(function(t) {
+            const vendor = (t.vendor || '').toLowerCase();
+            const cat = (t.category || getCategoryForVendor(t.vendor)).toLowerCase();
+            const amount = String(t.amount || '');
+            const date = (t.date || '').toLowerCase();
+            return vendor.includes(term) || cat.includes(term) || amount.includes(term) || date.includes(term);
+        });
+    }
+    return sortTransactions([...result]);
+}
+
+function updatePaginationUI(total, start, end, totalPages) {
+    const infoEl = document.querySelector('#table-info');
+    const prevBtn = document.querySelector('#prev-page');
+    const nextBtn = document.querySelector('#next-page');
+    const indicator = document.querySelector('#page-indicator');
+    if (infoEl) infoEl.textContent = total === 0 ? 'No transactions' : `Showing ${start + 1}–${end} of ${total}`;
+    if (prevBtn) prevBtn.disabled = currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+    if (indicator) indicator.textContent = `${currentPage} / ${totalPages}`;
+}
+
+function setDashboardLoading(loading) {
+    document.querySelectorAll('.skeleton-target').forEach(function(el) {
+        el.classList.toggle('skeleton-pulse', loading);
+    });
+}
+
+function openSettingsPanel() {
+    const drawer = document.querySelector('#settings-drawer');
+    if (!drawer) return;
+    // Sync budget input with stored value
+    const budgetInput = document.querySelector('#settings-budget-input');
+    if (budgetInput) {
+        const stored = getStoredMonthlyBudget();
+        budgetInput.value = stored ? String(stored) : '';
+        budgetInput.placeholder = String(getAutomaticBudgetTarget(currentBudgetSpend));
+    }
+    // Sync Gmail status
+    const gmailStatus = document.querySelector('#settings-gmail-status');
+    if (gmailStatus) {
+        gmailStatus.textContent = currentUser ? `Connected as ${currentUser.email || currentUser.username || 'your account'}` : 'Not connected';
+    }
+    drawer.hidden = false;
+    drawer.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(function() { drawer.classList.add('settings-open'); });
+}
+
+function closeSettingsPanel() {
+    const drawer = document.querySelector('#settings-drawer');
+    if (!drawer) return;
+    drawer.classList.remove('settings-open');
+    setTimeout(function() {
+        drawer.hidden = true;
+        drawer.setAttribute('aria-hidden', 'true');
+    }, 300);
+}
+
+function showUndoToast(message, onUndo) {
+    const existing = document.querySelector('.undo-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = 'undo-toast';
+    toast.innerHTML = `<span class="undo-toast-msg">${escapeHtml(message)}</span><button class="undo-toast-btn" type="button">Undo</button>`;
+    document.body.appendChild(toast);
+    toast.querySelector('.undo-toast-btn').addEventListener('click', function() {
+        toast.remove();
+        if (onUndo) onUndo();
+    });
+    setTimeout(function() { if (toast.parentNode) toast.remove(); }, 5200);
+}
+
+function openReceiptPreview(transaction) {
+    const modal = document.querySelector('#receipt-modal');
+    if (!modal) return;
+    const bodyEl = document.querySelector('#receipt-body');
+    const itemsEl = document.querySelector('#receipt-items');
+    const titleEl = document.querySelector('#receipt-modal-title');
+
+    if (titleEl) titleEl.textContent = `Receipt — ${transaction.vendor || 'Unknown vendor'}`;
+
+    if (itemsEl) {
+        itemsEl.hidden = true;
+        itemsEl.innerHTML = '';
+        if (transaction.items) {
+            try {
+                const items = typeof transaction.items === 'string' ? JSON.parse(transaction.items) : transaction.items;
+                if (Array.isArray(items) && items.length) {
+                    items.forEach(function(item) {
+                        const row = document.createElement('div');
+                        row.className = 'receipt-item-row';
+                        const name = typeof item === 'string' ? item : (item.name || item.description || JSON.stringify(item));
+                        const price = item.price != null ? formatCurrency(Number(item.price)) : '';
+                        row.innerHTML = `<span class="receipt-item-name">${escapeHtml(name)}</span>${price ? `<span class="receipt-item-price">${escapeHtml(price)}</span>` : ''}`;
+                        itemsEl.appendChild(row);
+                    });
+                    itemsEl.hidden = false;
+                }
+            } catch(e) {
+                // items not parseable — fall through to email body
+            }
+        }
+    }
+
+    if (bodyEl) {
+        bodyEl.textContent = transaction.email_body
+            ? transaction.email_body
+            : '(No email body stored for this receipt)';
+    }
+
+    modal.classList.add('show');
+    modal.style.display = 'flex';
+    modal.hidden = false;
 }
 
 function setSyncStatus(title, meta) {
@@ -1239,30 +1564,48 @@ function escapeHtml(value) {
     });
 }
 
-// Sort and render table from cached allTransactions
+// Render table using the unified pipeline: date filter → search → sort → paginate
 function renderTransactionsTable() {
     if (!tableBody) return;
-    const sorted = sortTransactions([...allTransactions]);
+
+    const processed = getProcessedTransactions();
+    const total = processed.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    currentPage = Math.max(1, Math.min(currentPage, totalPages));
+
+    const start = (currentPage - 1) * pageSize;
+    const end = Math.min(start + pageSize, total);
+    const pageItems = processed.slice(start, end);
+
     tableBody.innerHTML = '';
-    sorted.forEach(transaction => {
-        const row = createTransactionRow(transaction);
-        tableBody.appendChild(row);
+    pageItems.forEach(function(transaction) {
+        tableBody.appendChild(createTransactionRow(transaction));
     });
-    tableBody.querySelectorAll('.edit-btn').forEach(btn => {
+
+    tableBody.querySelectorAll('.edit-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             const id = this.getAttribute('data-id');
             if (!id) return;
             const row = this.closest('tr');
-            if (row) {
-                openEditModal(row);
-            }
+            if (row) openEditModal(row);
         });
     });
-    // Re-apply search filter if there is one
-    if (searchInput && searchInput.value.trim()) {
-        filterTransactions(searchInput.value.trim());
-    }
+
+    tableBody.querySelectorAll('.view-receipt-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const id = this.getAttribute('data-id');
+            if (!id) return;
+            const tx = allTransactions.find(t => String(t.id) === id);
+            if (tx) openReceiptPreview(tx);
+        });
+    });
+
+    updatePaginationUI(total, start, end, totalPages);
+
+    const onboardingCard = document.querySelector('#onboarding-card');
+    if (onboardingCard) onboardingCard.hidden = allTransactions.length > 0;
 }
 
 function parseIsoDateParts(dateStr) {
@@ -1355,14 +1698,12 @@ function createTransactionRow(transaction) {
     
     // Determine vendor icon and color
     const vendorInfo = getVendorInfo(transaction.vendor);
-    
-    // Determine parser badge
-    const parserBadge = getParserBadge(transaction.vendor);
+
     const vendorName = escapeHtml(transaction.vendor || 'Unknown vendor');
-    const emailPreview = escapeHtml(String(transaction.email_id || 'manual-entry').slice(0, 20));
     const amountValue = Number(transaction.amount) || 0;
     const taxValue = Number(transaction.tax) || 0;
-    
+    const category = transaction.category || getCategoryForVendor(transaction.vendor);
+
     row.innerHTML = `
         <td>
             <div class="date-cell">
@@ -1377,7 +1718,6 @@ function createTransactionRow(transaction) {
                 </div>
                 <div class="vendor-info">
                     <span class="vendor-name">${vendorName}</span>
-                    <span class="vendor-email">${emailPreview}...</span>
                 </div>
             </div>
         </td>
@@ -1388,16 +1728,13 @@ function createTransactionRow(transaction) {
             <span class="tax-value">${formatCurrency(taxValue)}</span>
         </td>
         <td>
-            ${parserBadge}
+            <span class="category-badge">${escapeHtml(category)}</span>
         </td>
         <td>
-            <span class="status status-success">
-                <span class="status-icon">OK</span>
-                Processed
-            </span>
-        </td>
-        <td>
-            <button class="edit-btn" type="button" data-id="${transaction.id}">Edit</button>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <button class="edit-btn" type="button" data-id="${transaction.id}">Edit</button>
+                ${transaction.email_body ? `<button class="view-receipt-btn" type="button" data-id="${transaction.id}" title="View original receipt">Receipt</button>` : ''}
+            </div>
         </td>
     `;
     
@@ -1529,25 +1866,20 @@ async function syncEmails() {
     
     const originalHTML = syncBtn.innerHTML;
     const previousSignature = buildTransactionSignature(allTransactions);
-    
+
     syncBtn.textContent = 'Starting sync...';
     syncBtn.disabled = true;
     setSyncStatus('Sync requested', 'Polling Gmail for fresh receipt activity.');
-    
+
     try {
-        console.log('Starting email sync...');
-        
         const response = await authFetch(`${API_BASE_URL}/api/sync`, { method: 'POST' });
-        
         const result = await response.json().catch(() => ({}));
-        
+
         if (!response.ok) {
-            const detail = result.detail || (typeof result.detail === 'string' ? result.detail : `API returned ${response.status}`);
-            throw new Error(detail);
+            throw new Error(result.detail || `API returned ${response.status}`);
         }
-        
-        console.log('Sync started:', result);
-        
+
+        syncRunId = result.run_id || null;
         syncBtn.textContent = 'Syncing...';
         startSyncRefreshLoop(previousSignature, originalHTML);
         
@@ -1770,43 +2102,54 @@ function startDemoParsePolling(originalHTML) {
     }, 1200);
 }
 
+let _clearUndoTimer = null;
+let _clearUndoSnapshot = null;
+
 async function clearAllTransactions() {
-    if (!clearBtn) return;
     if (!DEMO_MODE && !await hasActiveAuthSession()) {
         handleAuthRequired();
         return;
     }
-    if (!confirm('Clear all transactions from the database? This cannot be undone.')) {
-        return;
+
+    // Cancel any pending clear
+    if (_clearUndoTimer) {
+        clearTimeout(_clearUndoTimer);
+        _clearUndoTimer = null;
+        _clearUndoSnapshot = null;
     }
-    const originalHTML = clearBtn.innerHTML;
-    clearBtn.textContent = 'Clearing...';
-    clearBtn.disabled = true;
-    try {
-        const endpoint = DEMO_MODE ? '/api/demo/clear' : '/api/transactions/clear';
-        const response = await authFetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'DELETE'
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(result.detail || 'Clear failed');
+
+    // Snapshot and optimistically clear the UI
+    _clearUndoSnapshot = [...allTransactions];
+    allTransactions = [];
+    renderTransactionsTable();
+    renderExpensePreview([]);
+    renderSpendingTrends([]);
+    setSyncStatus('Cleared', 'Tap Undo within 5 seconds to restore.');
+
+    showUndoToast('All transactions cleared.', function() {
+        if (_clearUndoTimer) { clearTimeout(_clearUndoTimer); _clearUndoTimer = null; }
+        allTransactions = _clearUndoSnapshot || [];
+        _clearUndoSnapshot = null;
+        renderTransactionsTable();
+        renderExpensePreview(allTransactions);
+        renderSpendingTrends(allTransactions);
+        setSyncStatus('Restored', 'Transactions have been restored.');
+    });
+
+    _clearUndoTimer = setTimeout(async function() {
+        _clearUndoTimer = null;
+        _clearUndoSnapshot = null;
+        try {
+            const endpoint = DEMO_MODE ? '/api/demo/clear' : '/api/transactions/clear';
+            const response = await authFetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.detail || 'Clear failed');
+            setSyncStatus('Transactions cleared', 'Dashboard is empty until the next sync.');
+        } catch (error) {
+            loadDashboardData();
+            showError(error.message || 'Could not clear transactions.');
         }
-        clearBtn.textContent = 'Cleared';
-        await loadDashboardData();
-        setSyncStatus('Transactions cleared', 'The dashboard is empty until the next sync.');
-        setTimeout(() => {
-            clearBtn.innerHTML = originalHTML;
-            clearBtn.disabled = false;
-        }, 2000);
-    } catch (error) {
-        clearBtn.textContent = 'Failed';
-        setSyncStatus('Clear failed', error.message || 'Could not clear transactions.');
-        setTimeout(() => {
-            clearBtn.innerHTML = originalHTML;
-            clearBtn.disabled = false;
-        }, 2000);
-        showError(error.message || 'Could not clear transactions.');
-    }
+    }, 5000);
 }
 
 function buildTransactionSignature(transactions) {
@@ -1819,35 +2162,56 @@ function buildTransactionSignature(transactions) {
 }
 
 function startSyncRefreshLoop(previousSignature, originalHTML) {
-    if (syncPollTimer) {
-        clearInterval(syncPollTimer);
-        syncPollTimer = null;
-    }
+    if (syncPollTimer) { clearInterval(syncPollTimer); syncPollTimer = null; }
     const start = Date.now();
-    syncPollTimer = setInterval(async () => {
+
+    syncPollTimer = setInterval(async function() {
         try {
+            // Poll sync status if we have a run_id
+            if (syncRunId) {
+                try {
+                    const statusResp = await authFetch(`${API_BASE_URL}/api/sync-status?run_id=${encodeURIComponent(syncRunId)}`, { cache: 'no-store' });
+                    if (statusResp.ok) {
+                        const statusData = await statusResp.json().catch(() => ({}));
+                        const msg = statusData.message || '';
+                        if (msg) setSyncStatus('Syncing…', msg);
+                        if (statusData.status === 'completed' || statusData.status === 'failed') {
+                            const failed = statusData.status === 'failed';
+                            syncRunId = null;
+                            clearInterval(syncPollTimer);
+                            syncPollTimer = null;
+                            await loadDashboardData();
+                            syncBtn.textContent = failed ? 'Sync failed' : 'Updated';
+                            setSyncStatus(
+                                failed ? 'Sync failed' : 'New receipts loaded',
+                                failed ? (statusData.message || 'Sync did not complete.') : `${allTransactions.length} receipts ready.`
+                            );
+                            setTimeout(function() { syncBtn.innerHTML = originalHTML; syncBtn.disabled = false; }, 1800);
+                            return;
+                        }
+                    }
+                } catch(e) { /* status poll failed silently — fall back to signature poll */ }
+            }
+
+            // Fallback: check if new transactions appeared
             await loadDashboardData();
             const nextSignature = buildTransactionSignature(allTransactions);
             if (nextSignature !== previousSignature) {
                 clearInterval(syncPollTimer);
                 syncPollTimer = null;
+                syncRunId = null;
                 syncBtn.textContent = 'Updated';
-                setSyncStatus('New receipts loaded', `${allTransactions.length} receipts are ready in the transaction console.`);
-                setTimeout(() => {
-                    syncBtn.innerHTML = originalHTML;
-                    syncBtn.disabled = false;
-                }, 1500);
+                setSyncStatus('New receipts loaded', `${allTransactions.length} receipts ready.`);
+                setTimeout(function() { syncBtn.innerHTML = originalHTML; syncBtn.disabled = false; }, 1500);
                 return;
             }
             if (Date.now() - start > 90000) {
                 clearInterval(syncPollTimer);
                 syncPollTimer = null;
+                syncRunId = null;
                 syncBtn.textContent = 'Sync complete';
-                setSyncStatus('Sync complete', 'No new receipts were detected during the polling window.');
-                setTimeout(() => {
-                    syncBtn.innerHTML = originalHTML;
-                    syncBtn.disabled = false;
-                }, 1500);
+                setSyncStatus('Sync complete', 'No new receipts detected.');
+                setTimeout(function() { syncBtn.innerHTML = originalHTML; syncBtn.disabled = false; }, 1500);
             }
         } catch (error) {
             console.error('Sync refresh loop failed:', error);
@@ -2058,6 +2422,99 @@ function drawPieChart(canvas, legendEl, entries) {
     });
 }
 
+function renderSpendingTrends(transactions) {
+    const canvas = document.querySelector('#trends-chart');
+    const emptyEl = document.querySelector('#trends-empty');
+    if (!canvas) return;
+
+    const monthlyTotals = {};
+    (transactions || []).forEach(function(t) {
+        const parts = parseIsoDateParts(t.date);
+        if (!parts) return;
+        const amount = Number(t.amount) || 0;
+        if (amount <= 0) return;
+        const key = `${parts.year}-${String(parts.month).padStart(2, '0')}`;
+        monthlyTotals[key] = (monthlyTotals[key] || 0) + amount;
+    });
+
+    const entries = Object.entries(monthlyTotals).sort((a, b) => a[0].localeCompare(b[0]));
+
+    if (!entries.length) {
+        canvas.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+
+    if (emptyEl) emptyEl.style.display = 'none';
+    canvas.style.display = 'block';
+
+    const dpr = window.devicePixelRatio || 1;
+    const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth - 48 : 800;
+    const W = Math.max(containerWidth, 300);
+    const H = 220;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 60, padR = 20, padT = 20, padB = 50;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+    const maxVal = Math.max(...entries.map(e => e[1]));
+    const barW = Math.max(8, Math.floor((chartW / entries.length) * 0.6));
+    const gap = chartW / entries.length;
+
+    // Y-axis grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = padT + chartH - (chartH * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(W - padR, y);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.font = '10px IBM Plex Mono, monospace';
+        ctx.textAlign = 'right';
+        const label = formatCurrency(maxVal * i / 4, { whole: true });
+        ctx.fillText(label, padL - 6, y + 4);
+    }
+
+    // Bars
+    entries.forEach(function([key, val], i) {
+        const barH = maxVal > 0 ? (val / maxVal) * chartH : 0;
+        const x = padL + gap * i + (gap - barW) / 2;
+        const y = padT + chartH - barH;
+
+        const grad = ctx.createLinearGradient(0, y, 0, padT + chartH);
+        grad.addColorStop(0, 'rgba(217, 246, 103, 0.9)');
+        grad.addColorStop(1, 'rgba(74, 222, 128, 0.4)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]) : ctx.rect(x, y, barW, barH);
+        ctx.fill();
+
+        // Month label
+        const [yr, mo] = key.split('-');
+        const monthLabel = new Date(Number(yr), Number(mo) - 1).toLocaleString('en-US', { month: 'short' });
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.font = '10px IBM Plex Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(monthLabel, x + barW / 2, padT + chartH + 16);
+
+        // Year label only on Jan or first bar
+        if (mo === '01' || i === 0) {
+            ctx.fillStyle = 'rgba(255,255,255,0.22)';
+            ctx.font = '9px IBM Plex Sans, sans-serif';
+            ctx.fillText(yr, x + barW / 2, padT + chartH + 28);
+        }
+    });
+}
+
 function generateCsvFromTransactions(transactions) {
     let csv = 'Date,Vendor,Amount,Tax,Category,Status\n';
     let hasRows = false;
@@ -2122,6 +2579,7 @@ function openEditModal(row) {
     if (editVendorInput) editVendorInput.value = tx.vendor || '';
     if (editAmountInput) editAmountInput.value = Number(tx.amount || 0).toFixed(2);
     if (editTaxInput) editTaxInput.value = Number(tx.tax || 0).toFixed(2);
+    if (editCategoryInput) editCategoryInput.value = tx.category || '';
     if (editDateInput) {
         const parts = parseIsoDateParts(tx.date);
         if (parts) {
@@ -2158,7 +2616,8 @@ async function saveTransactionEdits() {
         vendor: editVendorInput ? editVendorInput.value.trim() : undefined,
         amount: editAmountInput ? editAmountInput.value : undefined,
         tax: editTaxInput ? editTaxInput.value : undefined,
-        date: editDateInput ? editDateInput.value : undefined
+        date: editDateInput ? editDateInput.value : undefined,
+        category: editCategoryInput ? editCategoryInput.value : undefined,
     };
     try {
         const endpoint = DEMO_MODE ? `/api/demo/transactions/${activeTransactionId}` : `/api/transactions/${activeTransactionId}`;
