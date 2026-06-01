@@ -428,6 +428,13 @@ function setupEventListeners() {
         modalDeleteBtn.addEventListener('click', deleteTransaction);
     }
 
+    const landingGetStarted = document.querySelector('#landing-get-started');
+    if (landingGetStarted) {
+        landingGetStarted.addEventListener('click', function() {
+            openAuthModal('signup');
+        });
+    }
+
     if (loginBtn) {
         loginBtn.addEventListener('click', function() {
             openAuthModal('login');
