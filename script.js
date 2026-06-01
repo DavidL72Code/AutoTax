@@ -1929,18 +1929,20 @@ async function syncEmails() {
 
         const isGmailNotConnected = (error.message || '').toLowerCase().includes('google oauth not connected') ||
             (error.message || '').toLowerCase().includes('oauth not connected');
-        const message = isGmailNotConnected
-            ? 'Connect your Gmail first — click "Connect Gmail" to grant read-only access to your receipts.'
-            : error.message || 'Email sync failed. Make sure the API is running and Gmail is configured.';
-
-        setSyncStatus('Sync failed', message);
 
         setTimeout(() => {
             syncBtn.innerHTML = originalHTML;
             syncBtn.disabled = false;
         }, 2000);
 
-        showError(message);
+        if (isGmailNotConnected) {
+            setSyncStatus('Gmail not connected', 'Click "Connect Gmail" below to grant read-only access to your receipts, then sync again.');
+            connectGoogle();
+        } else {
+            const message = error.message || 'Email sync failed. Make sure the API is running and Gmail is configured.';
+            setSyncStatus('Sync failed', message);
+            showError(message);
+        }
     }
 }
 

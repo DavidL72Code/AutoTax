@@ -1323,10 +1323,10 @@ def _print_db_snapshot(limit: int = 50, user_id: str | int | None = None):
 @app.post("/api/sync")
 def sync_emails(request: Request):
     """Start email scraper in background; returns a run_id for progress polling."""
+    user = _require_user(request)
+    if not _get_google_refresh_token_for_user(user.id):
+        raise HTTPException(status_code=400, detail="Google OAuth not connected for this user.")
     try:
-        user = _require_user(request)
-        if not _get_google_refresh_token_for_user(user.id):
-            raise HTTPException(status_code=400, detail="Google OAuth not connected for this user.")
         run_id = uuid.uuid4().hex
         with SYNC_LOCK:
             SYNC_RUNS[run_id] = {
