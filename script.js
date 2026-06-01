@@ -176,6 +176,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return bootstrapAuth();
     }).then(() => {
         if (DEMO_MODE || currentUser) {
+            // Show app container for demo or logged-in users
+            const _landing = document.querySelector('#landing');
+            const _app = document.querySelector('#app-container');
+            if (_landing) _landing.hidden = true;
+            if (_app) _app.hidden = false;
             loadDashboardData();
             if (DEMO_MODE) {
                 loadDemoEmails();
@@ -633,8 +638,24 @@ function setAuthState(user) {
     }
     if (currentUser) {
         setSyncStatus('Inbox sync ready', 'Run Sync Emails below to refresh your latest receipts.');
+        // Show app, hide landing
+        const _landing = document.querySelector('#landing');
+        const _app = document.querySelector('#app-container');
+        const _navAcc = document.querySelector('#nav-account-section');
+        if (_landing) _landing.hidden = true;
+        if (_app) _app.hidden = false;
+        if (_navAcc) _navAcc.hidden = false;
+        const _gmailEl = document.querySelector('#nav-gmail-status');
+        if (_gmailEl) _gmailEl.textContent = currentUser.email || currentUser.username || 'Connected';
     } else {
         setSyncStatus('Secure inbox connection', 'Log in to connect Gmail and unlock live receipt sync.');
+        // Show landing, hide app
+        const _landing = document.querySelector('#landing');
+        const _app = document.querySelector('#app-container');
+        const _navAcc = document.querySelector('#nav-account-section');
+        if (_landing) _landing.hidden = false;
+        if (_app) _app.hidden = true;
+        if (_navAcc) _navAcc.hidden = true;
     }
 }
 
@@ -2828,3 +2849,492 @@ function setupTour() {
     } catch(e) {}
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RESTRUCTURE: Nav drawer, section routing, spend chart, theme, auth gates
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Theme ────────────────────────────────────────────────────────────────────
+
+let currentTheme = 'dark';
+
+function setTheme(theme) {
+    currentTheme = theme;
+    const html = document.documentElement;
+    if (theme === 'light') {
+        html.classList.add('light-mode');
+    } else {
+        html.classList.remove('light-mode');
+    }
+    try { localStorage.setItem('ra_theme', theme); } catch(e) {}
+
+    const darkBtn = document.querySelector('#theme-dark-btn');
+    const lightBtn = document.querySelector('#theme-light-btn');
+    if (darkBtn) darkBtn.classList.toggle('theme-toggle-active', theme === 'dark');
+    if (lightBtn) lightBtn.classList.toggle('theme-toggle-active', theme === 'light');
+}
+
+function initTheme() {
+    try {
+        const saved = localStorage.getItem('ra_theme');
+        if (saved === 'light') setTheme('light');
+    } catch(e) {}
+}
+
+// ── Section routing ──────────────────────────────────────────────────────────
+
+let currentSection = 'dashboard';
+let currentSpendPeriod = 'monthly';
+
+function showSection(sectionId) {
+    currentSection = sectionId;
+    document.querySelectorAll('.app-section').forEach(function(el) {
+        el.hidden = el.dataset.section !== sectionId;
+    });
+
+    // Sync active state in nav drawer
+    document.querySelectorAll('.nav-item[data-nav]').forEach(function(btn) {
+        btn.classList.toggle('nav-item-active', btn.dataset.nav === sectionId);
+    });
+
+    if (sectionId === 'spend') {
+        renderSpendSection(currentSpendPeriod);
+    }
+
+    closeNavDrawer();
+}
+
+
+// ── Navigation Drawer ────────────────────────────────────────────────────────
+
+function openNavDrawer() {
+    const drawer = document.querySelector('#nav-drawer');
+    if (!drawer) return;
+    drawer.hidden = false;
+
+    // Sync page size
+    const navPS = document.querySelector('#nav-page-size');
+    if (navPS) navPS.value = String(pageSize);
+
+    // Sync budget
+    const navBudget = document.querySelector('#nav-budget-input');
+    try {
+        const saved = localStorage.getItem(MONTHLY_BUDGET_STORAGE_KEY);
+        if (navBudget && saved) navBudget.value = saved;
+    } catch(e) {}
+
+    // Sync theme buttons
+    setTheme(currentTheme);
+
+    // Update last sync time
+    const navLastSync = document.querySelector('#nav-last-sync');
+    try {
+        const ls = localStorage.getItem('LAST_SYNC_TIME');
+        if (navLastSync) navLastSync.textContent = ls ? new Date(ls).toLocaleString() : 'Never';
+    } catch(e) {}
+}
+
+function closeNavDrawer() {
+    const drawer = document.querySelector('#nav-drawer');
+    if (drawer) drawer.hidden = true;
+}
+
+// ── Spend bar chart ───────────────────────────────────────────────────────────
+
+function getSpendPeriodBounds(period) {
+    const now = new Date();
+    let curStart, curEnd, prevStart, prevEnd, labels, intervalFn;
+
+    if (period === 'weekly') {
+        const day = now.getDay(); // 0=Sun
+        const mon = new Date(now); mon.setHours(0,0,0,0);
+        mon.setDate(now.getDate() - ((day + 6) % 7));
+        curStart = mon;
+        curEnd = new Date();
+        prevStart = new Date(mon); prevStart.setDate(mon.getDate() - 7);
+        prevEnd = new Date(mon); prevEnd.setMilliseconds(-1);
+        labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        intervalFn = function(date) {
+            const d = new Date(date);
+            return ((d.getDay() + 6) % 7); // 0=Mon
+        };
+    } else if (period === 'monthly') {
+        curStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        curEnd = new Date();
+        prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        // Labels = week numbers within the month
+        const weeks = Math.ceil(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() / 7);
+        labels = Array.from({length: weeks}, function(_, i) { return 'Wk ' + (i + 1); });
+        intervalFn = function(date) {
+            const d = new Date(date);
+            return Math.min(Math.floor((d.getDate() - 1) / 7), labels.length - 1);
+        };
+    } else { // annually
+        curStart = new Date(now.getFullYear(), 0, 1);
+        curEnd = new Date();
+        prevStart = new Date(now.getFullYear() - 1, 0, 1);
+        prevEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+        labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        intervalFn = function(date) { return new Date(date).getMonth(); };
+    }
+
+    return { curStart, curEnd, prevStart, prevEnd, labels, intervalFn };
+}
+
+function computePeriodData(transactions, start, end, labels, intervalFn) {
+    const buckets = new Array(labels.length).fill(0);
+    let total = 0, count = 0;
+    transactions.forEach(function(tx) {
+        const d = new Date(tx.date);
+        if (d >= start && d <= end) {
+            const idx = intervalFn(d);
+            if (idx >= 0 && idx < buckets.length) {
+                const amt = parseFloat(tx.amount) || 0;
+                buckets[idx] += amt;
+                total += amt;
+                count++;
+            }
+        }
+    });
+    return { buckets, total, count };
+}
+
+function drawSpendBarChart(labels, currentBuckets, prevBuckets) {
+    const canvas = document.querySelector('#spend-bar-chart');
+    const emptyEl = document.querySelector('#spend-chart-empty');
+    if (!canvas) return;
+    const hasData = currentBuckets.some(function(v) { return v > 0; });
+    if (emptyEl) emptyEl.hidden = hasData;
+    if (!hasData) { canvas.style.display = 'none'; return; }
+    canvas.style.display = 'block';
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width || canvas.offsetWidth || 600;
+    const H = 220;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const isLight = document.documentElement.classList.contains('light-mode');
+    const textColor = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)';
+    const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
+    const barColor = isLight ? 'rgba(30,30,30,0.8)' : 'rgba(217,246,103,0.85)';
+    const prevColor = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)';
+
+    const n = labels.length;
+    const padLeft = 52, padRight = 16, padTop = 16, padBottom = 36;
+    const chartW = W - padLeft - padRight;
+    const chartH = H - padTop - padBottom;
+
+    const maxVal = Math.max(...currentBuckets, ...prevBuckets, 1);
+    const groupW = chartW / n;
+    const barW = Math.max(4, groupW * 0.35);
+    const prevBarW = Math.max(3, groupW * 0.28);
+    const gap = 4;
+
+    // Grid lines
+    for (let i = 0; i <= 4; i++) {
+        const y = padTop + (chartH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y); ctx.lineTo(W - padRight, y);
+        ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.stroke();
+        const val = maxVal * (1 - i / 4);
+        ctx.fillStyle = textColor;
+        ctx.font = '10px IBM Plex Mono, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(val >= 1000 ? '$' + Math.round(val/1000) + 'k' : '$' + Math.round(val), padLeft - 6, y + 4);
+    }
+
+    // Bars
+    for (let i = 0; i < n; i++) {
+        const cx = padLeft + (i + 0.5) * groupW;
+
+        // Previous bar (behind)
+        if (prevBuckets && prevBuckets[i] > 0) {
+            const ph = (prevBuckets[i] / maxVal) * chartH;
+            const px = cx - (barW + gap) / 2 - prevBarW / 2;
+            ctx.fillStyle = prevColor;
+            ctx.beginPath();
+            ctx.roundRect ? ctx.roundRect(px, padTop + chartH - ph, prevBarW, ph, [3,3,0,0])
+                          : ctx.rect(px, padTop + chartH - ph, prevBarW, ph);
+            ctx.fill();
+        }
+
+        // Current bar
+        if (currentBuckets[i] > 0) {
+            const bh = (currentBuckets[i] / maxVal) * chartH;
+            const bx = cx - barW / 2;
+            ctx.fillStyle = barColor;
+            ctx.beginPath();
+            ctx.roundRect ? ctx.roundRect(bx, padTop + chartH - bh, barW, bh, [4,4,0,0])
+                          : ctx.rect(bx, padTop + chartH - bh, barW, bh);
+            ctx.fill();
+        }
+
+        // Label
+        ctx.fillStyle = textColor;
+        ctx.font = '10px IBM Plex Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[i], cx, H - padBottom + 16);
+    }
+}
+
+function updateSpendStats(period, curData, prevData, bounds) {
+    const curLabel = document.querySelector('#spend-current-label');
+    const prevLabel = document.querySelector('#spend-prev-label');
+    const curTotal = document.querySelector('#spend-current-total');
+    const prevTotal = document.querySelector('#spend-prev-total');
+    const curCount = document.querySelector('#spend-current-count');
+    const prevCount = document.querySelector('#spend-prev-count');
+    const changeEl = document.querySelector('#spend-change');
+    const changeDesc = document.querySelector('#spend-change-desc');
+    const subtitle = document.querySelector('#spend-subtitle');
+
+    const labels = { weekly: ['This week','Last week'], monthly: ['This month','Last month'], annually: ['This year','Last year'] };
+    if (curLabel) curLabel.textContent = labels[period][0];
+    if (prevLabel) prevLabel.textContent = labels[period][1];
+    if (curTotal) curTotal.textContent = formatCurrency(curData.total);
+    if (prevTotal) prevTotal.textContent = formatCurrency(prevData.total);
+    if (curCount) curCount.textContent = curData.count + ' transaction' + (curData.count === 1 ? '' : 's');
+    if (prevCount) prevCount.textContent = prevData.count + ' transaction' + (prevData.count === 1 ? '' : 's');
+    if (subtitle) subtitle.textContent = 'How your spending compares ' + labels[period][0].toLowerCase() + ' vs ' + labels[period][1].toLowerCase() + '.';
+
+    if (changeEl && changeDesc) {
+        if (prevData.total === 0 && curData.total === 0) {
+            changeEl.textContent = '—';
+            changeEl.className = 'spend-stat-value';
+            changeDesc.textContent = 'no data yet';
+        } else if (prevData.total === 0) {
+            changeEl.textContent = 'New';
+            changeEl.className = 'spend-stat-value spend-stat-positive';
+            changeDesc.textContent = 'first period with data';
+        } else {
+            const pct = ((curData.total - prevData.total) / prevData.total) * 100;
+            const sign = pct >= 0 ? '+' : '';
+            changeEl.textContent = sign + pct.toFixed(1) + '%';
+            changeEl.className = 'spend-stat-value ' + (pct > 0 ? 'spend-stat-negative' : 'spend-stat-positive');
+            changeDesc.textContent = 'vs previous ' + period.replace('ly','').replace('ually','al');
+        }
+    }
+}
+
+function updateSpendVendors(period, bounds) {
+    const list = document.querySelector('#spend-vendors-list');
+    const title = document.querySelector('#spend-vendors-title');
+    if (!list) return;
+
+    const { curStart, curEnd } = bounds;
+    const vendorMap = {};
+    allTransactions.forEach(function(tx) {
+        const d = new Date(tx.date);
+        if (d >= curStart && d <= curEnd) {
+            const v = tx.vendor || 'Unknown';
+            if (!vendorMap[v]) vendorMap[v] = { total: 0, count: 0 };
+            vendorMap[v].total += parseFloat(tx.amount) || 0;
+            vendorMap[v].count++;
+        }
+    });
+
+    const sorted = Object.entries(vendorMap).sort(function(a, b) { return b[1].total - a[1].total; }).slice(0, 8);
+    const periodLabel = period === 'weekly' ? 'this week' : period === 'monthly' ? 'this month' : 'this year';
+    if (title) title.textContent = 'Top vendors ' + periodLabel;
+
+    if (sorted.length === 0) {
+        list.innerHTML = '<div style="color:var(--text-faint);font-size:0.85rem;">No transactions in this period.</div>';
+        return;
+    }
+
+    const maxAmt = sorted[0][1].total;
+    list.innerHTML = sorted.map(function(entry, i) {
+        const [vendor, data] = entry;
+        const pct = maxAmt > 0 ? (data.total / maxAmt * 100) : 0;
+        const initials = vendor.split(' ').map(function(w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+        return '<div class="spend-vendor-row">' +
+            '<div class="spend-vendor-rank">' + (i + 1) + '</div>' +
+            '<div class="spend-vendor-bar-wrap">' +
+                '<div class="spend-vendor-name">' + escapeHtml(vendor) + '</div>' +
+                '<div class="spend-vendor-bar"><div class="spend-vendor-bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+            '</div>' +
+            '<div class="spend-vendor-amount">' + formatCurrency(data.total) + '</div>' +
+            '<div class="spend-vendor-count">' + data.count + 'x</div>' +
+        '</div>';
+    }).join('');
+}
+
+function renderSpendSection(period) {
+    currentSpendPeriod = period;
+    const bounds = getSpendPeriodBounds(period);
+    const cur = computePeriodData(allTransactions, bounds.curStart, bounds.curEnd, bounds.labels, bounds.intervalFn);
+    const prev = computePeriodData(allTransactions, bounds.prevStart, bounds.prevEnd, bounds.labels, bounds.intervalFn);
+
+    updateSpendStats(period, cur, prev, bounds);
+    drawSpendBarChart(bounds.labels, cur.buckets, prev.buckets);
+    updateSpendVendors(period, bounds);
+
+    // Sync tab active state
+    document.querySelectorAll('.spend-tab').forEach(function(btn) {
+        btn.classList.toggle('spend-tab-active', btn.dataset.period === period);
+    });
+    document.querySelectorAll('.spend-period-nav-btn').forEach(function(btn) {
+        btn.classList.toggle('spend-period-nav-active', btn.dataset.period === period);
+    });
+}
+
+// ── Setup all new event listeners ────────────────────────────────────────────
+
+function setupNavDrawer() {
+    // Hamburger open
+    const hamburger = document.querySelector('#nav-hamburger');
+    if (hamburger) hamburger.addEventListener('click', openNavDrawer);
+
+    // Close btn + backdrop
+    const navClose = document.querySelector('#nav-close');
+    const navBackdrop = document.querySelector('#nav-backdrop');
+    if (navClose) navClose.addEventListener('click', closeNavDrawer);
+    if (navBackdrop) navBackdrop.addEventListener('click', closeNavDrawer);
+
+    // Escape closes drawer
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const drawer = document.querySelector('#nav-drawer');
+            if (drawer && !drawer.hidden) closeNavDrawer();
+        }
+    });
+
+    // Nav items (Transactions / Spend)
+    document.querySelectorAll('.nav-item[data-nav]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            showSection(btn.dataset.nav);
+        });
+    });
+
+    // Spend period buttons (in nav drawer)
+    document.querySelectorAll('.spend-period-nav-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            currentSpendPeriod = btn.dataset.period;
+            document.querySelectorAll('.spend-period-nav-btn').forEach(function(b) {
+                b.classList.toggle('spend-period-nav-active', b.dataset.period === currentSpendPeriod);
+            });
+            showSection('spend');
+        });
+    });
+
+    // Spend period tabs (in spend section)
+    document.querySelectorAll('.spend-tab').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            renderSpendSection(btn.dataset.period);
+        });
+    });
+
+    // Theme toggle
+    const darkBtn = document.querySelector('#theme-dark-btn');
+    const lightBtn = document.querySelector('#theme-light-btn');
+    if (darkBtn) darkBtn.addEventListener('click', function() { setTheme('dark'); });
+    if (lightBtn) lightBtn.addEventListener('click', function() { setTheme('light'); });
+
+    // Language select (UI only for now — full i18n would require server-side or a translation library)
+    const langSelect = document.querySelector('#lang-select');
+    if (langSelect) {
+        try { langSelect.value = localStorage.getItem('ra_lang') || 'en'; } catch(e) {}
+        langSelect.addEventListener('change', function() {
+            try { localStorage.setItem('ra_lang', langSelect.value); } catch(e) {}
+            if (langSelect.value !== 'en') {
+                const msg = document.createElement('div');
+                msg.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);padding:10px 18px;border-radius:10px;font-size:0.83rem;color:var(--text-muted);z-index:9999;';
+                msg.textContent = 'Full translation coming soon. Preference saved.';
+                document.body.appendChild(msg);
+                setTimeout(function() { msg.remove(); }, 3000);
+            }
+        });
+    }
+
+    // Nav drawer page size
+    const navPS = document.querySelector('#nav-page-size');
+    if (navPS) {
+        navPS.addEventListener('change', function() {
+            pageSize = Number(navPS.value) || 25;
+            currentPage = 1;
+            try { localStorage.setItem('TABLE_PAGE_SIZE', String(pageSize)); } catch(e) {}
+            const mainPS = document.querySelector('#page-size-select');
+            if (mainPS) mainPS.value = String(pageSize);
+            renderTransactionsTable();
+        });
+    }
+
+    // Nav drawer budget
+    const navBudgetSave = document.querySelector('#nav-budget-save');
+    const navBudgetAuto = document.querySelector('#nav-budget-auto');
+    const navBudgetInput = document.querySelector('#nav-budget-input');
+    if (navBudgetSave) {
+        navBudgetSave.addEventListener('click', function() {
+            if (!navBudgetInput) return;
+            const val = parseFloat(navBudgetInput.value);
+            if (!isNaN(val) && val > 0) {
+                try { localStorage.setItem(MONTHLY_BUDGET_STORAGE_KEY, String(Math.round(val))); } catch(e) {}
+                // Sync to hidden input so existing budget logic picks it up
+                const hiddenInput = document.querySelector('#expense-budget-input');
+                if (hiddenInput) { hiddenInput.value = String(Math.round(val)); }
+                updateBudgetSummary(currentBudgetSpend);
+            }
+        });
+    }
+    if (navBudgetAuto) {
+        navBudgetAuto.addEventListener('click', function() {
+            try { localStorage.removeItem(MONTHLY_BUDGET_STORAGE_KEY); } catch(e) {}
+            if (navBudgetInput) navBudgetInput.value = '';
+            updateBudgetSummary(currentBudgetSpend);
+        });
+    }
+
+    // Nav sync button
+    const navSyncBtn = document.querySelector('#nav-sync-btn');
+    if (navSyncBtn) {
+        navSyncBtn.addEventListener('click', function() {
+            closeNavDrawer();
+            syncEmails();
+        });
+    }
+
+    // Nav export
+    const navExportBtn = document.querySelector('#nav-export-btn');
+    if (navExportBtn) {
+        navExportBtn.addEventListener('click', function() {
+            closeNavDrawer();
+            if (exportBtn) exportBtn.click();
+        });
+    }
+
+    // Nav clear all
+    const navClearBtn = document.querySelector('#nav-clear-btn');
+    if (navClearBtn) {
+        navClearBtn.addEventListener('click', function() {
+            closeNavDrawer();
+            clearAllTransactions();
+        });
+    }
+
+    // Landing tour / onboard tour buttons
+    const landingTourBtn = document.querySelector('#landing-tour-btn');
+    if (landingTourBtn) landingTourBtn.addEventListener('click', openTour);
+}
+
+
+// ── Init on DOMContentLoaded ──────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', function() {
+    initTheme();
+    setupNavDrawer();
+
+    // On first load without auth, show landing. setAuthState will correct this when auth resolves.
+    const appContainer = document.querySelector('#app-container');
+    const landing = document.querySelector('#landing');
+    if (appContainer && !appContainer.hidden) appContainer.hidden = true;
+    if (landing) landing.hidden = false;
+});
