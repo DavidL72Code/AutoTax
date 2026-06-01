@@ -17,11 +17,11 @@
             <div class="nav-links">
                 <a href="#dashboard">Dashboard</a>
                 <a href="#csv-insights">Insights</a>
-                <a href="#dashboard">Transactions</a>
+                <a href="#spending-trends">Trends</a>
                 <a href="demo.html">Demo</a>
             </div>
             <div class="nav-actions">
-                <a href="demo.html" class="btn-action btn-try-demo">Try Demo</a>
+                <button id="tour-btn" class="btn-tour" aria-label="App tour" title="How to use ReceiptAuto">?</button>
                 <button class="btn-login">Log in</button>
                 <button class="btn-signup">Sign up</button>
                 <button id="settings-toggle" class="btn-settings" aria-label="Settings" title="Settings">⚙</button>
@@ -35,11 +35,11 @@
             <div class="section-container hero-shell">
                 <div class="hero-meta">
                     <p class="hero-kicker">Total Receipt Volume</p>
-                    <h1 id="hero-total-spent" class="hero-value skeleton-target">$4,892.45</h1>
-                    <p id="hero-summary-line" class="hero-change">247 receipts across 34 vendors. Live sync updates appear below.</p>
+                    <h1 id="hero-total-spent" class="hero-value skeleton-target">$0.00</h1>
+                    <p id="hero-summary-line" class="hero-change">Connect Gmail and sync to see your spending here.</p>
                     <div class="hero-cta">
-                        <a href="demo.html" class="btn-action-primary">Try the Demo</a>
-                        <button class="btn-action btn-connect-google-hero">Connect Gmail</button>
+                        <button class="btn-action-primary btn-connect-google-hero">Connect Gmail</button>
+                        <button id="hero-tour-btn" class="btn-action">How it works</button>
                     </div>
                 </div>
 
@@ -47,63 +47,24 @@
                     <article class="panel-card expense-panel">
                         <div class="panel-heading">
                             <h2>Monthly Expenses</h2>
-                            <span id="expense-period-label" class="panel-period">April 2026</span>
+                            <span id="expense-period-label" class="panel-period">—</span>
                         </div>
 
                         <div id="expense-preview-list" class="expense-preview-list">
-                            <div class="expense-item">
-                                <div class="expense-avatar">AM</div>
-                                <div class="expense-copy">
-                                    <div class="expense-name">Amazon Marketplace</div>
-                                    <div class="expense-meta">Auto classified • Apr 02</div>
-                                </div>
-                                <div class="expense-amount negative">-$89.99</div>
-                            </div>
-                            <div class="expense-item">
-                                <div class="expense-avatar">ST</div>
-                                <div class="expense-copy">
-                                    <div class="expense-name">Starbucks Reserve</div>
-                                    <div class="expense-meta">Coffee and cafes • Apr 01</div>
-                                </div>
-                                <div class="expense-amount negative">-$12.50</div>
-                            </div>
-                            <div class="expense-item">
-                                <div class="expense-avatar">UB</div>
-                                <div class="expense-copy">
-                                    <div class="expense-name">Uber Eats</div>
-                                    <div class="expense-meta">Food delivery • Mar 30</div>
-                                </div>
-                                <div class="expense-amount negative">-$24.50</div>
-                            </div>
-                            <div class="expense-item">
-                                <div class="expense-avatar">BB</div>
-                                <div class="expense-copy">
-                                    <div class="expense-name">Best Buy</div>
-                                    <div class="expense-meta">Electronics • Mar 28</div>
-                                </div>
-                                <div class="expense-amount negative">-$899.99</div>
-                            </div>
-                            <div class="expense-item">
-                                <div class="expense-avatar">PP</div>
-                                <div class="expense-copy">
-                                    <div class="expense-name">PayPal Credit</div>
-                                    <div class="expense-meta">Settlement received • Mar 27</div>
-                                </div>
-                                <div class="expense-amount positive">+$84.02</div>
-                            </div>
+                            <div class="expense-empty">No synced receipts yet. Connect Gmail and run a sync to populate this feed.</div>
                         </div>
 
                         <div class="budget-block">
                             <div class="budget-header">
                                 <span>Monthly Budget</span>
-                                <span id="expense-budget-used">72% used</span>
+                                <span id="expense-budget-used">0% used</span>
                             </div>
                             <div class="budget-track">
-                                <span id="expense-budget-fill" style="width:72%"></span>
+                                <span id="expense-budget-fill" style="width:0%"></span>
                             </div>
                             <div class="budget-footer">
-                                <span id="expense-budget-current">$4,892</span>
-                                <span id="expense-budget-target">$6,800</span>
+                                <span id="expense-budget-current">$0</span>
+                                <span id="expense-budget-target">—</span>
                             </div>
                             <div class="budget-editor" role="group" aria-label="Monthly budget controls">
                                 <label class="budget-input-shell" for="expense-budget-input">
@@ -135,20 +96,7 @@
                         </div>
 
                         <div id="hero-vendor-list" class="hero-vendor-list">
-                            <div class="hero-vendor-item">
-                                <span class="hero-vendor-dot"></span>
-                                <div class="hero-vendor-copy">
-                                    <div class="hero-vendor-name">Amazon</div>
-                                    <div class="hero-vendor-meta">12 receipts • Highest spend</div>
-                                </div>
-                            </div>
-                            <div class="hero-vendor-item">
-                                <span class="hero-vendor-dot hero-vendor-dot-secondary"></span>
-                                <div class="hero-vendor-copy">
-                                    <div class="hero-vendor-name">Uber Eats</div>
-                                    <div class="hero-vendor-meta">18 receipts • Consistent volume</div>
-                                </div>
-                            </div>
+                            <div class="hero-vendor-empty">Top merchants will appear here after your first successful sync.</div>
                         </div>
 
                         <div class="insight-visual" aria-hidden="true">
@@ -162,28 +110,28 @@
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Total Spent</div>
-                                    <div class="stat-value-large skeleton-target">$4,892.45</div>
+                                    <div class="stat-value-large skeleton-target">$0.00</div>
                                     <div class="stat-change-positive">Live across synced receipts</div>
                                 </div>
                             </div>
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Receipts</div>
-                                    <div class="stat-value-large skeleton-target">247</div>
+                                    <div class="stat-value-large skeleton-target">0</div>
                                     <div class="stat-change-neutral">Queued and processed</div>
                                 </div>
                             </div>
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Vendors</div>
-                                    <div class="stat-value-large skeleton-target">34</div>
+                                    <div class="stat-value-large skeleton-target">0</div>
                                     <div class="stat-change-neutral">Unique merchants found</div>
                                 </div>
                             </div>
                             <div class="stat-card-hero">
                                 <div class="stat-content">
                                     <div class="stat-label-large">Avg. Ticket</div>
-                                    <div class="stat-value-large skeleton-target">$162.41</div>
+                                    <div class="stat-value-large skeleton-target">$0.00</div>
                                     <div class="stat-change-negative">Per transaction average</div>
                                 </div>
                             </div>
@@ -215,7 +163,6 @@
                             <kbd class="search-shortcut">⌘K</kbd>
                         </div>
                         <button id="export-csv" class="btn-action">Export CSV</button>
-                        <button class="btn-action btn-clear">Clear All</button>
                         <button class="btn-action btn-connect-google">Connect Gmail</button>
                         <button id="sync-emails" class="btn-action-primary">Sync Emails</button>
                     </div>
@@ -270,7 +217,7 @@
                     </div>
                     <div class="onboarding-actions">
                         <button class="btn-action-primary btn-connect-google-onboard">Connect Gmail to start</button>
-                        <a href="demo.html" class="btn-action">See a demo first</a>
+                        <button id="onboard-tour-btn" class="btn-action">How it works</button>
                     </div>
                 </div>
 
@@ -392,73 +339,73 @@
                 <div class="vendors-grid">
                     <div class="vendor-card-new">
                         <div class="vendor-card-header">
-                            <span class="vendor-logo-large">A</span>
+                            <span class="vendor-logo-large">—</span>
                             <div>
-                                <h3 class="vendor-card-name">Amazon</h3>
-                                <p class="vendor-card-category">Online Shopping</p>
+                                <h3 class="vendor-card-name">—</h3>
+                                <p class="vendor-card-category">—</p>
                             </div>
                         </div>
-                        <div class="vendor-card-amount">$1,234.56</div>
-                        <div class="vendor-card-transactions">12 transactions</div>
+                        <div class="vendor-card-amount">$0.00</div>
+                        <div class="vendor-card-transactions">0 transactions</div>
                         <div class="progress-bar-new">
-                            <div class="progress-fill-new" style="width: 85%"></div>
+                            <div class="progress-fill-new" style="width: 0%"></div>
                         </div>
                         <div class="vendor-card-footer">
-                            <span class="trend-up">Highest spend so far</span>
+                            <span class="trend-neutral">Sync to populate</span>
                         </div>
                     </div>
 
                     <div class="vendor-card-new">
                         <div class="vendor-card-header">
-                            <span class="vendor-logo-large">U</span>
+                            <span class="vendor-logo-large">—</span>
                             <div>
-                                <h3 class="vendor-card-name">UberEats</h3>
-                                <p class="vendor-card-category">Food Delivery</p>
+                                <h3 class="vendor-card-name">—</h3>
+                                <p class="vendor-card-category">—</p>
                             </div>
                         </div>
-                        <div class="vendor-card-amount">$456.78</div>
-                        <div class="vendor-card-transactions">18 transactions</div>
+                        <div class="vendor-card-amount">$0.00</div>
+                        <div class="vendor-card-transactions">0 transactions</div>
                         <div class="progress-bar-new">
-                            <div class="progress-fill-new" style="width: 45%"></div>
+                            <div class="progress-fill-new" style="width: 0%"></div>
                         </div>
                         <div class="vendor-card-footer">
-                            <span class="trend-up">Steady receipt volume</span>
+                            <span class="trend-neutral">Sync to populate</span>
                         </div>
                     </div>
 
                     <div class="vendor-card-new">
                         <div class="vendor-card-header">
-                            <span class="vendor-logo-large">S</span>
+                            <span class="vendor-logo-large">—</span>
                             <div>
-                                <h3 class="vendor-card-name">Starbucks</h3>
-                                <p class="vendor-card-category">Coffee and Cafes</p>
+                                <h3 class="vendor-card-name">—</h3>
+                                <p class="vendor-card-category">—</p>
                             </div>
                         </div>
-                        <div class="vendor-card-amount">$234.50</div>
-                        <div class="vendor-card-transactions">28 transactions</div>
+                        <div class="vendor-card-amount">$0.00</div>
+                        <div class="vendor-card-transactions">0 transactions</div>
                         <div class="progress-bar-new">
-                            <div class="progress-fill-new" style="width: 30%"></div>
+                            <div class="progress-fill-new" style="width: 0%"></div>
                         </div>
                         <div class="vendor-card-footer">
-                            <span class="trend-neutral">Frequent low-ticket spend</span>
+                            <span class="trend-neutral">Sync to populate</span>
                         </div>
                     </div>
 
                     <div class="vendor-card-new">
                         <div class="vendor-card-header">
-                            <span class="vendor-logo-large">B</span>
+                            <span class="vendor-logo-large">—</span>
                             <div>
-                                <h3 class="vendor-card-name">Best Buy</h3>
-                                <p class="vendor-card-category">Electronics</p>
+                                <h3 class="vendor-card-name">—</h3>
+                                <p class="vendor-card-category">—</p>
                             </div>
                         </div>
-                        <div class="vendor-card-amount">$899.99</div>
-                        <div class="vendor-card-transactions">3 transactions</div>
+                        <div class="vendor-card-amount">$0.00</div>
+                        <div class="vendor-card-transactions">0 transactions</div>
                         <div class="progress-bar-new">
-                            <div class="progress-fill-new" style="width: 65%"></div>
+                            <div class="progress-fill-new" style="width: 0%"></div>
                         </div>
                         <div class="vendor-card-footer">
-                            <span class="trend-neutral">Larger one-off purchases</span>
+                            <span class="trend-neutral">Sync to populate</span>
                         </div>
                     </div>
                 </div>
@@ -649,6 +596,28 @@
             <div class="modal-body">
                 <div id="receipt-items" class="receipt-items" hidden></div>
                 <pre id="receipt-body" class="receipt-body"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guided Tour Modal -->
+    <div id="tour-modal" class="tour-overlay" aria-hidden="true" style="display:none;" hidden>
+        <div class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-step-title">
+            <div class="tour-progress">
+                <span class="tour-dot tour-dot-active" data-step="0"></span>
+                <span class="tour-dot" data-step="1"></span>
+                <span class="tour-dot" data-step="2"></span>
+                <span class="tour-dot" data-step="3"></span>
+            </div>
+            <div class="tour-body">
+                <div class="tour-icon" id="tour-step-icon">👋</div>
+                <h3 id="tour-step-title" class="tour-title">Welcome to ReceiptAuto</h3>
+                <p id="tour-step-desc" class="tour-desc">ReceiptAuto reads your Gmail receipt emails and automatically extracts transactions — no manual entry needed. Here's how to get started.</p>
+            </div>
+            <div class="tour-footer">
+                <button id="tour-prev" class="tour-btn-secondary" type="button" disabled>← Back</button>
+                <button id="tour-skip" class="tour-btn-skip" type="button">Skip tour</button>
+                <button id="tour-next" class="tour-btn-primary" type="button">Next →</button>
             </div>
         </div>
     </div>

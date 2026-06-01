@@ -168,6 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup event listeners
     setupEventListeners();
+    setupTour();
     refreshBudgetEditor();
     
     loadRuntimeConfig().then(() => {
@@ -2699,3 +2700,131 @@ function showNotification(message, variant) {
 console.log('%c Receipt Automation Dashboard ', 'background: #d946a6; color: white; padding: 10px; font-size: 16px; font-weight: bold;');
 console.log('%c Connected to API at ' + API_BASE_URL, 'color: #9333ea; font-size: 12px;');
 console.log('%c Press Ctrl+K to search, Ctrl+S to sync ', 'color: #3b82f6; font-size: 12px;');
+
+// ── Guided Tour ───────────────────────────────────────────────────────────
+
+const TOUR_STEPS = [
+    {
+        icon: '👋',
+        title: 'Welcome to ReceiptAuto',
+        desc: 'ReceiptAuto automatically scans your Gmail for receipt emails and extracts transactions — no manual entry, no uploading files. This tour takes 30 seconds.'
+    },
+    {
+        icon: '📧',
+        title: 'Connect your Gmail',
+        desc: 'Click <span class="tour-highlight">Connect Gmail</span> in the nav or hero section. We request read-only access — ReceiptAuto never reads personal emails, only receipts.'
+    },
+    {
+        icon: '⚡',
+        title: 'Sync & track transactions',
+        desc: 'Once connected, click <span class="tour-highlight">Sync Emails</span> to scan your inbox. Transactions appear in the table below — searchable, sortable, and filterable by date or category.'
+    },
+    {
+        icon: '📊',
+        title: 'Explore your spending',
+        desc: 'Scroll down for a <span class="tour-highlight">pie chart</span> by vendor or category, <span class="tour-highlight">monthly trends</span>, and your <span class="tour-highlight">top vendors</span>. Use ⚙ Settings to set a budget limit and export CSV.'
+    }
+];
+
+let tourStep = 0;
+
+function openTour() {
+    const modal = document.querySelector('#tour-modal');
+    if (!modal) return;
+    tourStep = 0;
+    renderTourStep();
+    modal.hidden = false;
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeTour() {
+    const modal = document.querySelector('#tour-modal');
+    if (!modal) return;
+    modal.hidden = true;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    try { localStorage.setItem('ra_tour_seen', '1'); } catch(e) {}
+}
+
+function renderTourStep() {
+    const step = TOUR_STEPS[tourStep];
+    if (!step) return;
+    const iconEl = document.querySelector('#tour-step-icon');
+    const titleEl = document.querySelector('#tour-step-title');
+    const descEl = document.querySelector('#tour-step-desc');
+    const prevBtn = document.querySelector('#tour-prev');
+    const nextBtn = document.querySelector('#tour-next');
+    const dots = document.querySelectorAll('.tour-dot');
+
+    if (iconEl) iconEl.textContent = step.icon;
+    if (titleEl) titleEl.textContent = step.title;
+    if (descEl) descEl.innerHTML = step.desc;
+    if (prevBtn) prevBtn.disabled = tourStep === 0;
+    if (nextBtn) {
+        if (tourStep === TOUR_STEPS.length - 1) {
+            nextBtn.textContent = 'Get started ✓';
+        } else {
+            nextBtn.textContent = 'Next →';
+        }
+    }
+    dots.forEach(function(dot, i) {
+        dot.classList.toggle('tour-dot-active', i === tourStep);
+    });
+}
+
+function setupTour() {
+    const tourModal = document.querySelector('#tour-modal');
+    const tourNextBtn = document.querySelector('#tour-next');
+    const tourPrevBtn = document.querySelector('#tour-prev');
+    const tourSkipBtn = document.querySelector('#tour-skip');
+
+    // All buttons that open the tour
+    const openBtns = [
+        document.querySelector('#tour-btn'),
+        document.querySelector('#hero-tour-btn'),
+        document.querySelector('#onboard-tour-btn')
+    ];
+    openBtns.forEach(function(btn) {
+        if (btn) btn.addEventListener('click', openTour);
+    });
+
+    if (tourNextBtn) {
+        tourNextBtn.addEventListener('click', function() {
+            if (tourStep < TOUR_STEPS.length - 1) {
+                tourStep++;
+                renderTourStep();
+            } else {
+                closeTour();
+            }
+        });
+    }
+    if (tourPrevBtn) {
+        tourPrevBtn.addEventListener('click', function() {
+            if (tourStep > 0) { tourStep--; renderTourStep(); }
+        });
+    }
+    if (tourSkipBtn) {
+        tourSkipBtn.addEventListener('click', closeTour);
+    }
+
+    // Close on backdrop click
+    if (tourModal) {
+        tourModal.addEventListener('click', function(e) {
+            if (e.target === tourModal) closeTour();
+        });
+    }
+
+    // Escape closes tour
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && tourModal && !tourModal.hidden) closeTour();
+    });
+
+    // Auto-show on first visit
+    try {
+        if (!localStorage.getItem('ra_tour_seen')) {
+            setTimeout(openTour, 800);
+        }
+    } catch(e) {}
+}
+
