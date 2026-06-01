@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .data_helper import (
     clear_transactions_for_user,
@@ -635,41 +636,54 @@ def google_auth_url(request: Request):
     return {"auth_url": auth_url}
 
 @app.get("/api/google/callback")
-def google_oauth_callback(code: str, state: str):
+def google_oauth_callback(code: str = None, state: str = None, error: str = None):
+    frontend_url = settings.google_oauth_redirect_uri or ""
+    # Derive frontend origin from the redirect URI (strip the path)
+    from urllib.parse import urlparse
+    parsed = urlparse(frontend_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    app_url = origin if origin and origin != "://" else "/"
+
+    if error:
+        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason={error}")
+
     client_id = settings.google_oauth_client_id or ""
     client_secret = settings.google_oauth_client_secret or ""
-    redirect_uri = settings.google_oauth_redirect_uri or ""
+    redirect_uri = frontend_url
     if not client_id or not client_secret or not redirect_uri:
-        raise HTTPException(status_code=500, detail="Google OAuth config missing")
+        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=config_missing")
 
     try:
         state_data = json.loads(_decrypt_token(state))
         user_id = str(state_data.get("user_id"))
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid state")
+        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=invalid_state")
 
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        },
-        scopes=['https://www.googleapis.com/auth/gmail.readonly'],
-        redirect_uri=redirect_uri,
-    )
-    flow.fetch_token(code=code)
-    creds = flow.credentials
-    if not creds or not creds.refresh_token:
-        raise HTTPException(status_code=400, detail="No refresh token returned")
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+            redirect_uri=redirect_uri,
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        if not creds or not creds.refresh_token:
+            return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=no_refresh_token")
 
-    enc_refresh = _encrypt_token(creds.refresh_token)
-    email = getattr(creds, "account", None)
-    _save_google_refresh_token_for_user(user_id, email, enc_refresh)
+        enc_refresh = _encrypt_token(creds.refresh_token)
+        email = getattr(creds, "account", None)
+        _save_google_refresh_token_for_user(user_id, email, enc_refresh)
+    except Exception as e:
+        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=token_exchange_failed")
 
-    return {"status": "success"}
+    return RedirectResponse(url=f"{app_url}/index.html?gmail=connected")
 
 def _nonzero_transactions(transactions):
     """Filter out transactions with amount 0 or None (no expenditure)."""

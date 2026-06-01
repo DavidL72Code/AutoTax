@@ -170,7 +170,18 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     setupTour();
     refreshBudgetEditor();
-    
+
+    // Handle redirect back from Google OAuth
+    const _gmailParam = new URLSearchParams(window.location.search).get('gmail');
+    if (_gmailParam) {
+        history.replaceState(null, '', window.location.pathname);
+        if (_gmailParam === 'connected') {
+            showSuccess('Gmail connected! Click Sync Emails to import your receipts.');
+        } else {
+            showError('Gmail connection failed. Please try again.');
+        }
+    }
+
     loadRuntimeConfig().then(() => {
         initializeFirebaseAuth();
         return bootstrapAuth();
