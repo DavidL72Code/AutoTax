@@ -549,14 +549,16 @@ async function loadRuntimeConfig() {
 
 async function connectGoogle() {
     if (!await hasActiveAuthSession()) {
-        handleAuthRequired();
+        showError('You need to be signed in before connecting Gmail.');
+        openAuthModal('login');
         return;
     }
+    showSuccess('Redirecting to Google to connect Gmail...');
     try {
         const response = await authFetch(`${API_BASE_URL}/api/google/auth-url`, { cache: 'no-store' });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.auth_url) {
-            throw new Error(result.detail || 'Failed to start Google OAuth');
+            throw new Error(result.detail || 'Failed to get Google auth URL — check that Google OAuth is configured on the server.');
         }
         window.location.href = result.auth_url;
     } catch (error) {
