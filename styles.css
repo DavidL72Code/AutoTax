@@ -3441,3 +3441,76 @@ html.light-mode .modal-input {
     padding-top: 0;
     padding-bottom: 60px;
 }
+
+/* ── Nav dropdown (shared across all pages) ──────────────────────────────── */
+.nav-user-label {
+    font-size: 0.78rem;
+    color: var(--text-faint);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nav-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 12px;
+    width: 230px;
+    background: var(--panel-strong);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 6px;
+    z-index: 9100;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+    animation: fadeIn 0.14s ease;
+}
+
+.nav-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+
+.nav-dropdown-item:hover,
+.nav-dropdown-active {
+    background: rgba(255,255,255,0.07);
+    color: var(--text-soft);
+}
+
+.nav-dropdown-active {
+    color: var(--text) !important;
+}
+
+.nav-dropdown-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 6px;
+}
+
+html.light-mode .nav-dropdown {
+    background: var(--bg-soft);
+    border-color: var(--border);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.12);
+}
+
+html.light-mode .nav-dropdown-item:hover,
+html.light-mode .nav-dropdown-active {
+    background: rgba(0,0,0,0.05);
+}
+
+/* Loading state used by sub-pages */
+.tx-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-faint);
+    font-size: 0.9rem;
+}

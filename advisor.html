@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RA Advisor — ReceiptAuto</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .advisor-shell {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 62px);
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+
+        .advisor-header {
+            padding: 24px 0 16px;
+            flex-shrink: 0;
+        }
+
+        .advisor-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .advisor-disclaimer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(251, 146, 60, 0.08);
+            border: 1px solid rgba(251, 146, 60, 0.2);
+            font-size: 0.78rem;
+            color: var(--accent-amber);
+            margin-top: 10px;
+        }
+
+        .advisor-disclaimer-icon { font-size: 1rem; flex-shrink: 0; }
+
+        /* Chat window */
+        .chat-window {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-message {
+            display: flex;
+            gap: 12px;
+            max-width: 88%;
+            animation: msgIn 0.18s ease;
+        }
+
+        @keyframes msgIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-message-ai { align-self: flex-start; }
+        .chat-message-user { align-self: flex-end; flex-direction: row-reverse; }
+
+        .chat-avatar {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .chat-avatar-ai   { background: rgba(217,246,103,0.15); color: var(--accent-lime); border: 1px solid rgba(217,246,103,0.25); }
+        .chat-avatar-user { background: rgba(255,255,255,0.08); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); }
+
+        .chat-bubble {
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .chat-bubble-ai {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-top-left-radius: 4px;
+            color: var(--text-soft);
+        }
+
+        .chat-bubble-user {
+            background: rgba(255,255,255,0.09);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-top-right-radius: 4px;
+            color: var(--text-soft);
+        }
+
+        .chat-bubble ul { padding-left: 18px; margin: 6px 0; }
+        .chat-bubble li { margin-bottom: 3px; }
+        .chat-bubble strong { color: var(--text); }
+
+        /* Suggested prompts */
+        .chat-prompts {
+            padding: 8px 0 4px;
+        }
+
+        .chat-prompts-label {
+            font-size: 0.72rem;
+            color: var(--text-faint);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 10px;
+        }
+
+        .chat-prompts-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chat-prompt-btn {
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+            text-align: left;
+        }
+
+        .chat-prompt-btn:hover {
+            background: rgba(255,255,255,0.08);
+            color: var(--text-soft);
+            border-color: rgba(255,255,255,0.18);
+        }
+
+        /* Thinking indicator */
+        .chat-thinking {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            padding: 14px 16px;
+        }
+
+        .chat-thinking span {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--text-faint);
+            animation: thinking 1.2s ease-in-out infinite;
+        }
+        .chat-thinking span:nth-child(2) { animation-delay: 0.2s; }
+        .chat-thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes thinking {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+            40%            { opacity: 1; transform: scale(1); }
+        }
+
+        /* Input bar */
+        .chat-input-bar {
+            flex-shrink: 0;
+            padding: 12px 0 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            min-height: 44px;
+            max-height: 120px;
+            padding: 11px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: var(--text);
+            font-size: 0.88rem;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+            transition: border-color 0.15s;
+        }
+
+        .chat-input:focus { border-color: rgba(255,255,255,0.22); }
+        .chat-input::placeholder { color: var(--text-faint); }
+
+        .chat-send-btn {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            transition: opacity 0.15s;
+        }
+        .chat-send-btn:hover { opacity: 0.88; }
+        .chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        html.light-mode .chat-bubble-ai   { background: var(--panel); }
+        html.light-mode .chat-bubble-user { background: rgba(0,0,0,0.05); }
+        html.light-mode .chat-input       { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); }
+        html.light-mode .chat-send-btn    { background: var(--text); color: var(--bg); }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="nav-container">
+            <button id="nav-hamburger" class="btn-hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <a class="logo" href="index.html">
+                <div class="logo-icon">RA</div>
+                <h1>Receipt<span>Auto</span></h1>
+            </a>
+            <div class="nav-auth">
+                <span id="nav-user-label" class="nav-user-label"></span>
+            </div>
+        </div>
+        <div id="nav-menu" class="nav-dropdown" hidden>
+            <a href="index.html" class="nav-dropdown-item">🏠 Home</a>
+            <a href="transactions.html" class="nav-dropdown-item">📊 Transactions</a>
+            <a href="advisor.html" class="nav-dropdown-item nav-dropdown-active">💬 Not a Financial Advisor</a>
+            <div class="nav-dropdown-divider"></div>
+            <a href="settings.html" class="nav-dropdown-item">⚙ Settings</a>
+        </div>
+    </nav>
+
+    <div class="advisor-shell">
+        <div class="advisor-header">
+            <div class="advisor-title">💬 Not a Financial Advisor</div>
+            <div class="advisor-disclaimer">
+                <span class="advisor-disclaimer-icon">⚠</span>
+                <span>AI-generated suggestions for educational purposes only. Not professional financial advice. Consult a licensed advisor for major decisions.</span>
+            </div>
+        </div>
+
+        <div class="chat-window" id="chat-window">
+            <!-- Welcome message -->
+            <div class="chat-message chat-message-ai">
+                <div class="chat-avatar chat-avatar-ai">RA</div>
+                <div class="chat-bubble chat-bubble-ai" id="welcome-bubble">
+                    Hey! I can see your spending data and help you think through personal finance goals — budgeting, saving, Roth IRAs, debt payoff, and more.<br><br>
+                    What would you like to explore?
+                </div>
+            </div>
+
+            <!-- Suggested prompts (hidden after first message) -->
+            <div class="chat-prompts" id="chat-prompts">
+                <div class="chat-prompts-label">Suggested</div>
+                <div class="chat-prompts-grid">
+                    <button class="chat-prompt-btn">How can I reduce my top spending categories?</button>
+                    <button class="chat-prompt-btn">Should I open a Roth IRA?</button>
+                    <button class="chat-prompt-btn">How do I build a 3-month emergency fund?</button>
+                    <button class="chat-prompt-btn">What's the best way to start investing?</button>
+                    <button class="chat-prompt-btn">Am I spending too much each month?</button>
+                    <button class="chat-prompt-btn">Explain the 50/30/20 budgeting rule.</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-bar">
+            <textarea id="chat-input" class="chat-input" placeholder="Ask about budgeting, investing, saving…" rows="1"></textarea>
+            <button id="chat-send" class="chat-send-btn" title="Send">↑</button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="advisor.js"></script>
+</body>
+</html>

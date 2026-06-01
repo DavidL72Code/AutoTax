@@ -23,12 +23,20 @@
                 <button class="btn-signup">Sign up</button>
             </div>
         </div>
+        <!-- Simple dropdown nav menu -->
+        <div id="nav-menu" class="nav-dropdown" hidden>
+            <a href="index.html" class="nav-dropdown-item nav-dropdown-active">🏠 Home</a>
+            <a href="transactions.html" class="nav-dropdown-item">📊 Transactions</a>
+            <a href="advisor.html" class="nav-dropdown-item">💬 Not a Financial Advisor</a>
+            <div class="nav-dropdown-divider"></div>
+            <a href="settings.html" class="nav-dropdown-item">⚙ Settings</a>
+        </div>
     </nav>
 
-    <!-- Navigation Drawer -->
-    <div id="nav-drawer" hidden>
+    <!-- LEGACY: Old nav drawer kept as hidden shell so existing script.js refs don't throw -->
+    <div id="nav-drawer" hidden aria-hidden="true">
         <div id="nav-backdrop"></div>
-        <div class="nav-panel" role="dialog" aria-label="Navigation and settings">
+        <div class="nav-panel" style="display:none;" role="dialog" aria-label="Navigation and settings">
             <div class="nav-panel-header">
                 <div class="nav-panel-logo">
                     <div class="logo-icon logo-icon-sm">RA</div>
@@ -151,7 +159,8 @@
                 <p class="landing-sub">ReceiptAuto reads your Gmail receipts and extracts every purchase — vendor, amount, category, date — with zero manual input.</p>
                 <div class="landing-cta">
                     <button class="btn-action-primary btn-connect-google-hero">Connect Gmail free</button>
-                    <button id="landing-tour-btn" class="btn-action">See how it works</button>
+                    <a href="demo.html" class="btn-action">Try Demo</a>
+                    <button id="landing-tour-btn" class="btn-action">How it works</button>
                 </div>
             </div>
             <div class="landing-steps">
@@ -341,75 +350,6 @@
                             <option value="50">50 / page</option>
                             <option value="100">100 / page</option>
                         </select>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ── Spend Analytics ────────────────────────────────────────── -->
-            <section class="app-section" id="spend-section" data-section="spend" hidden>
-                <div class="section-container">
-                    <div class="section-header-main">
-                        <div>
-                            <h2 class="section-title">Spend Analytics</h2>
-                            <p id="spend-subtitle" class="section-subtitle">How your spending compares this month vs last.</p>
-                        </div>
-                        <div class="spend-period-tabs">
-                            <button class="spend-tab spend-tab-active" data-period="monthly">Monthly</button>
-                            <button class="spend-tab" data-period="weekly">Weekly</button>
-                            <button class="spend-tab" data-period="annually">Annually</button>
-                        </div>
-                    </div>
-
-                    <!-- Comparison stats -->
-                    <div class="spend-stats-row">
-                        <div class="spend-stat-card">
-                            <div class="spend-stat-label" id="spend-current-label">This month</div>
-                            <div class="spend-stat-value skeleton-target" id="spend-current-total">$0.00</div>
-                            <div class="spend-stat-count" id="spend-current-count">0 transactions</div>
-                        </div>
-                        <div class="spend-stat-vs">vs</div>
-                        <div class="spend-stat-card">
-                            <div class="spend-stat-label" id="spend-prev-label">Last month</div>
-                            <div class="spend-stat-value" id="spend-prev-total">$0.00</div>
-                            <div class="spend-stat-count" id="spend-prev-count">0 transactions</div>
-                        </div>
-                        <div class="spend-stat-card spend-stat-card-delta">
-                            <div class="spend-stat-label">Change</div>
-                            <div class="spend-stat-value" id="spend-change">—</div>
-                            <div class="spend-stat-count" id="spend-change-desc">vs previous period</div>
-                        </div>
-                    </div>
-
-                    <!-- Bar chart -->
-                    <div class="spend-chart-card">
-                        <canvas id="spend-bar-chart" class="spend-bar-canvas"></canvas>
-                        <div id="spend-chart-empty" class="spend-chart-empty" hidden>No transactions in this period. Sync emails to populate.</div>
-                    </div>
-
-                    <!-- Top vendors this period -->
-                    <div class="spend-vendors-card">
-                        <h3 class="spend-vendors-title" id="spend-vendors-title">Top vendors this month</h3>
-                        <div id="spend-vendors-list" class="spend-vendors-list"></div>
-                    </div>
-
-                    <!-- Category breakdown (pie chart) -->
-                    <div class="spend-category-card">
-                        <div class="section-header-main spend-cat-header">
-                            <h3 class="spend-category-title">Spending breakdown</h3>
-                            <div class="csv-controls-inline">
-                                <label class="csv-label" for="csv-group">Group by</label>
-                                <select id="csv-group" class="csv-select">
-                                    <option value="vendor">Vendor</option>
-                                    <option value="category">Category</option>
-                                </select>
-                                <button id="csv-build" class="btn-action" type="button">Build chart</button>
-                            </div>
-                        </div>
-                        <div class="csv-chart-area">
-                            <img id="csv-chart-img" alt="Spend breakdown pie chart" style="display:none" />
-                            <canvas id="csv-chart" width="360" height="360"></canvas>
-                            <div id="csv-legend" class="csv-legend"></div>
-                        </div>
                     </div>
                 </div>
             </section>

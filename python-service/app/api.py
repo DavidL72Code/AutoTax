@@ -25,9 +25,11 @@ from .config import settings
 from cryptography.fernet import Fernet, InvalidToken
 from google_auth_oauthlib.flow import Flow
 from .email_scraper import credentials_from_refresh_token
+from .ai_client import generate_text
 from datetime import datetime, timedelta
 import uvicorn
 from dateutil import parser as date_parser
+from collections import defaultdict
 from io import StringIO, BytesIO
 import base64
 import pandas as pd
@@ -1606,6 +1608,144 @@ def delete_transaction(request: Request, transaction_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"status": "success", "id": str(transaction_id)}
+
+def _build_spend_summary(transactions) -> str:
+    """Build aggregated spend summary for the advisor — no raw email content or IDs."""
+    if not transactions:
+        return "No transaction data available yet. The user has not synced any receipts."
+
+    now = datetime.utcnow()
+    this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_end = this_month_start
+    last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
+
+    total_all = 0.0
+    this_month_total = 0.0
+    last_month_total = 0.0
+    cat_totals: dict = defaultdict(float)
+    vendor_totals: dict = defaultdict(float)
+    monthly_totals: dict = defaultdict(float)
+    valid_count = 0
+
+    for t in transactions:
+        amt = float(t.amount or 0)
+        if amt <= 0:
+            continue
+        valid_count += 1
+        total_all += amt
+
+        date = t.date
+        if date and isinstance(date, str):
+            try:
+                date = date_parser.parse(date)
+            except Exception:
+                date = None
+
+        if date:
+            if date >= this_month_start:
+                this_month_total += amt
+            if last_month_start <= date < last_month_end:
+                last_month_total += amt
+            key = date.strftime('%b %Y')
+            monthly_totals[key] += amt
+
+        cat = (getattr(t, 'category', None) or 'Uncategorized').strip()
+        cat_totals[cat] += amt
+        vendor = (getattr(t, 'vendor', None) or 'Unknown').strip()
+        vendor_totals[vendor] += amt
+
+    avg = total_all / valid_count if valid_count else 0
+    top_cats = sorted(cat_totals.items(), key=lambda x: -x[1])[:8]
+    top_vendors = sorted(vendor_totals.items(), key=lambda x: -x[1])[:6]
+    recent_months = sorted(monthly_totals.items())[-6:]
+
+    lines = [
+        f"Total transactions: {valid_count}",
+        f"All-time total spend: ${total_all:.2f}",
+        f"This month: ${this_month_total:.2f}",
+        f"Last month: ${last_month_total:.2f}",
+        f"Average transaction: ${avg:.2f}",
+        "",
+        "Spending by category:",
+    ]
+    for cat, amt in top_cats:
+        pct = (amt / total_all * 100) if total_all else 0
+        lines.append(f"  {cat}: ${amt:.2f} ({pct:.1f}%)")
+    lines += ["", "Top vendors:"]
+    for vendor, amt in top_vendors:
+        lines.append(f"  {vendor}: ${amt:.2f}")
+    if recent_months:
+        lines += ["", "Monthly trend (recent months):"]
+        for month, amt in recent_months:
+            lines.append(f"  {month}: ${amt:.2f}")
+    return "\n".join(lines)
+
+
+@app.post("/api/advisor/chat")
+def advisor_chat(request: Request, body: dict = Body(...)):
+    """AI financial advisor. Uses aggregated spend data only — no raw email content."""
+    user = _require_user(request)
+    message = (body.get("message") or "").strip()
+    history = body.get("history") or []
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required.")
+    if len(message) > 2000:
+        raise HTTPException(status_code=400, detail="Message too long.")
+
+    transactions = get_all_transactions(user_id=user.id)
+    spend_summary = _build_spend_summary(transactions)
+
+    history_text = ""
+    for turn in history[-8:]:
+        role = turn.get("role", "")
+        content = (turn.get("content") or "").strip()[:800]
+        if role == "user":
+            history_text += f"\nUser: {content}"
+        elif role == "assistant":
+            history_text += f"\nAdvisor: {content}"
+
+    prompt = f"""You are "RA Advisor", a friendly personal finance helper inside ReceiptAuto. You are NOT a licensed financial advisor — always make this clear when giving advice.
+
+The user's spending summary (aggregated, no private identifiers):
+{spend_summary}
+
+YOUR SCOPE — only respond to:
+- Budgeting, spending reduction, tracking habits
+- Emergency fund building
+- Saving strategies (high-yield savings, CDs, I-bonds)
+- Retirement accounts (Roth IRA, Traditional IRA, 401k, 403b, SEP-IRA)
+- Passive investing basics (index funds, ETFs, asset allocation)
+- Debt payoff strategies (avalanche, snowball, consolidation)
+- Housing basics (rent vs buy, down payment planning, mortgage concepts)
+- General personal finance education and money mindset
+
+OUT OF SCOPE — politely decline and redirect if asked about:
+- Specific stock picks, options trading, crypto speculation
+- Tax filing or legal advice
+- Medical or insurance decisions
+- Anything unrelated to personal finance
+- Technical questions about ReceiptAuto
+
+PRIVACY — never repeat raw transaction details verbatim. Reference spending patterns and categories to give personalized advice, but keep responses focused on actionable guidance.
+
+FORMAT — be concise, warm, and practical. Use bullet points for action steps. Keep responses under 250 words. End with a short disclaimer line.
+{history_text}
+User: {message}
+Advisor:"""
+
+    try:
+        response_text = generate_text(
+            prompt,
+            temperature=0.72,
+            max_output_tokens=512,
+            model=settings.gemini_model,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=f"AI service unavailable: {exc}")
+
+    return {"response": response_text, "status": "success"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transactions — ReceiptAuto</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .page-shell { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+        .page-title { font-size: 1.6rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+        .page-sub   { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 32px; }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="nav-container">
+            <button id="nav-hamburger" class="btn-hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <a class="logo" href="index.html">
+                <div class="logo-icon">RA</div>
+                <h1>Receipt<span>Auto</span></h1>
+            </a>
+            <div class="nav-auth">
+                <span id="nav-user-label" class="nav-user-label"></span>
+                <button id="nav-logout-btn" class="btn-login" hidden>Log out</button>
+            </div>
+        </div>
+        <div id="nav-menu" class="nav-dropdown" hidden>
+            <a href="index.html" class="nav-dropdown-item">🏠 Home</a>
+            <a href="transactions.html" class="nav-dropdown-item nav-dropdown-active">📊 Transactions</a>
+            <a href="advisor.html" class="nav-dropdown-item">💬 Not a Financial Advisor</a>
+            <div class="nav-dropdown-divider"></div>
+            <a href="settings.html" class="nav-dropdown-item">⚙ Settings</a>
+        </div>
+    </nav>
+
+    <div class="page-shell">
+        <h1 class="page-title">Spend Analytics</h1>
+        <p class="page-sub">Compare your spending across periods, track top vendors, and visualize category breakdowns.</p>
+
+        <!-- Period tabs -->
+        <div class="spend-period-tabs" style="margin-bottom:28px;">
+            <button class="spend-tab spend-tab-active" data-period="monthly">Monthly</button>
+            <button class="spend-tab" data-period="weekly">Weekly</button>
+            <button class="spend-tab" data-period="annually">Annually</button>
+        </div>
+
+        <!-- Loading state -->
+        <div id="tx-loading" class="tx-loading">Loading your transactions…</div>
+
+        <!-- Content (shown after load) -->
+        <div id="tx-content" hidden>
+
+            <!-- Comparison stats -->
+            <div class="spend-stats-row">
+                <div class="spend-stat-card">
+                    <div class="spend-stat-label" id="spend-current-label">This month</div>
+                    <div class="spend-stat-value" id="spend-current-total">$0.00</div>
+                    <div class="spend-stat-count" id="spend-current-count">0 transactions</div>
+                </div>
+                <div class="spend-stat-vs">vs</div>
+                <div class="spend-stat-card">
+                    <div class="spend-stat-label" id="spend-prev-label">Last month</div>
+                    <div class="spend-stat-value" id="spend-prev-total">$0.00</div>
+                    <div class="spend-stat-count" id="spend-prev-count">0 transactions</div>
+                </div>
+                <div class="spend-stat-card spend-stat-card-delta">
+                    <div class="spend-stat-label">Change</div>
+                    <div class="spend-stat-value" id="spend-change">—</div>
+                    <div class="spend-stat-count" id="spend-change-desc">vs previous period</div>
+                </div>
+            </div>
+
+            <!-- Bar chart -->
+            <div class="spend-chart-card" style="margin-bottom:24px;">
+                <canvas id="spend-bar-chart" class="spend-bar-canvas"></canvas>
+                <div id="spend-chart-empty" class="spend-chart-empty" hidden>No transactions in this period.</div>
+            </div>
+
+            <!-- Top vendors -->
+            <div class="spend-vendors-card" style="margin-bottom:24px;">
+                <h3 class="spend-vendors-title" id="spend-vendors-title">Top vendors this month</h3>
+                <div id="spend-vendors-list" class="spend-vendors-list"></div>
+            </div>
+
+            <!-- Category breakdown -->
+            <div class="spend-category-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                    <h3 class="spend-category-title">Spending breakdown</h3>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <label class="csv-label" for="csv-group">Group by</label>
+                        <select id="csv-group" class="csv-select">
+                            <option value="vendor">Vendor</option>
+                            <option value="category">Category</option>
+                        </select>
+                        <button id="csv-build" class="btn-action" type="button">Build chart</button>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap;">
+                    <canvas id="csv-chart" width="320" height="320"></canvas>
+                    <div id="csv-legend" class="csv-legend" style="flex:1;min-width:160px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="tx-empty" class="onboarding-card" hidden>
+            <h3 class="onboarding-title">No transactions yet</h3>
+            <p style="color:var(--text-muted);font-size:0.88rem;margin-top:8px;">Sync your Gmail receipts from the Home page to see your spend analytics here.</p>
+            <div class="onboarding-actions" style="margin-top:20px;">
+                <a href="index.html" class="btn-action-primary">Go to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="transactions.js"></script>
+</body>
+</html>

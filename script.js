@@ -3190,25 +3190,25 @@ function renderSpendSection(period) {
 // ── Setup all new event listeners ────────────────────────────────────────────
 
 function setupNavDrawer() {
-    // Hamburger open
+    // Hamburger toggles the simple dropdown menu
     const hamburger = document.querySelector('#nav-hamburger');
-    if (hamburger) hamburger.addEventListener('click', openNavDrawer);
+    const navMenu = document.querySelector('#nav-menu');
+    if (hamburger && navMenu) {
+        hamburger.addEventListener('click', function(e) {
+            e.stopPropagation();
+            navMenu.hidden = !navMenu.hidden;
+        });
+        document.addEventListener('click', function(e) {
+            if (!hamburger.contains(e.target) && !navMenu.contains(e.target)) {
+                navMenu.hidden = true;
+            }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') navMenu.hidden = true;
+        });
+    }
 
-    // Close btn + backdrop
-    const navClose = document.querySelector('#nav-close');
-    const navBackdrop = document.querySelector('#nav-backdrop');
-    if (navClose) navClose.addEventListener('click', closeNavDrawer);
-    if (navBackdrop) navBackdrop.addEventListener('click', closeNavDrawer);
-
-    // Escape closes drawer
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            const drawer = document.querySelector('#nav-drawer');
-            if (drawer && !drawer.hidden) closeNavDrawer();
-        }
-    });
-
-    // Nav items (Transactions / Spend)
+    // Legacy nav-item buttons (no-op now — pages handle routing via href)
     document.querySelectorAll('.nav-item[data-nav]').forEach(function(btn) {
         btn.addEventListener('click', function() {
             showSection(btn.dataset.nav);
