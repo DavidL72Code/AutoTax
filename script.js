@@ -2726,24 +2726,24 @@ console.log('%c Press Ctrl+K to search, Ctrl+S to sync ', 'color: #3b82f6; font-
 
 const TOUR_STEPS = [
     {
-        icon: '👋',
+        icon: '',
         title: 'Welcome to ReceiptAuto',
         desc: 'ReceiptAuto automatically scans your Gmail for receipt emails and extracts transactions — no manual entry, no uploading files. This tour takes 30 seconds.'
     },
     {
-        icon: '📧',
+        icon: '',
         title: 'Connect your Gmail',
         desc: 'Click <span class="tour-highlight">Connect Gmail</span> in the nav or hero section. We request read-only access — ReceiptAuto never reads personal emails, only receipts.'
     },
     {
-        icon: '⚡',
+        icon: '',
         title: 'Sync & track transactions',
         desc: 'Once connected, click <span class="tour-highlight">Sync Emails</span> to scan your inbox. Transactions appear in the table below — searchable, sortable, and filterable by date or category.'
     },
     {
-        icon: '📊',
+        icon: '',
         title: 'Explore your spending',
-        desc: 'Scroll down for a <span class="tour-highlight">pie chart</span> by vendor or category, <span class="tour-highlight">monthly trends</span>, and your <span class="tour-highlight">top vendors</span>. Use ⚙ Settings to set a budget limit and export CSV.'
+        desc: 'Scroll down for a <span class="tour-highlight">pie chart</span> by vendor or category, <span class="tour-highlight">monthly trends</span>, and your <span class="tour-highlight">top vendors</span>. Use Settings to set a budget limit and export CSV.'
     }
 ];
 

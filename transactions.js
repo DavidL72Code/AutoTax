@@ -304,9 +304,8 @@ function renderPeriod(period) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     setupNav();
-    if (!(await requireAuth())) return;
 
-    // Show user label
+    // Show user label if signed in
     try {
         const token = getToken();
         if (token) {

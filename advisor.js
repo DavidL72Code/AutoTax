@@ -131,14 +131,14 @@ async function sendMessage(text) {
 document.addEventListener('DOMContentLoaded', async () => {
     setupNav();
 
-    if (!getToken()) { location.href = 'index.html'; return; }
-
-    // User label
+    // User label if signed in
     try {
         const token = getToken();
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const label = document.querySelector('#nav-user-label');
-        if (label && payload.email) label.textContent = payload.email;
+        if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const label = document.querySelector('#nav-user-label');
+            if (label && payload.email) label.textContent = payload.email;
+        }
     } catch(e) {}
 
     // Send button
