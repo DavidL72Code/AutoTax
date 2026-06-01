@@ -342,22 +342,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const contentEl = document.querySelector('#tx-content');
     const emptyEl = document.querySelector('#tx-empty');
 
-    try {
-        const data = await apiFetch('/api/transactions');
-        allTx = (data.transactions || []).filter(t => parseFloat(t.amount) > 0);
+    if (loadingEl) loadingEl.hidden = true;
 
-        if (loadingEl) loadingEl.hidden = true;
-
-        if (allTx.length === 0) {
-            if (emptyEl) emptyEl.hidden = false;
-            return;
+    if (getToken()) {
+        try {
+            const data = await apiFetch('/api/transactions');
+            allTx = (data.transactions || []).filter(t => parseFloat(t.amount) > 0);
+        } catch(err) {
+            console.error(err);
         }
-
-        if (contentEl) contentEl.hidden = false;
-        renderPeriod('monthly');
-        buildPieChart(allTx, 'vendor');
-    } catch(err) {
-        if (loadingEl) loadingEl.textContent = 'Failed to load transactions. Please try again.';
-        console.error(err);
     }
+
+    if (allTx.length === 0) {
+        if (emptyEl) emptyEl.hidden = false;
+        return;
+    }
+
+    if (contentEl) contentEl.hidden = false;
+    renderPeriod('monthly');
+    buildPieChart(allTx, 'vendor');
 });
