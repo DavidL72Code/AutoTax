@@ -81,6 +81,10 @@ def _ensure_transactions_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_transactions_user_id ON transactions (user_id)"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_email ON transactions (user_id, email_id)"))
 
+        # Add order_number column if missing
+        if "order_number" not in cols:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN order_number VARCHAR(255)"))
+
 _ensure_users_schema()
 _ensure_transactions_schema()
 Base.metadata.create_all(bind=engine)

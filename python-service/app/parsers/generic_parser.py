@@ -82,6 +82,23 @@ def _extract_tax_value(email_text: str) -> Optional[float]:
     return None
 
 
+_ORDER_NUMBER_RE = re.compile(
+    r'(?:order\s*(?:#|number|id|no\.?|reference)|confirmation\s*(?:#|number|code)|receipt\s*(?:#|number))'
+    r'\s*[:\-#]?\s*([A-Z0-9][A-Z0-9\-]{3,30})',
+    re.IGNORECASE,
+)
+
+def _extract_order_number(text: str) -> str | None:
+    for line in text.splitlines():
+        m = _ORDER_NUMBER_RE.search(line)
+        if m:
+            candidate = m.group(1).strip()
+            # Skip purely numeric short strings that are likely prices or zip codes
+            if candidate.isdigit() and len(candidate) < 6:
+                continue
+            return candidate
+    return None
+
 def regex_parsing(email_text: str) -> dict:
     regex_info = {}
     amount_value = _extract_amount_value(email_text)
@@ -90,6 +107,9 @@ def regex_parsing(email_text: str) -> dict:
     tax_value = _extract_tax_value(email_text)
     if tax_value is not None:
         regex_info["tax"] = tax_value
+    order_number = _extract_order_number(email_text)
+    if order_number:
+        regex_info["order_number"] = order_number
     return regex_info
 
 

@@ -73,14 +73,27 @@ def log_transaction(parsed_data:dict, user_id: str | int | None = None):
 
     db=SessionLocal()
     try:
+        # Deduplicate by email_id first
         existing=db.query(Transaction).filter(
             Transaction.email_id==parsed_data.get('email_id'),
             Transaction.user_id==user_id
         ).first()
         if existing:
-            print(f"Transaction already exists:{parsed_data.get('email_id')}")
+            print(f"Transaction already exists (email_id): {parsed_data.get('email_id')}")
             return existing
-    
+
+        # Deduplicate by order number — different emails about the same order
+        order_number = parsed_data.get('order_number')
+        if order_number:
+            existing_order = db.query(Transaction).filter(
+                Transaction.order_number == order_number,
+                Transaction.user_id == user_id,
+                Transaction.vendor == (parsed_data.get('vendor') or 'Unknown'),
+            ).first()
+            if existing_order:
+                print(f"Duplicate order number {order_number} for {parsed_data.get('vendor')} — skipping")
+                return existing_order
+
         transaction=Transaction(
             user_id=user_id,
             email_id=parsed_data.get('email_id'),
@@ -92,6 +105,7 @@ def log_transaction(parsed_data:dict, user_id: str | int | None = None):
             payment_method=parsed_data.get('payment_method'),
             items=parsed_data.get('items'),
             email_body=parsed_data.get('email_body') or parsed_data.get('email body'),
+            order_number=order_number,
             )
 
         db.add(transaction)
