@@ -1,15 +1,7 @@
 // Receipt Automation Dashboard JavaScript
 
-// API Configuration
-const API_BASE_URL = (() => {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-        return 'http://localhost:8000';
-    }
-    const forced = localStorage.getItem('API_BASE_URL');
-    if (forced) return forced;
-    return 'https://autotax-xwly.onrender.com';
-})();
+// API Configuration — defined in config.js (window.API_BASE_URL)
+const API_BASE_URL = window.API_BASE_URL;
 const DEMO_MODE = Boolean(window.DEMO_MODE);
 const MONTHLY_BUDGET_STORAGE_KEY = 'MONTHLY_BUDGET_TARGET';
 let firebaseConfig = null;

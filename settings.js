@@ -1,10 +1,6 @@
 'use strict';
 
-const API_BASE_URL = (() => {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'http://localhost:8000';
-    const forced = localStorage.getItem('API_BASE_URL');
-    return forced || 'https://autotax-xwly.onrender.com';
-})();
+const API_BASE_URL = window.API_BASE_URL;
 
 function getToken() { return localStorage.getItem('AUTH_TOKEN') || ''; }
 
