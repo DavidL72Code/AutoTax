@@ -171,7 +171,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Sign out
     document.querySelector('#signout-btn')?.addEventListener('click', async () => {
-        try { if (_firebaseAuth) await _firebaseAuth.signOut(); } catch(e) {}
+        // Invalidate server-side token
+        try {
+            const token = getToken();
+            if (token) await fetch(API_BASE_URL + '/api/auth/logout', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            });
+        } catch(e) {}
+        // Sign out of Firebase — use _firebaseAuth if ready, else grab it directly
+        try {
+            const auth = _firebaseAuth || (window.firebase?.apps?.length ? window.firebase.auth() : null);
+            if (auth) await auth.signOut();
+        } catch(e) {}
         localStorage.removeItem('AUTH_TOKEN');
         location.href = 'index.html';
     });
