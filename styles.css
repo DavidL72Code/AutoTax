@@ -846,6 +846,43 @@ nav,
     align-items: center;
 }
 
+.parse-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.parse-date-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.parse-date-input {
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    font-size: 0.83rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.parse-date-input:focus {
+    outline: none;
+    border-color: rgba(255,255,255,0.22);
+}
+
+html.light-mode .parse-date-input {
+    background: rgba(0,0,0,0.04);
+    border-color: rgba(0,0,0,0.12);
+    color: var(--text);
+}
+
 .search-input,
 .csv-select,
 .modal-input {

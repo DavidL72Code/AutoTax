@@ -807,8 +807,14 @@ def _update_sync_run(run_id: str, **kwargs):
         if run:
             run.update(kwargs)
 
-def _run_sync(user_id: int, run_id: str | None = None):
-    """Run email sync in background with optional progress tracking."""
+def _is_cancelled(run_id):
+    if not run_id:
+        return False
+    with SYNC_LOCK:
+        return SYNC_RUNS.get(run_id, {}).get("cancelled", False)
+
+def _run_sync(user_id: int, run_id: str | None = None, date_from: str | None = None, date_to: str | None = None):
+    """Run email sync in background with optional progress tracking and date range."""
     def _status(status: str, message: str = ""):
         if run_id:
             _update_sync_run(run_id, status=status, message=message, updated_at=_now_iso())
@@ -819,24 +825,24 @@ def _run_sync(user_id: int, run_id: str | None = None):
         refresh_token = _get_google_refresh_token_for_user(user_id)
         if not refresh_token:
             _status("failed", "Google account not connected. Use Connect Gmail to authorise.")
-            print("❌ No Google OAuth token found for user.")
             return
         client_id = settings.google_oauth_client_id or ""
         client_secret = settings.google_oauth_client_secret or ""
         if not client_id or not client_secret:
             _status("failed", "Server OAuth configuration missing.")
-            print("❌ Google OAuth client config missing.")
+            return
+        if _is_cancelled(run_id):
+            _status("failed", "Cancelled.")
             return
         gmail_creds = credentials_from_refresh_token(refresh_token, client_id, client_secret)
         _status("running", "Fetching and parsing emails…")
-        print("🔄 Starting email sync...")
-        main(user_id=user_id, gmail_creds=gmail_creds)
-        deleted = delete_zero_amount_transactions(user_id=user_id)
-        if deleted:
-            print(f"🧹 Removed {deleted} zero-amount transaction(s) after sync.")
+        main(user_id=user_id, gmail_creds=gmail_creds, date_from=date_from, date_to=date_to, run_id=run_id, is_cancelled=_is_cancelled)
+        if _is_cancelled(run_id):
+            _status("failed", "Cancelled.")
+            return
+        delete_zero_amount_transactions(user_id=user_id)
         _print_db_snapshot(user_id=user_id)
         _status("completed", "Sync finished. New receipts are ready.")
-        print("✅ Email sync completed")
     except Exception as e:
         _status("failed", str(e))
         print(f"❌ Sync failed: {e}")
@@ -1332,11 +1338,13 @@ def _print_db_snapshot(limit: int = 50, user_id: str | int | None = None):
         print(f"  {date} | {vendor} | ${float(amount):.2f}")
 
 @app.post("/api/sync")
-def sync_emails(request: Request):
+def sync_emails(request: Request, payload: dict = Body(default={})):
     """Start email scraper in background; returns a run_id for progress polling."""
     user = _require_user(request)
     if not _get_google_refresh_token_for_user(user.id):
         raise HTTPException(status_code=400, detail="Google OAuth not connected for this user.")
+    date_from = payload.get("date_from")
+    date_to   = payload.get("date_to")
     try:
         run_id = uuid.uuid4().hex
         with SYNC_LOCK:
@@ -1347,12 +1355,23 @@ def sync_emails(request: Request):
                 "message": "Queued…",
                 "started_at": _now_iso(),
                 "updated_at": _now_iso(),
+                "cancelled": False,
             }
-        thread = threading.Thread(target=_run_sync, args=(user.id, run_id), daemon=True)
+        thread = threading.Thread(target=_run_sync, args=(user.id, run_id, date_from, date_to), daemon=True)
         thread.start()
         return {"status": "success", "run_id": run_id, "message": "Sync started."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed to start: {str(e)}")
+
+@app.post("/api/sync-stop")
+def sync_stop(request: Request, payload: dict = Body(default={})):
+    _require_user(request)
+    run_id = payload.get("run_id")
+    if run_id:
+        with SYNC_LOCK:
+            if run_id in SYNC_RUNS:
+                SYNC_RUNS[run_id]["cancelled"] = True
+    return {"status": "ok"}
 
 @app.get("/api/sync-status")
 def sync_status(request: Request, run_id: str):

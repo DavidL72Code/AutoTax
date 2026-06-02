@@ -52,20 +52,26 @@ def credentials_from_refresh_token(refresh_token: str, client_id: str, client_se
         creds.refresh(Request())
     return creds
 
-def fetch_receipt_emails(max_results=15, days_back=60, existing_ids=None, creds: Credentials | None = None):
+def fetch_receipt_emails(max_results=50, days_back=180, date_from=None, date_to=None, existing_ids=None, creds: Credentials | None = None):
     """
     Fetch receipt-like emails from Gmail.
-    existing_ids: optional set of Gmail message ids already in DB; we skip fetching/parsing those to save time and AI.
+    date_from / date_to: ISO date strings (YYYY-MM-DD) for custom range; overrides days_back when provided.
+    existing_ids: optional set of Gmail message ids already in DB; we skip fetching/parsing those.
     """
     try:
         print("Connecting to Gmail...")
         service = get_gmail_service(creds)
 
         query = (
-            f'(subject:"receipt" OR subject:"confirmation" OR subject:"payment" OR subject:"order" OR subject:"invoice") '
-            f'-subject:"shipping update" -subject:"delivered" -subject:"newsletter" '
-            f'newer_than:{days_back}d'
+            '(subject:"receipt" OR subject:"confirmation" OR subject:"payment" OR subject:"order" OR subject:"invoice") '
+            '-subject:"shipping update" -subject:"delivered" -subject:"newsletter" '
         )
+        if date_from:
+            query += f'after:{date_from.replace("-", "/")} '
+        if date_to:
+            query += f'before:{date_to.replace("-", "/")} '
+        if not date_from and not date_to:
+            query += f'newer_than:{days_back}d'
         print(f"Searching: {query}")
 
         results = service.users().messages().list(

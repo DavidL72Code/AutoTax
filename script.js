@@ -329,6 +329,22 @@ function setupEventListeners() {
         });
     }
 
+    // Parse + Stop buttons
+    const parseBtn = document.querySelector('#parse-btn');
+    const stopParseBtn = document.querySelector('#stop-parse-btn');
+    if (parseBtn) {
+        parseBtn.addEventListener('click', function() {
+            const from = document.querySelector('#parse-date-from')?.value;
+            const to = document.querySelector('#parse-date-to')?.value;
+            startParse(from, to, parseBtn, stopParseBtn);
+        });
+    }
+    if (stopParseBtn) {
+        stopParseBtn.addEventListener('click', function() {
+            stopActiveParse(parseBtn, stopParseBtn);
+        });
+    }
+
     // Export CSV button
     if (exportBtn) {
         exportBtn.addEventListener('click', function() {
@@ -1951,6 +1967,73 @@ async function syncEmails() {
             showError(message);
         }
     }
+}
+
+let _activeSyncRunId = null;
+
+async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
+    if (!await hasActiveAuthSession()) { openAuthModal('login'); return; }
+
+    const body = {};
+    if (dateFrom) body.date_from = dateFrom;
+    if (dateTo)   body.date_to   = dateTo;
+
+    if (parseBtn) { parseBtn.textContent = 'Parsing...'; parseBtn.disabled = true; }
+    if (stopParseBtn) stopParseBtn.hidden = false;
+
+    const logEl = document.querySelector('#demo-run-log');
+    if (logEl) logEl.textContent = 'Starting parse…';
+
+    try {
+        const response = await authFetch(`${API_BASE_URL}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || `API ${response.status}`);
+
+        _activeSyncRunId = result.run_id || null;
+        const previousSignature = buildTransactionSignature(allTransactions);
+        startSyncRefreshLoop(previousSignature, parseBtn ? parseBtn.innerHTML : '');
+
+        const pollLog = setInterval(async () => {
+            if (!_activeSyncRunId) { clearInterval(pollLog); return; }
+            try {
+                const sr = await authFetch(`${API_BASE_URL}/api/sync-status?run_id=${_activeSyncRunId}`);
+                const s = await sr.json().catch(() => ({}));
+                if (logEl && s.message) logEl.textContent = s.message;
+                if (s.status === 'completed' || s.status === 'failed') {
+                    clearInterval(pollLog);
+                    _activeSyncRunId = null;
+                    if (parseBtn) { parseBtn.textContent = 'Parse'; parseBtn.disabled = false; }
+                    if (stopParseBtn) stopParseBtn.hidden = true;
+                    loadDashboardData();
+                }
+            } catch(e) { clearInterval(pollLog); }
+        }, 2000);
+
+    } catch (error) {
+        if (logEl) logEl.textContent = `Error: ${error.message}`;
+        showError(error.message);
+        if (parseBtn) { parseBtn.textContent = 'Parse'; parseBtn.disabled = false; }
+        if (stopParseBtn) stopParseBtn.hidden = true;
+    }
+}
+
+async function stopActiveParse(parseBtn, stopParseBtn) {
+    if (_activeSyncRunId) {
+        try {
+            await authFetch(`${API_BASE_URL}/api/sync-stop`, { method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ run_id: _activeSyncRunId }) });
+        } catch(e) {}
+        _activeSyncRunId = null;
+    }
+    if (parseBtn) { parseBtn.textContent = 'Parse'; parseBtn.disabled = false; }
+    if (stopParseBtn) stopParseBtn.hidden = true;
+    const logEl = document.querySelector('#demo-run-log');
+    if (logEl) logEl.textContent = 'Parse stopped.';
 }
 
 async function buildAuthHeaders() {

@@ -2,11 +2,13 @@ from .email_scraper import fetch_receipt_emails
 from .parser_select import parser_select
 from .data_helper import log_transaction, get_existing_email_ids
 
-def main(user_id: str | int | None = None, gmail_creds=None):
-    # Only fetch/parse emails we don't already have (saves parsing and AI)
+def main(user_id: str | int | None = None, gmail_creds=None, date_from: str | None = None, date_to: str | None = None, run_id=None, is_cancelled=None):
     existing_ids = get_existing_email_ids(user_id=user_id)
-    emails = fetch_receipt_emails(max_results=50, days_back=180, existing_ids=existing_ids, creds=gmail_creds)
+    emails = fetch_receipt_emails(max_results=50, days_back=180, date_from=date_from, date_to=date_to, existing_ids=existing_ids, creds=gmail_creds)
     for email in emails:
+        if is_cancelled and is_cancelled(run_id):
+            print("Parse cancelled.")
+            return
         parsed_data = parser_select(email)
 
         if parsed_data and isinstance(parsed_data, dict):
