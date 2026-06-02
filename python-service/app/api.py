@@ -79,27 +79,14 @@ _RATE_BUCKETS: dict = {}
 _RATE_LOCK = threading.Lock()
 
 # Allow your website to call the API.
-# Build an explicit allowlist instead of "*" so a wildcard origin can't drive
-# the API on a user's behalf. Always include localhost for local dev.
-def _build_cors_origins() -> list[str]:
-    origins = {
-        "http://localhost:8000", "http://127.0.0.1:8000",
-        "http://localhost:5500", "http://127.0.0.1:5500",
-        "http://localhost:3000", "http://127.0.0.1:3000",
-    }
-    if settings.frontend_url:
-        origins.add(settings.frontend_url.strip().rstrip("/"))
-    if settings.cors_allow_origins:
-        for o in settings.cors_allow_origins.split(","):
-            o = o.strip().rstrip("/")
-            if o:
-                origins.add(o)
-    return sorted(origins)
-
+# Auth is Bearer-token only (no cookies), so allow_origins=["*"] is safe here —
+# the security risk is specifically allow_origins=* combined with allow_credentials=True,
+# which would let arbitrary sites send cookies. With credentials=False and a Bearer
+# scheme, the wildcard is harmless: a foreign site can't inject or read our tokens.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_build_cors_origins(),
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
