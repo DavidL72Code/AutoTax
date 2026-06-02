@@ -850,6 +850,7 @@ async function logoutUser() {
 }
 
 // Load all dashboard data from API
+let _lastDashboardErrorShown = 0;
 async function loadDashboardData() {
     setDashboardLoading(true);
     try {
@@ -858,11 +859,15 @@ async function loadDashboardData() {
             loadStats(),
             loadTopVendors()
         ]);
+        _lastDashboardErrorShown = 0;
     } catch (error) {
         console.error('Error loading dashboard:', error);
         if (!DEMO_MODE) {
-            const base = API_BASE_URL || 'the API';
-            showError(`Failed to load dashboard data. Make sure the API is running at ${base}.`);
+            const now = Date.now();
+            if (now - _lastDashboardErrorShown > 60000) {
+                _lastDashboardErrorShown = now;
+                showError('Could not reach the server — it may be waking up. Retrying automatically.');
+            }
         }
     } finally {
         setDashboardLoading(false);
