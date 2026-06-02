@@ -3,7 +3,7 @@
 const API_BASE_URL = (() => {
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'http://localhost:8000';
     const forced = localStorage.getItem('API_BASE_URL');
-    return forced || location.origin;
+    return forced || 'https://autotax-xwly.onrender.com';
 })();
 
 function getToken() { return localStorage.getItem('AUTH_TOKEN') || ''; }
