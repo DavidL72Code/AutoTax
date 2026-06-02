@@ -8,13 +8,50 @@ const API_BASE_URL = (() => {
 
 function getToken() { return localStorage.getItem('AUTH_TOKEN') || ''; }
 
+let _firebaseAuth = null;
+let _firebaseReadyPromise = null;
+
+async function _initFirebase() {
+    if (_firebaseReadyPromise) return _firebaseReadyPromise;
+    _firebaseReadyPromise = (async () => {
+        try {
+            const res = await fetch(API_BASE_URL + '/api/public-config', { cache: 'no-store' });
+            if (!res.ok) return;
+            const cfg = await res.json().catch(() => null);
+            const fb = cfg?.firebase;
+            if (!fb?.apiKey || !window.firebase) return;
+            if (!window.firebase.apps.length) window.firebase.initializeApp(fb);
+            _firebaseAuth = window.firebase.auth();
+            await new Promise(resolve => {
+                const unsub = _firebaseAuth.onAuthStateChanged(user => { unsub(); resolve(user); });
+            });
+        } catch(e) {}
+    })();
+    return _firebaseReadyPromise;
+}
+
+async function getFreshToken() {
+    await _initFirebase();
+    try {
+        if (_firebaseAuth?.currentUser) {
+            const token = await _firebaseAuth.currentUser.getIdToken(/* forceRefresh */ true);
+            localStorage.setItem('AUTH_TOKEN', token);
+            return token;
+        }
+    } catch(e) {}
+    return getToken();
+}
+
 async function apiFetch(path, opts = {}) {
-    const token = getToken();
+    const token = await getFreshToken();
     const res = await fetch(API_BASE_URL + path, {
         ...opts,
         headers: { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
-    if (!res.ok) throw new Error(`API ${res.status}`);
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `API ${res.status}`);
+    }
     return res.json();
 }
 
