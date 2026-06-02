@@ -329,21 +329,24 @@ def save_transaction_record(parsed_data: dict, *, user_id: str | int) -> Transac
     if existing.exists:
         return _transaction_from_doc(existing)
 
-    # Dedup by order_number — same order may appear in multiple status emails
+    # Dedup by order_number — same order may appear in multiple status emails.
+    # Only query on user_id + order_number (no vendor) so a slight name difference
+    # between emails doesn't let duplicates slip through.
     order_number = parsed_data.get("order_number")
     if order_number:
-        vendor = (parsed_data.get("vendor") or "Unknown")
-        dupe = (
-            _transactions()
-            .where("user_id", "==", user_id_str)
-            .where("order_number", "==", str(order_number))
-            .where("vendor", "==", vendor)
-            .limit(1)
-            .get()
-        )
-        if dupe:
-            print(f"Duplicate order_number {order_number} for {vendor} — skipping")
-            return None
+        try:
+            dupe = (
+                _transactions()
+                .where("user_id", "==", user_id_str)
+                .where("order_number", "==", str(order_number))
+                .limit(1)
+                .get()
+            )
+            if dupe:
+                print(f"Duplicate order_number {order_number} — skipping")
+                return None
+        except Exception as e:
+            print(f"Order dedup query failed (index may be missing): {e}")
 
     amount = parsed_data.get("amount")
     if amount is None:
@@ -365,6 +368,54 @@ def save_transaction_record(parsed_data: dict, *, user_id: str | int) -> Transac
     }
     doc_ref.set(payload)
     return get_transaction_by_id(doc_id)
+
+
+def deduplicate_order_transactions(user_id: str | int | None = None) -> int:
+    """Remove duplicate transactions for the same order.
+
+    Two passes:
+    1. Group by order_number (for docs that have it stored) — keep earliest.
+    2. Group by (vendor, amount, date-day) — catches pre-fix docs that have no
+       order_number field but were saved multiple times from status emails.
+    Returns number of docs deleted.
+    """
+    if not firestore_enabled():
+        return 0
+    all_txns = get_all_transactions(user_id=user_id)
+    to_delete: set[str] = set()
+
+    # Pass 1 — order_number dedup
+    by_order: dict[str, list] = {}
+    for t in all_txns:
+        if getattr(t, "order_number", None):
+            key = (str(getattr(t, "order_number")), str(t.user_id))
+            by_order.setdefault(key, []).append(t)
+    for txns in by_order.values():
+        if len(txns) > 1:
+            txns.sort(key=lambda t: t.created_at or datetime.min)
+            for dupe in txns[1:]:
+                to_delete.add(dupe.id)
+
+    # Pass 2 — (vendor, amount, date-day) dedup for docs without order_number
+    by_fingerprint: dict[str, list] = {}
+    for t in all_txns:
+        if t.id in to_delete or getattr(t, "order_number", None):
+            continue
+        try:
+            day = t.date.strftime("%Y-%m-%d") if t.date else "unknown"
+        except Exception:
+            day = str(t.date)
+        key = (str(t.user_id), (t.vendor or "").lower().strip(), str(round(float(t.amount or 0), 2)), day)
+        by_fingerprint.setdefault(key, []).append(t)
+    for txns in by_fingerprint.values():
+        if len(txns) > 1:
+            txns.sort(key=lambda t: t.created_at or datetime.min)
+            for dupe in txns[1:]:
+                to_delete.add(dupe.id)
+
+    for doc_id in to_delete:
+        _transactions().document(doc_id).delete()
+    return len(to_delete)
 
 
 def delete_zero_amount_transactions(user_id: str | int | None = None) -> int:

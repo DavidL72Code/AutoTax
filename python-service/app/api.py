@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .data_helper import (
     clear_transactions_for_user,
+    deduplicate_transactions_for_user,
     delete_transaction_for_user,
     delete_zero_amount_transactions,
     get_all_transactions,
@@ -818,6 +819,13 @@ def get_top_vendors(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching top vendors: {str(e)}")
 
+@app.post("/api/transactions/deduplicate")
+def deduplicate_transactions(request: Request):
+    """Remove duplicate transactions (same order number or same vendor+amount+date)."""
+    user = _require_user(request)
+    removed = deduplicate_transactions_for_user(user_id=user.id)
+    return {"status": "success", "removed": removed, "message": f"Removed {removed} duplicate(s)."}
+
 @app.post("/api/cleanup-zero")
 def cleanup_zero_transactions(request: Request):
     """Delete all transactions with amount 0 or null from the database. Returns count removed."""
@@ -895,6 +903,9 @@ def _run_sync(user_id: int, run_id: str | None = None, date_from: str | None = N
             _status("failed", "Cancelled.")
             return
         delete_zero_amount_transactions(user_id=user_id)
+        removed = deduplicate_transactions_for_user(user_id=user_id)
+        if removed:
+            _append_sync_log(run_id, f"Removed {removed} duplicate transaction(s).")
         _print_db_snapshot(user_id=user_id)
         saved = (summary or {}).get("saved", 0)
         skipped = (summary or {}).get("skipped", 0)

@@ -4,6 +4,7 @@ from datetime import datetime
 from dateutil import parser as date_parser
 from .firestore_store import (
     clear_transactions as clear_firestore_transactions,
+    deduplicate_order_transactions as deduplicate_firestore_transactions,
     delete_transaction as delete_firestore_transaction,
     delete_zero_amount_transactions as delete_zero_firestore_transactions,
     firestore_enabled,
@@ -187,6 +188,12 @@ def get_transaction_by_id(transaction_id: str | int):
         return transaction
     finally:
         db.close()
+
+
+def deduplicate_transactions_for_user(user_id: str | int | None) -> int:
+    if firestore_enabled():
+        return deduplicate_firestore_transactions(user_id=user_id)
+    return 0  # SQLite path uses DB-level constraints; no cleanup needed
 
 
 def clear_transactions_for_user(user_id: str | int | None):
