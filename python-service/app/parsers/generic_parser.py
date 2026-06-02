@@ -168,6 +168,14 @@ def _build_base_result(
     regex_result = regex_parsing(email_text)
     result.update(regex_result)
 
+    # Order numbers often live in the subject line (e.g. AliExpress
+    # "Order 8210701771043416: order shipped") rather than the body.
+    # Scan the subject too so multi-status emails for one order dedup correctly.
+    if not regex_result.get('order_number') and email_subject:
+        subject_order = _extract_order_number(email_subject)
+        if subject_order:
+            result['order_number'] = subject_order
+
     has_amount = regex_result.get('amount') is not None
     has_tax = regex_result.get('tax') is not None
     result['_meta']['amount_regex_found'] = bool(has_amount)
