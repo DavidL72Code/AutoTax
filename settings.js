@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelector('#clear-btn')?.addEventListener('click', async () => {
         if (!confirm('Delete all transactions? This cannot be undone.')) return;
         try {
-            await apiFetch('/api/transactions/clear', { method: 'DELETE' });
+            await apiFetch('/api/transactions/clear', { method: 'POST' });
             showFeedback('budget-feedback', '✓ All transactions cleared', false);
         } catch(e) { alert('Clear failed: ' + (e.message || 'unknown error')); }
     });

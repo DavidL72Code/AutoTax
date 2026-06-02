@@ -1582,6 +1582,7 @@ def delete_demo_transaction(transaction_id: str):
     return {"status": "success", "id": str(transaction_id)}
 
 @app.delete("/api/transactions/clear")
+@app.post("/api/transactions/clear")
 def clear_transactions(request: Request):
     """Delete all transactions for the current user."""
     user = _require_user(request)
