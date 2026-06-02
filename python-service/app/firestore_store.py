@@ -45,6 +45,7 @@ class TransactionRecord:
     payment_method: Optional[str] = None
     items: Optional[str] = None
     email_body: Optional[str] = None
+    order_number: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -157,6 +158,7 @@ def _transaction_from_doc(doc) -> TransactionRecord:
         payment_method=data.get("payment_method"),
         items=data.get("items"),
         email_body=data.get("email_body"),
+        order_number=data.get("order_number"),
         created_at=data.get("created_at"),
         updated_at=data.get("updated_at"),
     )
@@ -326,6 +328,23 @@ def save_transaction_record(parsed_data: dict, *, user_id: str | int) -> Transac
     existing = doc_ref.get()
     if existing.exists:
         return _transaction_from_doc(existing)
+
+    # Dedup by order_number — same order may appear in multiple status emails
+    order_number = parsed_data.get("order_number")
+    if order_number:
+        vendor = (parsed_data.get("vendor") or "Unknown")
+        dupe = (
+            _transactions()
+            .where("user_id", "==", user_id_str)
+            .where("order_number", "==", str(order_number))
+            .where("vendor", "==", vendor)
+            .limit(1)
+            .get()
+        )
+        if dupe:
+            print(f"Duplicate order_number {order_number} for {vendor} — skipping")
+            return None
+
     amount = parsed_data.get("amount")
     if amount is None:
         return None
@@ -339,6 +358,7 @@ def save_transaction_record(parsed_data: dict, *, user_id: str | int) -> Transac
         "category": parsed_data.get("category"),
         "payment_method": parsed_data.get("payment_method"),
         "items": parsed_data.get("items"),
+        "order_number": str(order_number) if order_number else None,
         "email_body": parsed_data.get("email_body") or parsed_data.get("email body"),
         "created_at": _now(),
         "updated_at": _now(),
