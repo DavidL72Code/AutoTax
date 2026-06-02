@@ -5,7 +5,7 @@ from .data_helper import log_transaction, get_existing_email_ids
 def main(user_id: str | int | None = None, gmail_creds=None):
     # Only fetch/parse emails we don't already have (saves parsing and AI)
     existing_ids = get_existing_email_ids(user_id=user_id)
-    emails = fetch_receipt_emails(existing_ids=existing_ids, creds=gmail_creds)
+    emails = fetch_receipt_emails(max_results=50, days_back=180, existing_ids=existing_ids, creds=gmail_creds)
     for email in emails:
         parsed_data = parser_select(email)
 

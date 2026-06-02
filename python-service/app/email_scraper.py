@@ -61,12 +61,12 @@ def fetch_receipt_emails(max_results=15, days_back=60, existing_ids=None, creds:
         print("Connecting to Gmail...")
         service = get_gmail_service(creds)
 
-        query_parts = [
-            '(subject:"confirmation" OR subject:"receipt" OR OR subject:"payment" OR subject:"order summary") -subject:"shipping" -subject:"delivered" -subject:"sale" -subject:"deals"',
-            f' newer_than:{days_back}d',
-        ]
-        query = ''.join(query_parts)
-        print(f"Searching{query}")
+        query = (
+            f'(subject:"receipt" OR subject:"confirmation" OR subject:"payment" OR subject:"order" OR subject:"invoice") '
+            f'-subject:"shipping update" -subject:"delivered" -subject:"newsletter" '
+            f'newer_than:{days_back}d'
+        )
+        print(f"Searching: {query}")
 
         results = service.users().messages().list(
             userId='me',
