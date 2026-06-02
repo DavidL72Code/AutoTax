@@ -322,26 +322,18 @@ function setupEventListeners() {
         });
     }
 
-    // Sync button
+    // Sync button — uses the date range inputs
+    const stopParseBtn = document.querySelector('#stop-parse-btn');
     if (syncBtn) {
         syncBtn.addEventListener('click', function() {
-            syncEmails();
-        });
-    }
-
-    // Parse + Stop buttons
-    const parseBtn = document.querySelector('#parse-btn');
-    const stopParseBtn = document.querySelector('#stop-parse-btn');
-    if (parseBtn) {
-        parseBtn.addEventListener('click', function() {
             const from = document.querySelector('#parse-date-from')?.value;
             const to = document.querySelector('#parse-date-to')?.value;
-            startParse(from, to, parseBtn, stopParseBtn);
+            startParse(from, to, syncBtn, stopParseBtn);
         });
     }
     if (stopParseBtn) {
         stopParseBtn.addEventListener('click', function() {
-            stopActiveParse(parseBtn, stopParseBtn);
+            stopActiveParse(syncBtn, stopParseBtn);
         });
     }
 
@@ -403,7 +395,9 @@ function setupEventListeners() {
         }
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
-            syncEmails();
+            const from = document.querySelector('#parse-date-from')?.value;
+            const to = document.querySelector('#parse-date-to')?.value;
+            startParse(from, to, syncBtn, document.querySelector('#stop-parse-btn'));
         }
         if (e.key === 'Escape') {
             const drawer = document.querySelector('#settings-drawer');
@@ -1916,59 +1910,6 @@ function filterTransactions(searchTerm) {
 }
 
 
-// Sync emails via API (sync runs in background on server; this returns right away)
-async function syncEmails() {
-    if (!syncBtn) return;
-    if (DEMO_MODE) {
-        return;
-    }
-    if (!await hasActiveAuthSession()) {
-        handleAuthRequired();
-        return;
-    }
-    
-    const originalHTML = syncBtn.innerHTML;
-    const previousSignature = buildTransactionSignature(allTransactions);
-
-    syncBtn.textContent = 'Starting sync...';
-    syncBtn.disabled = true;
-    setSyncStatus('Sync requested', 'Polling Gmail for fresh receipt activity.');
-
-    try {
-        const response = await authFetch(`${API_BASE_URL}/api/sync`, { method: 'POST' });
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            throw new Error(result.detail || `API returned ${response.status}`);
-        }
-
-        syncRunId = result.run_id || null;
-        syncBtn.textContent = 'Syncing...';
-        startSyncRefreshLoop(previousSignature, originalHTML);
-        
-    } catch (error) {
-        console.error('Sync failed:', error);
-        syncBtn.textContent = 'Sync Failed';
-
-        const isGmailNotConnected = (error.message || '').toLowerCase().includes('google oauth not connected') ||
-            (error.message || '').toLowerCase().includes('oauth not connected');
-
-        setTimeout(() => {
-            syncBtn.innerHTML = originalHTML;
-            syncBtn.disabled = false;
-        }, 2000);
-
-        if (isGmailNotConnected) {
-            setSyncStatus('Gmail not connected', 'Click "Connect Gmail" below to grant read-only access to your receipts, then sync again.');
-            connectGoogle();
-        } else {
-            const message = error.message || 'Email sync failed. Make sure the API is running and Gmail is configured.';
-            setSyncStatus('Sync failed', message);
-            showError(message);
-        }
-    }
-}
-
 let _activeSyncRunId = null;
 
 async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
@@ -1978,7 +1919,8 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
     if (dateFrom) body.date_from = dateFrom;
     if (dateTo)   body.date_to   = dateTo;
 
-    if (parseBtn) { parseBtn.textContent = 'Parsing...'; parseBtn.disabled = true; }
+    const originalLabel = parseBtn?.textContent || 'Sync Emails';
+    if (parseBtn) { parseBtn.textContent = 'Syncing...'; parseBtn.disabled = true; }
     if (stopParseBtn) stopParseBtn.hidden = false;
 
     const logEl = document.querySelector('#demo-run-log');
@@ -2006,7 +1948,7 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
                 if (s.status === 'completed' || s.status === 'failed') {
                     clearInterval(pollLog);
                     _activeSyncRunId = null;
-                    if (parseBtn) { parseBtn.textContent = 'Parse'; parseBtn.disabled = false; }
+                    if (parseBtn) { parseBtn.textContent = originalLabel; parseBtn.disabled = false; }
                     if (stopParseBtn) stopParseBtn.hidden = true;
                     loadDashboardData();
                 }
@@ -2016,7 +1958,7 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
     } catch (error) {
         if (logEl) logEl.textContent = `Error: ${error.message}`;
         showError(error.message);
-        if (parseBtn) { parseBtn.textContent = 'Parse'; parseBtn.disabled = false; }
+        if (parseBtn) { parseBtn.textContent = originalLabel; parseBtn.disabled = false; }
         if (stopParseBtn) stopParseBtn.hidden = true;
     }
 }
@@ -2030,10 +1972,10 @@ async function stopActiveParse(parseBtn, stopParseBtn) {
         } catch(e) {}
         _activeSyncRunId = null;
     }
-    if (parseBtn) { parseBtn.textContent = 'Parse'; parseBtn.disabled = false; }
+    if (parseBtn) { parseBtn.textContent = parseBtn.dataset.origLabel || 'Sync Emails'; parseBtn.disabled = false; }
     if (stopParseBtn) stopParseBtn.hidden = true;
     const logEl = document.querySelector('#demo-run-log');
-    if (logEl) logEl.textContent = 'Parse stopped.';
+    if (logEl) logEl.textContent = 'Sync stopped.';
 }
 
 async function buildAuthHeaders() {
@@ -3414,7 +3356,9 @@ function setupNavDrawer() {
     if (navSyncBtn) {
         navSyncBtn.addEventListener('click', function() {
             closeNavDrawer();
-            syncEmails();
+            const from = document.querySelector('#parse-date-from')?.value;
+            const to = document.querySelector('#parse-date-to')?.value;
+            startParse(from, to, syncBtn, document.querySelector('#stop-parse-btn'));
         });
     }
 

@@ -165,12 +165,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelector('#gmail-connect-btn')?.addEventListener('click', async () => {
         try {
             const data = await apiFetch('/api/google/auth-url');
-            if (data.auth_url) window.open(data.auth_url, '_blank');
-        } catch(e) { alert('Could not get Gmail auth URL.'); }
+            if (data.auth_url) window.location.href = data.auth_url;
+        } catch(e) { alert(e.message || 'Could not get Gmail auth URL.'); }
     });
 
     // Sign out
-    document.querySelector('#signout-btn')?.addEventListener('click', () => {
+    document.querySelector('#signout-btn')?.addEventListener('click', async () => {
+        try { if (_firebaseAuth) await _firebaseAuth.signOut(); } catch(e) {}
         localStorage.removeItem('AUTH_TOKEN');
         location.href = 'index.html';
     });
@@ -206,7 +207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await apiFetch('/api/transactions/clear', { method: 'DELETE' });
             showFeedback('budget-feedback', '✓ All transactions cleared', false);
-        } catch(e) { alert('Clear failed. Please try again.'); }
+        } catch(e) { alert('Clear failed: ' + (e.message || 'unknown error')); }
     });
 });
 

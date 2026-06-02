@@ -599,6 +599,33 @@ def auth_me(request: Request):
     user = _require_user(request)
     return {"id": user.id, "username": user.username, "email": user.email, "firebase_uid": user.firebase_uid}
 
+@app.get("/api/gmail-status")
+def gmail_status(request: Request):
+    user = _require_user(request)
+    connected = False
+    email = None
+    try:
+        token = _get_google_refresh_token_for_user(user.id)
+        connected = token is not None
+        if connected:
+            if firestore_enabled():
+                fc = _get_firestore_client()
+                if fc:
+                    doc = fc.collection(settings.firebase_firestore_tokens_collection).document(_firebase_doc_id_for_user(user)).get()
+                    if doc.exists:
+                        email = (doc.to_dict() or {}).get("email")
+            else:
+                db = SessionLocal()
+                try:
+                    row = db.query(GoogleCredential).filter(GoogleCredential.user_id == user.id).first()
+                    if row:
+                        email = row.email
+                finally:
+                    db.close()
+    except Exception:
+        pass
+    return {"connected": connected, "email": email}
+
 @app.get("/api/google/auth-url")
 def google_auth_url(request: Request):
     user = _require_user(request)
