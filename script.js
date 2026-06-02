@@ -181,11 +181,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (DEMO_MODE || currentUser) {
             const _landing = document.querySelector('#landing');
             const _app = document.querySelector('#app-container');
-            // On index.html (landing only, no app-container): redirect to console
-            if (!DEMO_MODE && currentUser && !_app) {
-                window.location.href = 'console.html';
-                return;
-            }
+            // On index.html there is no app-container — just leave landing visible
+            if (!_app) return;
             if (_landing) _landing.hidden = true;
             if (_app) _app.hidden = false;
             loadDashboardData();
