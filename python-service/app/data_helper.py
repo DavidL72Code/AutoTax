@@ -83,16 +83,17 @@ def log_transaction(parsed_data:dict, user_id: str | int | None = None):
             print(f"Transaction already exists (email_id): {parsed_data.get('email_id')}")
             return existing
 
-        # Deduplicate by order number — different emails about the same order
+        # Deduplicate by order number — different emails about the same order.
+        # Do NOT filter by vendor: slight name differences between emails would
+        # let duplicates slip through (e.g. "Amazon" vs "Amazon.com").
         order_number = parsed_data.get('order_number')
         if order_number:
             existing_order = db.query(Transaction).filter(
                 Transaction.order_number == order_number,
                 Transaction.user_id == user_id,
-                Transaction.vendor == (parsed_data.get('vendor') or 'Unknown'),
             ).first()
             if existing_order:
-                print(f"Duplicate order number {order_number} for {parsed_data.get('vendor')} — skipping")
+                print(f"Duplicate order number {order_number} — skipping")
                 return existing_order
 
         transaction=Transaction(

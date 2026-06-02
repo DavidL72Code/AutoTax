@@ -209,14 +209,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch(e) { alert('Export failed. Please try again.'); }
     });
 
-    // Remove duplicates
-    document.querySelector('#dedup-btn')?.addEventListener('click', async () => {
-        try {
-            const data = await apiFetch('/api/transactions/deduplicate', { method: 'POST' });
-            showFeedback('budget-feedback', `✓ ${data.message}`, false);
-        } catch(e) { alert('Dedup failed: ' + (e.message || 'unknown error')); }
-    });
-
     // Clear all
     document.querySelector('#clear-btn')?.addEventListener('click', async () => {
         if (!confirm('Delete all transactions? This cannot be undone.')) return;
