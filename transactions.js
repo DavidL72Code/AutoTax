@@ -15,6 +15,33 @@ async function apiFetch(path, opts = {}) {
     return res.json();
 }
 
+// Initialize Firebase auth and refresh the stored ID token before any API calls.
+async function initFirebaseAuth() {
+    try {
+        const res = await fetch(API_BASE_URL + '/api/config');
+        const cfg = await res.json();
+        const fb = cfg && cfg.firebase;
+        if (!fb || !fb.apiKey || !window.firebase) return;
+        if (!window.firebase.apps.length) window.firebase.initializeApp(fb);
+        const auth = window.firebase.auth();
+        await new Promise(resolve => {
+            auth.onIdTokenChanged(async user => {
+                if (user) {
+                    try {
+                        const token = await user.getIdToken();
+                        localStorage.setItem('AUTH_TOKEN', token);
+                    } catch(e) {}
+                } else {
+                    localStorage.removeItem('AUTH_TOKEN');
+                }
+                resolve();
+            });
+        });
+    } catch(e) {
+        // Fall back to whatever token is already in localStorage
+    }
+}
+
 function fmtCurrency(v) {
     const n = parseFloat(v) || 0;
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -338,16 +365,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const contentEl = document.querySelector('#tx-content');
     const emptyEl = document.querySelector('#tx-empty');
 
-    if (loadingEl) loadingEl.hidden = true;
+    // Refresh Firebase ID token before fetching so it's never stale
+    await initFirebaseAuth();
 
     if (getToken()) {
         try {
             const data = await apiFetch('/api/transactions');
             allTx = (data.transactions || []).filter(t => parseFloat(t.amount) > 0);
         } catch(err) {
-            console.error(err);
+            console.error('Failed to load transactions:', err);
         }
     }
+
+    if (loadingEl) loadingEl.hidden = true;
 
     if (allTx.length === 0) {
         if (emptyEl) emptyEl.hidden = false;

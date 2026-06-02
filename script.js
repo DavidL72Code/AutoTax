@@ -179,9 +179,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return bootstrapAuth();
     }).then(() => {
         if (DEMO_MODE || currentUser) {
-            // Show app container for demo or logged-in users
             const _landing = document.querySelector('#landing');
             const _app = document.querySelector('#app-container');
+            // On index.html (landing only, no app-container): redirect to console
+            if (!DEMO_MODE && currentUser && !_app) {
+                window.location.href = 'console.html';
+                return;
+            }
             if (_landing) _landing.hidden = true;
             if (_app) _app.hidden = false;
             loadDashboardData();
@@ -660,10 +664,17 @@ function setAuthState(user) {
     }
     if (currentUser) {
         setSyncStatus('Inbox scan ready', 'Run Scan Emails below to refresh your latest receipts.');
-        // Show app, hide landing
         const _landing = document.querySelector('#landing');
         const _app = document.querySelector('#app-container');
         const _navAcc = document.querySelector('#nav-account-section');
+        // On index.html (no app-container): redirect to console and swap landing CTAs
+        if (!_app) {
+            const _ctaOut = document.querySelector('#landing-cta-loggedout');
+            const _ctaIn = document.querySelector('#landing-cta-loggedin');
+            if (_ctaOut) _ctaOut.hidden = true;
+            if (_ctaIn) _ctaIn.hidden = false;
+            return;
+        }
         if (_landing) _landing.hidden = true;
         if (_app) _app.hidden = false;
         if (_navAcc) _navAcc.hidden = false;
@@ -671,10 +682,14 @@ function setAuthState(user) {
         if (_gmailEl) _gmailEl.textContent = currentUser.email || currentUser.username || 'Connected';
     } else {
         setSyncStatus('Secure inbox connection', 'Log in to connect Gmail and unlock live receipt sync.');
-        // Show landing, hide app
         const _landing = document.querySelector('#landing');
         const _app = document.querySelector('#app-container');
         const _navAcc = document.querySelector('#nav-account-section');
+        // On console.html (no landing): redirect logged-out users to index
+        if (!_landing && _app) {
+            window.location.href = 'index.html';
+            return;
+        }
         if (_landing) _landing.hidden = false;
         if (_app) _app.hidden = true;
         if (_navAcc) _navAcc.hidden = true;

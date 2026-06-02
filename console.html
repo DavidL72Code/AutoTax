@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ReceiptAuto - Smart Receipt Tracking</title>
+    <title>Transaction Console — ReceiptAuto</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -23,10 +23,9 @@
                 <button class="btn-signup">Sign up</button>
             </div>
         </div>
-        <!-- Simple dropdown nav menu -->
         <div id="nav-menu" class="nav-dropdown" hidden>
-            <a href="index.html" class="nav-dropdown-item nav-dropdown-active">Home</a>
-            <a href="console.html" class="nav-dropdown-item">Transaction Console</a>
+            <a href="index.html" class="nav-dropdown-item">Home</a>
+            <a href="console.html" class="nav-dropdown-item nav-dropdown-active">Transaction Console</a>
             <a href="transactions.html" class="nav-dropdown-item">Spend Analytics</a>
             <a href="advisor.html" class="nav-dropdown-item">Not a Financial Advisor</a>
             <div class="nav-dropdown-divider"></div>
@@ -45,30 +44,14 @@
                 </div>
                 <button id="nav-close" class="nav-close-btn" aria-label="Close">×</button>
             </div>
-
-            <!-- Navigation -->
             <div class="nav-panel-section">
                 <div class="nav-section-label">Navigate</div>
                 <button class="nav-item nav-item-active" data-nav="dashboard">
                     <span class="nav-item-icon">⊞</span>
                     <span>Transactions</span>
                 </button>
-                <div class="nav-item-wrapper">
-                    <button class="nav-item" data-nav="spend">
-                        <span class="nav-item-icon">◑</span>
-                        <span>Spend</span>
-                    </button>
-                    <div class="nav-spend-periods">
-                        <button class="spend-period-nav-btn spend-period-nav-active" data-period="monthly">Monthly</button>
-                        <button class="spend-period-nav-btn" data-period="weekly">Weekly</button>
-                        <button class="spend-period-nav-btn" data-period="annually">Annually</button>
-                    </div>
-                </div>
             </div>
-
             <div class="nav-panel-divider"></div>
-
-            <!-- Appearance -->
             <div class="nav-panel-section">
                 <div class="nav-section-label">Appearance</div>
                 <div class="nav-settings-row">
@@ -89,10 +72,7 @@
                     </select>
                 </div>
             </div>
-
             <div class="nav-panel-divider"></div>
-
-            <!-- Display settings -->
             <div class="nav-panel-section">
                 <div class="nav-section-label">Display</div>
                 <div class="nav-settings-row">
@@ -115,10 +95,7 @@
                     </div>
                 </div>
             </div>
-
             <div class="nav-panel-divider"></div>
-
-            <!-- Account (shown when logged in) -->
             <div class="nav-panel-section" id="nav-account-section" hidden>
                 <div class="nav-section-label">Account</div>
                 <div class="nav-settings-row">
@@ -136,10 +113,7 @@
                     <button id="nav-sync-btn" class="btn-action-primary">Sync now</button>
                 </div>
             </div>
-
             <div class="nav-panel-divider"></div>
-
-            <!-- Data actions -->
             <div class="nav-panel-section">
                 <div class="nav-section-label">Data</div>
                 <div class="nav-data-actions">
@@ -152,48 +126,180 @@
 
     <main class="dashboard-shell">
 
-        <!-- ── Landing: shown when logged out ──────────────────────────── -->
-        <section id="landing" class="landing-section">
-            <div class="landing-hero">
-                <div class="landing-badge">AI-powered · Gmail receipt parsing</div>
-                <h1 class="landing-title">Your spending,<br>automatically tracked.</h1>
-                <p class="landing-sub">ReceiptAuto reads your Gmail receipts and extracts every purchase — vendor, amount, category, date — with zero manual input.</p>
-                <div class="landing-cta" id="landing-cta-loggedout">
-                    <button id="landing-get-started" class="btn-action-primary">Get Started</button>
-                    <a href="demo.html" class="btn-action">Try Demo</a>
-                    <button id="landing-tour-btn" class="btn-action">How it works</button>
-                </div>
-                <div class="landing-cta" id="landing-cta-loggedin" hidden>
-                    <a href="console.html" class="btn-action-primary">Open Console</a>
-                    <a href="transactions.html" class="btn-action">Spend Analytics</a>
-                    <a href="demo.html" class="btn-action">Try Demo</a>
-                </div>
-            </div>
-            <div class="landing-steps">
-                <div class="landing-step">
-                    <div class="landing-step-num">01</div>
-                    <div class="landing-step-content">
-                        <h3>Connect Gmail</h3>
-                        <p>Grant read-only access once. We only scan receipt-type emails — never personal messages.</p>
-                    </div>
-                </div>
-                <div class="landing-step">
-                    <div class="landing-step-num">02</div>
-                    <div class="landing-step-content">
-                        <h3>Click Scan Emails</h3>
-                        <p>One click scans your inbox and automatically extracts every receipt transaction via AI.</p>
-                    </div>
-                </div>
-                <div class="landing-step">
-                    <div class="landing-step-num">03</div>
-                    <div class="landing-step-content">
-                        <h3>Track your spend</h3>
-                        <p>Browse your full transaction log, view weekly / monthly / annual spend charts, set budgets.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <!-- ── App container: always visible on this page ──────────────────── -->
+        <div id="app-container">
 
+            <!-- ── Transaction Console ───────────────────────────────────────── -->
+            <section class="dashboard-section app-section" id="dashboard" data-section="dashboard">
+                <div class="section-container">
+
+                    <!-- Stats strip -->
+                    <div class="stats-strip">
+                        <div class="stat-card-hero">
+                            <div class="stat-content">
+                                <div class="stat-label-large">Total Spent</div>
+                                <div class="stat-value-large skeleton-target">$0.00</div>
+                                <div class="stat-change-positive">Across all synced receipts</div>
+                            </div>
+                        </div>
+                        <div class="stat-card-hero">
+                            <div class="stat-content">
+                                <div class="stat-label-large">Receipts</div>
+                                <div class="stat-value-large skeleton-target">0</div>
+                                <div class="stat-change-neutral">Queued and processed</div>
+                            </div>
+                        </div>
+                        <div class="stat-card-hero">
+                            <div class="stat-content">
+                                <div class="stat-label-large">Vendors</div>
+                                <div class="stat-value-large skeleton-target">0</div>
+                                <div class="stat-change-neutral">Unique merchants found</div>
+                            </div>
+                        </div>
+                        <div class="stat-card-hero">
+                            <div class="stat-content">
+                                <div class="stat-label-large">Avg. Ticket</div>
+                                <div class="stat-value-large skeleton-target">$0.00</div>
+                                <div class="stat-change-negative">Per transaction average</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Budget mini-bar -->
+                    <div class="budget-mini-bar">
+                        <div class="budget-mini-header">
+                            <span class="budget-mini-label">Monthly Budget</span>
+                            <span id="expense-budget-used" class="budget-mini-pct">0% used</span>
+                            <span id="expense-budget-current" class="budget-mini-current">$0</span>
+                            <span class="budget-mini-sep">/</span>
+                            <span id="expense-budget-target" class="budget-mini-target">—</span>
+                        </div>
+                        <div class="budget-mini-track">
+                            <span id="expense-budget-fill" class="budget-mini-fill" style="width:0%"></span>
+                        </div>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="section-header-main">
+                        <div>
+                            <h2 class="section-title">Transaction Console</h2>
+                            <p class="section-subtitle">
+                                <strong id="sync-status-title">Inbox sync ready</strong>
+                                <span id="sync-status-meta"> · Connect Gmail and run a sync to refresh this dashboard.</span>
+                            </p>
+                        </div>
+                        <div class="section-actions">
+                            <div class="search-wrapper">
+                                <input type="text" placeholder="Search transactions…" class="search-input">
+                                <kbd class="search-shortcut">⌘K</kbd>
+                            </div>
+                            <button id="export-csv" class="btn-action">Export CSV</button>
+                            <button class="btn-action btn-connect-google">Connect Gmail</button>
+                            <button id="sync-emails" class="btn-action-primary">Scan Emails</button>
+                        </div>
+                        <div class="parse-controls">
+                            <label class="parse-date-label">From</label>
+                            <input type="date" id="parse-date-from" class="parse-date-input">
+                            <label class="parse-date-label">To</label>
+                            <input type="date" id="parse-date-to" class="parse-date-input">
+                            <button id="stop-parse-btn" class="btn-action btn-danger" hidden>Stop</button>
+                        </div>
+                    </div>
+
+                    <div id="duplicate-warning" class="duplicate-warning" hidden>
+                        <span class="duplicate-warning-icon">!</span>
+                        <span id="duplicate-warning-text">Possible duplicate transactions detected. Check entries with matching vendor, amount, and date.</span>
+                        <button id="duplicate-dismiss" class="duplicate-dismiss" type="button">Dismiss</button>
+                    </div>
+
+                    <div class="date-filter-bar">
+                        <button class="date-filter-btn date-filter-active" data-filter="all">All time</button>
+                        <button class="date-filter-btn" data-filter="1y">This year</button>
+                        <button class="date-filter-btn" data-filter="3m">3 months</button>
+                        <button class="date-filter-btn" data-filter="30d">Last 30 days</button>
+                    </div>
+
+                    <div class="demo-run-panel">
+                        <div class="demo-run-header">
+                            <h3 class="demo-run-title">Parser Log</h3>
+                            <p class="demo-run-subtitle">Live parser output from the most recent run.</p>
+                        </div>
+                        <pre id="demo-run-log" class="demo-run-log">No parse run yet.</pre>
+                    </div>
+
+                    <!-- Onboarding card (shown when no transactions exist) -->
+                    <div id="onboarding-card" class="onboarding-card" hidden>
+                        <h3 class="onboarding-title">Get started in 3 steps</h3>
+                        <div class="onboarding-steps">
+                            <div class="onboarding-step">
+                                <div class="onboarding-step-num">1</div>
+                                <div>
+                                    <div class="onboarding-step-title">Connect Gmail</div>
+                                    <div class="onboarding-step-desc">Authorize read-only access so ReceiptAuto can find receipt emails in your inbox.</div>
+                                </div>
+                            </div>
+                            <div class="onboarding-step">
+                                <div class="onboarding-step-num">2</div>
+                                <div>
+                                    <div class="onboarding-step-title">Scan Emails</div>
+                                    <div class="onboarding-step-desc">Click Scan Emails to scan your inbox and extract transaction data automatically.</div>
+                                </div>
+                            </div>
+                            <div class="onboarding-step">
+                                <div class="onboarding-step-num">3</div>
+                                <div>
+                                    <div class="onboarding-step-title">See Your Spending</div>
+                                    <div class="onboarding-step-desc">Your transactions, trends, and category breakdown appear here in real time.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="onboarding-actions">
+                            <button class="btn-action-primary btn-connect-google-onboard">Connect Gmail to start</button>
+                            <button id="onboard-tour-btn" class="btn-action">How it works</button>
+                        </div>
+                    </div>
+
+                    <!-- Transactions Table -->
+                    <div class="table-wrapper">
+                        <table class="transactions-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable sortable-date" data-sort="date" title="Click to sort">
+                                        <div class="th-content"><span>Date</span><span class="sort-arrow" aria-hidden="true"></span></div>
+                                    </th>
+                                    <th><div class="th-content"><span>Vendor</span></div></th>
+                                    <th class="sortable sortable-amount" data-sort="amount" title="Click to sort">
+                                        <div class="th-content"><span>Amount</span><span class="sort-arrow" aria-hidden="true"></span></div>
+                                    </th>
+                                    <th class="sortable sortable-tax" data-sort="tax" title="Click to sort">
+                                        <div class="th-content"><span>Tax</span><span class="sort-arrow" aria-hidden="true"></span></div>
+                                    </th>
+                                    <th><div class="th-content"><span>Category</span></div></th>
+                                    <th><div class="th-content"><span>Edit</span></div></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination footer -->
+                    <div class="table-footer">
+                        <div id="table-info" class="table-info">No transactions</div>
+                        <div class="pagination" id="pagination">
+                            <button id="prev-page" class="page-btn" type="button" disabled>← Prev</button>
+                            <span id="page-indicator" class="page-indicator">1 / 1</span>
+                            <button id="next-page" class="page-btn" type="button" disabled>Next →</button>
+                        </div>
+                        <select id="page-size-select" class="page-size-select" aria-label="Rows per page">
+                            <option value="25">25 / page</option>
+                            <option value="50">50 / page</option>
+                            <option value="100">100 / page</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+        </div><!-- /#app-container -->
     </main>
 
     <!-- Hidden elements kept in DOM for JS compatibility -->
@@ -204,7 +310,6 @@
         <span id="expense-period-label"></span>
         <div id="hero-vendor-list"></div>
         <div id="expense-budget-note"></div>
-        <!-- Budget editor (hidden; nav drawer budget inputs are wired separately) -->
         <input id="expense-budget-input" type="number" />
         <button id="expense-budget-save" type="button"></button>
         <button id="expense-budget-reset" type="button"></button>
