@@ -3,43 +3,57 @@
 // ── Shared setup ─────────────────────────────────────────────────────────────
 const API_BASE_URL = window.API_BASE_URL;
 
-function getToken() { return localStorage.getItem('AUTH_TOKEN') || ''; }
+let _firebaseAuth = null;
+let _firebaseReadyPromise = null;
+
+function _initFirebase() {
+    if (_firebaseReadyPromise) return _firebaseReadyPromise;
+    _firebaseReadyPromise = (async () => {
+        try {
+            const res = await fetch(API_BASE_URL + '/api/config');
+            const cfg = await res.json();
+            const fb = cfg && cfg.firebase;
+            if (!fb || !fb.apiKey || !window.firebase) return;
+            if (!window.firebase.apps.length) window.firebase.initializeApp(fb);
+            _firebaseAuth = window.firebase.auth();
+            await new Promise(resolve => {
+                let resolved = false;
+                _firebaseAuth.onIdTokenChanged(async user => {
+                    if (user) {
+                        try {
+                            const token = await user.getIdToken();
+                            localStorage.setItem('AUTH_TOKEN', token);
+                        } catch(e) {}
+                    }
+                    // Never remove the token — the backend JWT is still valid even if Firebase has no session
+                    if (!resolved) { resolved = true; resolve(); }
+                });
+            });
+        } catch(e) {}
+    })();
+    return _firebaseReadyPromise;
+}
+
+async function getToken() {
+    await _initFirebase();
+    if (_firebaseAuth && _firebaseAuth.currentUser) {
+        try {
+            const token = await _firebaseAuth.currentUser.getIdToken();
+            localStorage.setItem('AUTH_TOKEN', token);
+            return token;
+        } catch(e) {}
+    }
+    return localStorage.getItem('AUTH_TOKEN') || '';
+}
 
 async function apiFetch(path, opts = {}) {
-    const token = getToken();
+    const token = await getToken();
     const res = await fetch(API_BASE_URL + path, {
         ...opts,
         headers: { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     if (!res.ok) throw new Error(`API ${res.status}`);
     return res.json();
-}
-
-// Initialize Firebase auth and refresh the stored ID token before any API calls.
-async function initFirebaseAuth() {
-    try {
-        const res = await fetch(API_BASE_URL + '/api/config');
-        const cfg = await res.json();
-        const fb = cfg && cfg.firebase;
-        if (!fb || !fb.apiKey || !window.firebase) return;
-        if (!window.firebase.apps.length) window.firebase.initializeApp(fb);
-        const auth = window.firebase.auth();
-        await new Promise(resolve => {
-            auth.onIdTokenChanged(async user => {
-                if (user) {
-                    try {
-                        const token = await user.getIdToken();
-                        localStorage.setItem('AUTH_TOKEN', token);
-                    } catch(e) {}
-                } else {
-                    localStorage.removeItem('AUTH_TOKEN');
-                }
-                resolve();
-            });
-        });
-    } catch(e) {
-        // Fall back to whatever token is already in localStorage
-    }
 }
 
 function fmtCurrency(v) {
@@ -365,16 +379,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const contentEl = document.querySelector('#tx-content');
     const emptyEl = document.querySelector('#tx-empty');
 
-    // Refresh Firebase ID token before fetching so it's never stale
-    await initFirebaseAuth();
-
-    if (getToken()) {
-        try {
-            const data = await apiFetch('/api/transactions');
-            allTx = (data.transactions || []).filter(t => parseFloat(t.amount) > 0);
-        } catch(err) {
-            console.error('Failed to load transactions:', err);
-        }
+    try {
+        const data = await apiFetch('/api/transactions');
+        allTx = (Array.isArray(data) ? data : (data.transactions || [])).filter(t => parseFloat(t.amount) > 0);
+    } catch(err) {
+        console.error('Failed to load transactions:', err);
     }
 
     if (loadingEl) loadingEl.hidden = true;
