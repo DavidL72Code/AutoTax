@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     google_oauth_client_id: Optional[str] = None
     google_oauth_client_secret: Optional[str] = None
     google_oauth_redirect_uri: Optional[str] = None
+    frontend_url: Optional[str] = None
     fernet_key: Optional[str] = None
     firebase_project_id: Optional[str] = None
     firebase_service_account_path: Optional[str] = None

@@ -637,27 +637,38 @@ def google_auth_url(request: Request):
 
 @app.get("/api/google/callback")
 def google_oauth_callback(code: str = None, state: str = None, error: str = None):
-    frontend_url = settings.google_oauth_redirect_uri or ""
-    # Derive frontend origin from the redirect URI (strip the path)
-    from urllib.parse import urlparse
-    parsed = urlparse(frontend_url)
-    origin = f"{parsed.scheme}://{parsed.netloc}"
-    app_url = origin if origin and origin != "://" else "/"
+    from fastapi.responses import HTMLResponse as _HTMLResponse
+    frontend = (settings.frontend_url or "").rstrip("/")
+
+    def _page(success: bool, message: str):
+        color = "#4ade80" if success else "#f87171"
+        label = "Gmail Connected" if success else "Connection Failed"
+        redirect = f'<script>setTimeout(()=>{{window.location.href="{frontend}";}},2500);</script>' if frontend else ""
+        back = f'<a href="{frontend}" style="color:#aaa;font-size:0.85rem;text-decoration:none;">Back to app</a>' if frontend else ""
+        return _HTMLResponse(content=f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>{label}</title>
+<style>body{{margin:0;background:#0a0a0a;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;}}
+.dot{{width:56px;height:56px;border-radius:50%;background:{color};display:flex;align-items:center;justify-content:center;font-size:1.6rem;}}
+h2{{margin:0;font-size:1.2rem;}}p{{margin:0;color:#aaa;font-size:0.88rem;}}</style>
+{redirect}</head><body>
+<div class="dot">{"✓" if success else "✗"}</div>
+<h2>{label}</h2><p>{message}</p>{back}
+</body></html>""")
 
     if error:
-        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason={error}")
+        return _page(False, f"Google returned: {error}")
 
     client_id = settings.google_oauth_client_id or ""
     client_secret = settings.google_oauth_client_secret or ""
-    redirect_uri = frontend_url
+    redirect_uri = settings.google_oauth_redirect_uri or ""
     if not client_id or not client_secret or not redirect_uri:
-        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=config_missing")
+        return _page(False, "OAuth credentials are not configured on the server.")
 
     try:
         state_data = json.loads(_decrypt_token(state))
         user_id = str(state_data.get("user_id"))
     except Exception:
-        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=invalid_state")
+        return _page(False, "Invalid session state. Please try again.")
 
     try:
         flow = Flow.from_client_config(
@@ -675,15 +686,15 @@ def google_oauth_callback(code: str = None, state: str = None, error: str = None
         flow.fetch_token(code=code)
         creds = flow.credentials
         if not creds or not creds.refresh_token:
-            return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=no_refresh_token")
+            return _page(False, "No refresh token returned. Try revoking access in your Google account and connecting again.")
 
         enc_refresh = _encrypt_token(creds.refresh_token)
         email = getattr(creds, "account", None)
         _save_google_refresh_token_for_user(user_id, email, enc_refresh)
     except Exception as e:
-        return RedirectResponse(url=f"{app_url}/index.html?gmail=error&reason=token_exchange_failed")
+        return _page(False, f"Token exchange failed: {e}")
 
-    return RedirectResponse(url=f"{app_url}/index.html?gmail=connected")
+    return _page(True, "Your Gmail is connected. You can now sync receipts." + (" Redirecting…" if frontend else ""))
 
 def _nonzero_transactions(transactions):
     """Filter out transactions with amount 0 or None (no expenditure)."""
