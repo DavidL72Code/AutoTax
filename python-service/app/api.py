@@ -840,38 +840,70 @@ def _is_cancelled(run_id):
     with SYNC_LOCK:
         return SYNC_RUNS.get(run_id, {}).get("cancelled", False)
 
+def _append_sync_log(run_id: str, line: str):
+    if not run_id:
+        return
+    with SYNC_LOCK:
+        run = SYNC_RUNS.get(run_id)
+        if run is None:
+            return
+        run.setdefault("logs", [])
+        run["logs"].append(f"[{datetime.utcnow().strftime('%H:%M:%S')}] {line}")
+        if len(run["logs"]) > 500:
+            run["logs"] = run["logs"][-500:]
+
 def _run_sync(user_id: int, run_id: str | None = None, date_from: str | None = None, date_to: str | None = None):
     """Run email sync in background with optional progress tracking and date range."""
     def _status(status: str, message: str = ""):
         if run_id:
             _update_sync_run(run_id, status=status, message=message, updated_at=_now_iso())
 
+    def _progress(message: str):
+        """Update the live status message and append it to the scan log."""
+        _status("running", message)
+        _append_sync_log(run_id, message)
+
     try:
-        _status("running", "Connecting to Gmail…")
+        _progress("Connecting to Gmail…")
         from .main import main
         refresh_token = _get_google_refresh_token_for_user(user_id)
         if not refresh_token:
             _status("failed", "Google account not connected. Use Connect Gmail to authorise.")
+            _append_sync_log(run_id, "Google account not connected.")
             return
         client_id = settings.google_oauth_client_id or ""
         client_secret = settings.google_oauth_client_secret or ""
         if not client_id or not client_secret:
             _status("failed", "Server OAuth configuration missing.")
+            _append_sync_log(run_id, "Server OAuth configuration missing.")
             return
         if _is_cancelled(run_id):
             _status("failed", "Cancelled.")
             return
         gmail_creds = credentials_from_refresh_token(refresh_token, client_id, client_secret)
-        _status("running", "Fetching and parsing emails…")
-        main(user_id=user_id, gmail_creds=gmail_creds, date_from=date_from, date_to=date_to, run_id=run_id, is_cancelled=_is_cancelled)
+        _progress("Searching inbox for receipts…")
+        summary = main(
+            user_id=user_id,
+            gmail_creds=gmail_creds,
+            date_from=date_from,
+            date_to=date_to,
+            run_id=run_id,
+            is_cancelled=_is_cancelled,
+            progress=_progress,
+        )
         if _is_cancelled(run_id):
             _status("failed", "Cancelled.")
             return
         delete_zero_amount_transactions(user_id=user_id)
         _print_db_snapshot(user_id=user_id)
-        _status("completed", "Sync finished. New receipts are ready.")
+        saved = (summary or {}).get("saved", 0)
+        skipped = (summary or {}).get("skipped", 0)
+        scanned = (summary or {}).get("scanned", 0)
+        _append_sync_log(run_id, f"Done. Scanned {scanned}, saved {saved}, skipped {skipped}.")
+        _status("completed", f"Scan finished — {saved} new receipt(s) saved.")
     except Exception as e:
         _status("failed", str(e))
+        _append_sync_log(run_id, f"Error: {e}")
         print(f"❌ Sync failed: {e}")
 
 def _require_api_key(request: Request):
@@ -1380,6 +1412,7 @@ def sync_emails(request: Request, payload: dict = Body(default={})):
                 "user_id": user.id,
                 "status": "queued",
                 "message": "Queued…",
+                "logs": [],
                 "started_at": _now_iso(),
                 "updated_at": _now_iso(),
                 "cancelled": False,

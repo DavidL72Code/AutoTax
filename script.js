@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (_gmailParam) {
         history.replaceState(null, '', window.location.pathname);
         if (_gmailParam === 'connected') {
-            showSuccess('Gmail connected! Click Sync Emails to import your receipts.');
+            showSuccess('Gmail connected! Click Scan Emails to import your receipts.');
         } else {
             showError('Gmail connection failed. Please try again.');
         }
@@ -659,7 +659,7 @@ function setAuthState(user) {
         signupBtn.textContent = currentUser ? 'Log out' : 'Sign up';
     }
     if (currentUser) {
-        setSyncStatus('Inbox sync ready', 'Run Sync Emails below to refresh your latest receipts.');
+        setSyncStatus('Inbox scan ready', 'Run Scan Emails below to refresh your latest receipts.');
         // Show app, hide landing
         const _landing = document.querySelector('#landing');
         const _app = document.querySelector('#app-container');
@@ -1911,12 +1911,12 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
     if (dateFrom) body.date_from = dateFrom;
     if (dateTo)   body.date_to   = dateTo;
 
-    const originalLabel = parseBtn?.textContent || 'Sync Emails';
-    if (parseBtn) { parseBtn.textContent = 'Syncing...'; parseBtn.disabled = true; }
+    const originalLabel = parseBtn?.textContent || 'Scan Emails';
+    if (parseBtn) { parseBtn.textContent = 'Scanning...'; parseBtn.disabled = true; }
     if (stopParseBtn) stopParseBtn.hidden = false;
 
     const logEl = document.querySelector('#demo-run-log');
-    if (logEl) logEl.textContent = 'Starting parse…';
+    if (logEl) logEl.textContent = 'Starting scan…';
 
     try {
         const response = await authFetch(`${API_BASE_URL}/api/sync`, {
@@ -1936,7 +1936,14 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
             try {
                 const sr = await authFetch(`${API_BASE_URL}/api/sync-status?run_id=${_activeSyncRunId}`);
                 const s = await sr.json().catch(() => ({}));
-                if (logEl && s.message) logEl.textContent = s.message;
+                if (logEl) {
+                    if (s.logs && s.logs.length) {
+                        logEl.textContent = s.logs.join('\n');
+                        logEl.scrollTop = logEl.scrollHeight;
+                    } else if (s.message) {
+                        logEl.textContent = s.message;
+                    }
+                }
                 if (s.status === 'completed' || s.status === 'failed') {
                     clearInterval(pollLog);
                     _activeSyncRunId = null;
@@ -1964,10 +1971,10 @@ async function stopActiveParse(parseBtn, stopParseBtn) {
         } catch(e) {}
         _activeSyncRunId = null;
     }
-    if (parseBtn) { parseBtn.textContent = parseBtn.dataset.origLabel || 'Sync Emails'; parseBtn.disabled = false; }
+    if (parseBtn) { parseBtn.textContent = parseBtn.dataset.origLabel || 'Scan Emails'; parseBtn.disabled = false; }
     if (stopParseBtn) stopParseBtn.hidden = true;
     const logEl = document.querySelector('#demo-run-log');
-    if (logEl) logEl.textContent = 'Sync stopped.';
+    if (logEl) logEl.textContent = 'Scan stopped.';
 }
 
 async function buildAuthHeaders() {
@@ -2246,7 +2253,7 @@ function startSyncRefreshLoop(previousSignature, originalHTML) {
                     if (statusResp.ok) {
                         const statusData = await statusResp.json().catch(() => ({}));
                         const msg = statusData.message || '';
-                        if (msg) setSyncStatus('Syncing…', msg);
+                        if (msg) setSyncStatus('Scanning…', msg);
                         if (statusData.status === 'completed' || statusData.status === 'failed') {
                             const failed = statusData.status === 'failed';
                             syncRunId = null;
@@ -2787,8 +2794,8 @@ const TOUR_STEPS = [
     },
     {
         icon: '',
-        title: 'Sync & track transactions',
-        desc: 'Once connected, click <span class="tour-highlight">Sync Emails</span> to scan your inbox. Transactions appear in the table below — searchable, sortable, and filterable by date or category.'
+        title: 'Scan & track transactions',
+        desc: 'Once connected, click <span class="tour-highlight">Scan Emails</span> to scan your inbox. Transactions appear in the table below — searchable, sortable, and filterable by date or category.'
     },
     {
         icon: '',
