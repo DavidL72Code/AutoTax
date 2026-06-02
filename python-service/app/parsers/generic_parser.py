@@ -50,6 +50,21 @@ def _extract_amount_value(email_text: str) -> Optional[float]:
             parsed_value = _parse_currency_value(match.group(1))
             if parsed_value is not None:
                 return parsed_value
+
+    # Fallback: in HTML receipts the label and amount often sit in separate
+    # table cells, landing on separate lines. Search the whole text and allow
+    # a whitespace/newline gap between a *strong* total label and the amount.
+    # Only unambiguous "final total" labels here — bare "total" is too risky
+    # in a whole-text search (it would match line items like "Item total").
+    cross_line = re.search(
+        r'\b(?:grand\s+total|order\s+total|total\s+amount|amount\s+charged|'
+        r'amount\s+due|balance\s+due(?:\s+now)?)\b'
+        r'\s*[:\-]?\s*(?:USD?|US)?\s*\$?\s*([\d,]+\.\d{2})\b',
+        email_text,
+        re.IGNORECASE,
+    )
+    if cross_line:
+        return _parse_currency_value(cross_line.group(1))
     return None
 
 

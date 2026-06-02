@@ -190,7 +190,14 @@ def get_email_body(payload):
         soup = BeautifulSoup(" ".join(html_parts), 'html.parser')
         for hidden in soup(["script", "style", "meta", "noscript"]):
             hidden.decompose()
-        return " ".join(soup.get_text(separator=' ').split())
+        # Preserve line structure: the parsers iterate splitlines() with
+        # line-anchored amount/tax patterns, and the AI helper keeps only the
+        # lines near financial keywords. Flattening to one line broke both —
+        # the regex anchors never matched and the AI only saw the first 500
+        # chars (the top of the email, not the total at the bottom).
+        text = soup.get_text(separator='\n')
+        lines = [re.sub(r'[ \t]+', ' ', ln).strip() for ln in text.splitlines()]
+        return "\n".join(ln for ln in lines if ln)
 
     return ""
 
