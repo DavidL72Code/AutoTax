@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "info"
 
+    # Comma-separated list of extra allowed CORS origins (in addition to frontend_url).
+    cors_allow_origins: Optional[str] = None
+
 settings = Settings()
 
 # Strip whitespace that can sneak in from env var editors (e.g. trailing newlines in Render).

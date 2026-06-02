@@ -125,14 +125,14 @@ def log_transaction(parsed_data:dict, user_id: str | int | None = None):
 
 def get_all_transactions(user_id: str | int | None = None):
     """Get all transactions from database"""
+    # Require a user_id so a missing scope can never return every user's data.
+    if user_id is None:
+        raise ValueError("get_all_transactions requires a user_id")
     if firestore_enabled():
         return get_all_firestore_transactions(user_id=user_id)
     db = SessionLocal()
     try:
-        query = db.query(Transaction)
-        if user_id is not None:
-            query = query.filter(Transaction.user_id == user_id)
-        transactions = query.all()
+        transactions = db.query(Transaction).filter(Transaction.user_id == user_id).all()
         return transactions
     finally:
         db.close()
@@ -140,14 +140,13 @@ def get_all_transactions(user_id: str | int | None = None):
 
 def get_existing_email_ids(user_id: str | int | None = None):
     """Return set of Gmail message ids we already have as transactions. Use before fetch/parse to skip duplicates."""
+    if user_id is None:
+        raise ValueError("get_existing_email_ids requires a user_id")
     if firestore_enabled():
         return get_existing_firestore_email_ids(user_id=user_id)
     db = SessionLocal()
     try:
-        query = db.query(Transaction.email_id)
-        if user_id is not None:
-            query = query.filter(Transaction.user_id == user_id)
-        rows = query.all()
+        rows = db.query(Transaction.email_id).filter(Transaction.user_id == user_id).all()
         return set(r[0] for r in rows if r[0])
     finally:
         db.close()
@@ -155,15 +154,15 @@ def get_existing_email_ids(user_id: str | int | None = None):
 
 def delete_zero_amount_transactions(user_id: str | int | None = None):
     """Remove all transactions with amount 0 or None from the database. Returns count deleted."""
+    if user_id is None:
+        raise ValueError("delete_zero_amount_transactions requires a user_id")
     if firestore_enabled():
         return delete_zero_firestore_transactions(user_id=user_id)
     db = SessionLocal()
     try:
         query = db.query(Transaction).filter(
             (Transaction.amount.is_(None)) | (Transaction.amount == 0)
-        )
-        if user_id is not None:
-            query = query.filter(Transaction.user_id == user_id)
+        ).filter(Transaction.user_id == user_id)
         to_delete = query.all()
         count = len(to_delete)
         for t in to_delete:
@@ -198,6 +197,8 @@ def deduplicate_transactions_for_user(user_id: str | int | None) -> int:
 
 
 def clear_transactions_for_user(user_id: str | int | None):
+    if user_id is None:
+        raise ValueError("clear_transactions_for_user requires a user_id")
     if firestore_enabled():
         return clear_firestore_transactions(user_id=user_id)
     db = SessionLocal()

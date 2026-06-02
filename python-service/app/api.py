@@ -1,4 +1,5 @@
 import os
+import time
 import threading
 import json
 import hashlib
@@ -73,10 +74,31 @@ DEMO_PARSE_LOCK = threading.Lock()
 SYNC_RUNS = {}
 SYNC_LOCK = threading.Lock()
 
-# Allow your website to call the API
+# Lightweight in-memory rate limiter for unauthenticated/abuse-prone endpoints.
+_RATE_BUCKETS: dict = {}
+_RATE_LOCK = threading.Lock()
+
+# Allow your website to call the API.
+# Build an explicit allowlist instead of "*" so a wildcard origin can't drive
+# the API on a user's behalf. Always include localhost for local dev.
+def _build_cors_origins() -> list[str]:
+    origins = {
+        "http://localhost:8000", "http://127.0.0.1:8000",
+        "http://localhost:5500", "http://127.0.0.1:5500",
+        "http://localhost:3000", "http://127.0.0.1:3000",
+    }
+    if settings.frontend_url:
+        origins.add(settings.frontend_url.strip().rstrip("/"))
+    if settings.cors_allow_origins:
+        for o in settings.cors_allow_origins.split(","):
+            o = o.strip().rstrip("/")
+            if o:
+                origins.add(o)
+    return sorted(origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your domain
+    allow_origins=_build_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -246,17 +268,23 @@ def _upsert_user_from_firebase_claims(claims: dict) -> User:
     if not firebase_uid:
         raise HTTPException(status_code=401, detail="Invalid Firebase token")
 
+    # Only trust the email for linking to a pre-existing account when the
+    # provider verified it. Otherwise an unverified Firebase email could be
+    # used to take over a local account that registered with the same email.
+    email_verified = bool((claims or {}).get("email_verified"))
+    link_email = email if email_verified else ""
+
     if firestore_enabled():
         user = get_user_by_firebase_uid(firebase_uid)
-        if not user and email:
-            user = get_user_by_email(email)
+        if not user and link_email:
+            user = get_user_by_email(link_email)
         if user:
             updated = False
             if user.firebase_uid != firebase_uid:
                 user.firebase_uid = firebase_uid
                 updated = True
-            if email and user.email != email:
-                user.email = email
+            if link_email and user.email != link_email:
+                user.email = link_email
                 updated = True
             preferred_username = _sanitize_username(display_name or user.username or email or "user")
             if user.username != preferred_username:
@@ -269,7 +297,7 @@ def _upsert_user_from_firebase_claims(claims: dict) -> User:
 
         user = create_user_record(
             username=_next_available_username(None, display_name or email or "user"),
-            email=email or None,
+            email=link_email or None,
             firebase_uid=firebase_uid,
             password_hash=_hash_password(secrets.token_urlsafe(32)),
         )
@@ -279,16 +307,16 @@ def _upsert_user_from_firebase_claims(claims: dict) -> User:
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
-        if not user and email:
-            user = db.query(User).filter(User.email == email).first()
+        if not user and link_email:
+            user = db.query(User).filter(User.email == link_email).first()
 
         if user:
             updated = False
             if user.firebase_uid != firebase_uid:
                 user.firebase_uid = firebase_uid
                 updated = True
-            if email and user.email != email:
-                user.email = email
+            if link_email and user.email != link_email:
+                user.email = link_email
                 updated = True
             preferred_username = _sanitize_username(display_name or user.username or email or "user")
             if user.username != preferred_username:
@@ -303,7 +331,7 @@ def _upsert_user_from_firebase_claims(claims: dict) -> User:
         username = _next_available_username(db, display_name or email or "user")
         user = User(
             username=username,
-            email=email or None,
+            email=link_email or None,
             firebase_uid=firebase_uid,
             password_hash=_hash_password(secrets.token_urlsafe(32)),
         )
@@ -415,6 +443,24 @@ def _require_user(request: Request) -> User:
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def _rate_limit(request: Request, bucket: str, max_calls: int, window_seconds: int):
+    """Throttle by client IP. Raises 429 when the caller exceeds max_calls in the window.
+    In-memory only (per process) — a basic abuse/cost guard, not a hard quota."""
+    now = time.time()
+    key = f"{bucket}:{_client_ip(request)}"
+    with _RATE_LOCK:
+        hits = [t for t in _RATE_BUCKETS.get(key, []) if now - t < window_seconds]
+        if len(hits) >= max_calls:
+            raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
+        hits.append(now)
+        _RATE_BUCKETS[key] = hits
 
 def _get_fernet() -> Fernet:
     key = settings.fernet_key or ""
@@ -720,7 +766,8 @@ h2{{margin:0;font-size:1.2rem;}}p{{margin:0;color:#aaa;font-size:0.88rem;}}</sty
         email = getattr(creds, "account", None)
         _save_google_refresh_token_for_user(user_id, email, enc_refresh)
     except Exception as e:
-        return _page(False, f"Token exchange failed: {e}")
+        print(f"❌ Token exchange failed: {e}")
+        return _page(False, "Could not connect your Gmail account. Please try again.")
 
     return _page(True, "Your Gmail is connected. You can now sync receipts." + (" Redirecting…" if frontend else ""))
 
@@ -762,7 +809,8 @@ def get_transactions(request: Request):
             for t in transactions
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching transactions: {str(e)}")
+        print(f"❌ Error fetching transactions: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch transactions")
 
 @app.get("/api/stats")
 def get_stats(request: Request):
@@ -782,7 +830,8 @@ def get_stats(request: Request):
             "avg_transaction": round(avg_transaction, 2)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching stats: {str(e)}")
+        print(f"❌ Error fetching stats: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch stats")
 
 @app.get("/api/top-vendors")
 def get_top_vendors(request: Request):
@@ -817,7 +866,8 @@ def get_top_vendors(request: Request):
             for vendor, amount in top_vendors
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching top vendors: {str(e)}")
+        print(f"❌ Error fetching top vendors: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch top vendors")
 
 @app.post("/api/transactions/deduplicate")
 def deduplicate_transactions(request: Request):
@@ -834,7 +884,8 @@ def cleanup_zero_transactions(request: Request):
         deleted = delete_zero_amount_transactions(user_id=user.id)
         return {"status": "success", "deleted": deleted, "message": f"Removed {deleted} zero-amount transaction(s)."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+        print(f"❌ Cleanup failed: {e}")
+        raise HTTPException(status_code=500, detail="Cleanup failed")
 
 def _update_sync_run(run_id: str, **kwargs):
     with SYNC_LOCK:
@@ -1432,7 +1483,8 @@ def sync_emails(request: Request, payload: dict = Body(default={})):
         thread.start()
         return {"status": "success", "run_id": run_id, "message": "Sync started."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed to start: {str(e)}")
+        print(f"❌ Sync failed to start: {e}")
+        raise HTTPException(status_code=500, detail="Sync failed to start")
 
 @app.post("/api/sync-stop")
 def sync_stop(request: Request, payload: dict = Body(default={})):
@@ -1457,6 +1509,7 @@ def sync_status(request: Request, run_id: str):
 @app.post("/api/demo-sync")
 def demo_sync(request: Request):
     """Generate demo emails with AI, parse them, and store transactions."""
+    _rate_limit(request, "demo-ai", max_calls=5, window_seconds=60)
     try:
         demo_user = _get_demo_user()
         from .parser_select import parser_select
@@ -1481,22 +1534,26 @@ def demo_sync(request: Request):
         _demo_emails_path().write_text(json.dumps(demo_rows, indent=2))
         return {"status": "success", "count": len(demo_rows)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Demo sync failed: {e}")
+        print(f"❌ Demo sync failed: {e}")
+        raise HTTPException(status_code=500, detail="Demo sync failed")
 
 @app.post("/api/demo-generate")
 def demo_generate(request: Request):
     """Generate demo emails only (no parsing)."""
+    _rate_limit(request, "demo-ai", max_calls=5, window_seconds=60)
     try:
         emails = _generate_demo_emails(10)
         demo_rows = _prepare_demo_emails(emails)
         _demo_emails_path().write_text(json.dumps(demo_rows, indent=2))
         return {"status": "success", "count": len(demo_rows)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Demo generation failed: {e}")
+        print(f"❌ Demo generation failed: {e}")
+        raise HTTPException(status_code=500, detail="Demo generation failed")
 
 @app.post("/api/demo-parse")
 def demo_parse(request: Request, force_reprocess: bool = False):
     """Parse existing demo emails in background and expose progress logs."""
+    _rate_limit(request, "demo-ai", max_calls=5, window_seconds=60)
     try:
         demo_user = _get_demo_user()
         run_id = uuid.uuid4().hex
@@ -1511,7 +1568,8 @@ def demo_parse(request: Request, force_reprocess: bool = False):
                 status_code=500,
                 detail="Demo is unavailable: the server's Firestore service account lacks the required permissions. Check that the Firebase service account has the 'Cloud Datastore User' IAM role."
             )
-        raise HTTPException(status_code=500, detail=f"Demo parse failed to start: {e}")
+        print(f"❌ Demo parse failed to start: {e}")
+        raise HTTPException(status_code=500, detail="Demo parse failed to start")
 
 @app.get("/api/demo-parse-status")
 def demo_parse_status(request: Request, run_id: str):
@@ -1600,25 +1658,29 @@ def get_demo_top_vendors(request: Request):
 @app.delete("/api/demo/clear")
 def clear_demo_transactions(request: Request):
     """Clear all demo transactions."""
+    _rate_limit(request, "demo-write", max_calls=30, window_seconds=60)
     demo_user = _get_demo_user()
     deleted = clear_transactions_for_user(demo_user.id)
     return {"status": "success", "deleted": deleted}
 
 @app.put("/api/demo/transactions/{transaction_id}")
-def update_demo_transaction(transaction_id: str, payload: dict = Body(...)):
+def update_demo_transaction(transaction_id: str, request: Request, payload: dict = Body(...)):
     """Update a demo transaction without auth."""
+    _rate_limit(request, "demo-write", max_calls=30, window_seconds=60)
     demo_user = _get_demo_user()
     try:
         tx = update_transaction_for_user(str(transaction_id), payload, demo_user.id)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        print(f"❌ update_demo_transaction failed: {exc}")
+        raise HTTPException(status_code=400, detail="Could not update transaction")
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"status": "success", "id": tx.id}
 
 @app.delete("/api/demo/transactions/{transaction_id}")
-def delete_demo_transaction(transaction_id: str):
+def delete_demo_transaction(transaction_id: str, request: Request):
     """Delete a demo transaction without auth."""
+    _rate_limit(request, "demo-write", max_calls=30, window_seconds=60)
     demo_user = _get_demo_user()
     deleted = delete_transaction_for_user(str(transaction_id), demo_user.id)
     if not deleted:
@@ -1702,7 +1764,8 @@ async def vendor_pie(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chart generation failed: {e}")
+        print(f"❌ Chart generation failed: {e}")
+        raise HTTPException(status_code=500, detail="Chart generation failed")
 
 @app.put("/api/transactions/{transaction_id}")
 def update_transaction(request: Request, transaction_id: str, payload: dict = Body(...)):
@@ -1711,7 +1774,8 @@ def update_transaction(request: Request, transaction_id: str, payload: dict = Bo
     try:
         tx = update_transaction_for_user(str(transaction_id), payload, user.id)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        print(f"❌ update_transaction failed: {exc}")
+        raise HTTPException(status_code=400, detail="Could not update transaction")
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"status": "success", "id": tx.id}
@@ -1858,7 +1922,8 @@ Advisor:"""
             model=settings.gemini_model,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=f"AI service unavailable: {exc}")
+        print(f"❌ AI service unavailable: {exc}")
+        raise HTTPException(status_code=503, detail="AI service unavailable")
 
     return {"response": response_text, "status": "success"}
 

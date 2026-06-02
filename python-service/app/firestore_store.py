@@ -296,9 +296,10 @@ def ensure_demo_user(password_hash: str) -> UserRecord:
 def get_all_transactions(user_id: str | int | None = None) -> list[TransactionRecord]:
     if not firestore_enabled():
         return []
-    query = _transactions()
-    if user_id is not None:
-        query = query.where("user_id", "==", str(user_id))
+    # Require a user_id so a missing scope can never return every user's data.
+    if user_id is None:
+        raise ValueError("get_all_transactions requires a user_id")
+    query = _transactions().where("user_id", "==", str(user_id))
     docs = query.stream()
     return sorted((_transaction_from_doc(doc) for doc in docs), key=lambda t: t.date or datetime.min, reverse=True)
 
@@ -442,10 +443,12 @@ def clear_transactions(user_id: str | int | None = None) -> int:
 def update_transaction(transaction_id: str, *, user_id: str | int | None, payload: dict) -> TransactionRecord | None:
     if not firestore_enabled():
         return None
+    if user_id is None:
+        raise ValueError("update_transaction requires a user_id")
     transaction = get_transaction_by_id(transaction_id)
     if not transaction:
         return None
-    if user_id is not None and str(transaction.user_id) != str(user_id):
+    if str(transaction.user_id) != str(user_id):
         return None
 
     updates = {"updated_at": _now()}
@@ -471,10 +474,12 @@ def update_transaction(transaction_id: str, *, user_id: str | int | None, payloa
 def delete_transaction(transaction_id: str, *, user_id: str | int | None) -> bool:
     if not firestore_enabled():
         return False
+    if user_id is None:
+        raise ValueError("delete_transaction requires a user_id")
     transaction = get_transaction_by_id(transaction_id)
     if not transaction:
         return False
-    if user_id is not None and str(transaction.user_id) != str(user_id):
+    if str(transaction.user_id) != str(user_id):
         return False
     _transactions().document(str(transaction_id)).delete()
     return True
