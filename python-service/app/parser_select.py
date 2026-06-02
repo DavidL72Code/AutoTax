@@ -26,6 +26,8 @@ _PROMO_BODY = re.compile(
 )
 _PURCHASE_SIGNALS = re.compile(
     r'\border\s*(#|number|id|confirmation)\b'
+    r'|\b(?:order|grand)\s+total\b'                  # "Order total $11.60" / "Grand total"
+    r'|\border\s+[0-9]{6,}\b'                         # "order 8210689700343416"
     r'|\btotal\s*(due|charged|paid|amount)\b'
     r'|\breceipt\s*(#|number|for)\b'
     r'|\byour\s*(order|purchase|payment)\s*(has been|was|is)\b'
