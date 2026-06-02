@@ -103,6 +103,10 @@ _ORDER_NUMBER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Bare "order 8210689700343416" with no #/number/id keyword (e.g. AliExpress).
+# Require 6+ digits so it can't match words like "order confirmed" / "order total".
+_BARE_ORDER_NUMBER_RE = re.compile(r'\border\s+([0-9]{6,})\b', re.IGNORECASE)
+
 def _extract_order_number(text: str) -> str | None:
     for line in text.splitlines():
         m = _ORDER_NUMBER_RE.search(line)
@@ -112,6 +116,11 @@ def _extract_order_number(text: str) -> str | None:
             if candidate.isdigit() and len(candidate) < 6:
                 continue
             return candidate
+    # Fallback: keyword-less "order <digits>"
+    for line in text.splitlines():
+        m = _BARE_ORDER_NUMBER_RE.search(line)
+        if m:
+            return m.group(1).strip()
     return None
 
 def regex_parsing(email_text: str) -> dict:
