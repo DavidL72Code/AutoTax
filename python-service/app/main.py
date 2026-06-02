@@ -33,7 +33,7 @@ def main(user_id: str | int | None = None, gmail_creds=None, date_from: str | No
         parsed_data = parser_select(email)
         if not parsed_data or not isinstance(parsed_data, dict):
             skipped += 1
-            report(f"[{index}/{total}] Skipped — could not parse receipt.")
+            report(f"[{index}/{total}] Skipped — promotional or non-receipt email.")
             continue
 
         amount = parsed_data.get('amount') or 0.0

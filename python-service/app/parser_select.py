@@ -15,9 +15,11 @@ _PROMO_SUBJECT = re.compile(
     r'\b(deals?|sale|% off|discount|coupon|promo|offer|flash|saving|app.only|exclusive|download.to.get|limited.time|special.price|participating.store)\b',
     re.IGNORECASE,
 )
+# NOTE: do not include a bare "unsubscribe" here — nearly every commercial
+# email (including legitimate receipts) has an unsubscribe link in its footer,
+# so it is not a reliable marketing signal and was dropping real receipts.
 _PROMO_BODY = re.compile(
     r'you are receiving this email because you (are a registered member|subscribed|signed up)'
-    r'|unsubscribe\b'
     r'|this is a marketing email'
     r'|to stop receiving (promotional|marketing)',
     re.IGNORECASE,
