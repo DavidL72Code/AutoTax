@@ -2824,7 +2824,7 @@ function showNotification(message, variant) {
         max-width: 400px;
         font-weight: 600;
     `;
-    notification.textContent = `${isSuccess ? 'Success' : 'Notice'}: ${message}`;
+    notification.textContent = isSuccess ? `${message}` : `${message}`;
     
     document.body.appendChild(notification);
     

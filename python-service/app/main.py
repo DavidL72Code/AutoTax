@@ -10,6 +10,8 @@ def main(user_id: str | int | None = None, gmail_creds=None, date_from: str | No
             print("Parse cancelled.")
             return
         parsed_data = parser_select(email)
+        if parsed_data is None:
+            continue
 
         if parsed_data and isinstance(parsed_data, dict):
             print(

@@ -64,7 +64,9 @@ def fetch_receipt_emails(max_results=50, days_back=180, date_from=None, date_to=
 
         query = (
             '(subject:"receipt" OR subject:"confirmation" OR subject:"payment" OR subject:"order" OR subject:"invoice") '
-            '-subject:"shipping update" -subject:"delivered" -subject:"newsletter" '
+            '-subject:"shipping update" -subject:"out for delivery" -subject:"delivered" '
+            '-subject:"newsletter" -subject:"unsubscribe" -subject:"deal" -subject:"sale" '
+            '-category:promotions '
         )
         if date_from:
             query += f'after:{date_from.replace("-", "/")} '
