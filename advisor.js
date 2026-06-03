@@ -2,16 +2,108 @@
 
 const API_BASE_URL = window.API_BASE_URL;
 
-function getToken() { return localStorage.getItem('AUTH_TOKEN') || ''; }
+let _firebaseAuth = null;
+let _firebaseReadyPromise = null;
+
+function openLoginFallback() {
+    const shouldRedirect = window.confirm('Your session may have expired. Go back to the home page to log in again?');
+    if (shouldRedirect) {
+        window.location.href = 'index.html';
+    }
+}
+
+function setupThemeFromStorage() {
+    const saved = localStorage.getItem('ra_theme');
+    if (saved === 'light') document.documentElement.classList.add('light-mode');
+}
+
+function mapNetworkError(err) {
+    const message = String(err && err.message ? err.message : err || '');
+    if (message.includes('Failed to fetch')) {
+        return 'Could not reach the server. Check your connection or API URL and try again.';
+    }
+    if (message.includes('401')) {
+        return 'Your session expired. Please log in again.';
+    }
+    if (message.includes('503')) {
+        return 'The AI service is temporarily unavailable. Please try again in a moment.';
+    }
+    return message || 'Request failed.';
+}
+
+function parseJwtPayload(token) {
+    try {
+        return JSON.parse(atob(String(token).split('.')[1]));
+    } catch (error) {
+        return null;
+    }
+}
+
+function isTokenExpired(token) {
+    const payload = parseJwtPayload(token);
+    if (!payload || !payload.exp) return false;
+    return Date.now() >= (Number(payload.exp) * 1000);
+}
+
+function hasUsableFirebaseConfig(cfg) {
+    return Boolean(cfg && cfg.apiKey && cfg.authDomain && cfg.projectId && cfg.appId);
+}
+
+async function _initFirebase() {
+    if (_firebaseReadyPromise) return _firebaseReadyPromise;
+    _firebaseReadyPromise = (async () => {
+        try {
+            const res = await fetch(API_BASE_URL + '/api/public-config', { cache: 'no-store' });
+            if (!res.ok) return;
+            const cfg = await res.json().catch(() => ({}));
+            const fb = cfg && cfg.firebase;
+            if (!hasUsableFirebaseConfig(fb) || !window.firebase) return;
+            if (!window.firebase.apps.length) window.firebase.initializeApp(fb);
+            _firebaseAuth = window.firebase.auth();
+            await new Promise(resolve => {
+                let resolved = false;
+                _firebaseAuth.onIdTokenChanged(async user => {
+                    if (user) {
+                        try {
+                            const token = await user.getIdToken();
+                            localStorage.setItem('AUTH_TOKEN', token);
+                        } catch (e) {}
+                    }
+                    if (!resolved) {
+                        resolved = true;
+                        resolve();
+                    }
+                });
+            });
+        } catch (e) {}
+    })();
+    return _firebaseReadyPromise;
+}
+
+async function getToken() {
+    await _initFirebase();
+    if (_firebaseAuth && _firebaseAuth.currentUser) {
+        try {
+            const token = await _firebaseAuth.currentUser.getIdToken();
+            localStorage.setItem('AUTH_TOKEN', token);
+            return token;
+        } catch (e) {}
+    }
+    const token = localStorage.getItem('AUTH_TOKEN') || '';
+    return isTokenExpired(token) ? '' : token;
+}
 
 async function apiFetch(path, opts = {}) {
-    const token = getToken();
+    const token = await getToken();
     const res = await fetch(API_BASE_URL + path, {
         ...opts,
         headers: { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+            localStorage.removeItem('AUTH_TOKEN');
+        }
         throw new Error(body.detail || `API ${res.status}`);
     }
     return res.json();
@@ -27,8 +119,7 @@ function setupNav() {
         if (!hamburger.contains(e.target) && !menu.contains(e.target)) menu.hidden = true;
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') menu.hidden = true; });
-    const saved = localStorage.getItem('ra_theme');
-    if (saved === 'light') document.documentElement.classList.add('light-mode');
+    setupThemeFromStorage();
 }
 
 // ── Markdown-lite renderer ────────────────────────────────────────────────────
@@ -112,10 +203,11 @@ async function sendMessage(text) {
         chatHistory.push({ role: 'assistant', content: response });
     } catch(err) {
         removeThinking();
-        const errMsg = err.message.includes('503')
-            ? 'The AI service is temporarily unavailable. Please try again in a moment.'
-            : `Something went wrong: ${err.message}`;
+        const errMsg = `Something went wrong: ${mapNetworkError(err)}`;
         appendMessage('assistant', errMsg);
+        if (String(err.message || '').includes('401')) {
+            openLoginFallback();
+        }
     } finally {
         isThinking = false;
         if (sendBtn) sendBtn.disabled = false;
@@ -129,11 +221,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // User label if signed in
     try {
-        const token = getToken();
+        const token = await getToken();
         if (token) {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            const payload = parseJwtPayload(token);
             const label = document.querySelector('#nav-user-label');
-            if (label && payload.email) label.textContent = payload.email;
+            if (label && payload && payload.email) label.textContent = payload.email;
         }
     } catch(e) {}
 
