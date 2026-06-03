@@ -104,52 +104,193 @@ async function requireAuth() {
 }
 
 // ── Period helpers ────────────────────────────────────────────────────────────
-function getPeriodBounds(period) {
-    const now = new Date();
-    let curStart, curEnd, prevStart, prevEnd, labels, intervalFn;
-
-    if (period === 'weekly') {
-        const day = now.getDay();
-        const mon = new Date(now); mon.setHours(0,0,0,0);
-        mon.setDate(now.getDate() - ((day + 6) % 7));
-        curStart = mon; curEnd = new Date();
-        prevStart = new Date(mon); prevStart.setDate(mon.getDate() - 7);
-        prevEnd = new Date(mon); prevEnd.setMilliseconds(-1);
-        labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-        intervalFn = d => ((new Date(d).getDay() + 6) % 7);
-    } else if (period === 'monthly') {
-        curStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        curEnd = new Date();
-        prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        prevEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const weeks = Math.ceil(daysInMonth / 7);
-        labels = Array.from({length: weeks}, (_, i) => `Wk ${i+1}`);
-        intervalFn = d => Math.min(Math.floor((new Date(d).getDate() - 1) / 7), labels.length - 1);
-    } else {
-        curStart = new Date(now.getFullYear(), 0, 1);
-        curEnd = new Date();
-        prevStart = new Date(now.getFullYear() - 1, 0, 1);
-        prevEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
-        labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        intervalFn = d => new Date(d).getMonth();
-    }
-    return { curStart, curEnd, prevStart, prevEnd, labels, intervalFn };
+function parseIsoDateParts(dateStr) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+    if (!match) return null;
+    return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
 }
 
-function computePeriod(txs, start, end, labels, fn) {
-    const buckets = new Array(labels.length).fill(0);
-    let total = 0, count = 0;
-    txs.forEach(tx => {
-        const d = new Date(tx.date);
-        if (d >= start && d <= end) {
-            const amt = parseFloat(tx.amount) || 0;
-            const idx = fn(d);
-            if (idx >= 0 && idx < buckets.length) buckets[idx] += amt;
-            total += amt; count++;
-        }
+function isoDateToUtcDate(isoDate) {
+    const parts = parseIsoDateParts(isoDate);
+    if (!parts) return null;
+    return new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0));
+}
+
+function dateToIsoUtc(date) {
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : '';
+}
+
+function getTodayIsoDate() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
+}
+
+function addDaysIso(isoDate, days) {
+    const date = isoDateToUtcDate(isoDate);
+    if (!date) return '';
+    date.setUTCDate(date.getUTCDate() + days);
+    return dateToIsoUtc(date);
+}
+
+function diffDaysInclusive(startIso, endIso) {
+    const start = isoDateToUtcDate(startIso);
+    const end = isoDateToUtcDate(endIso);
+    if (!start || !end) return 0;
+    return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+function startOfWeekUtc(date) {
+    const copy = new Date(date.getTime());
+    const day = copy.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    copy.setUTCDate(copy.getUTCDate() + diff);
+    return copy;
+}
+
+function formatDateRangeLabel(startIso, endIso, mode) {
+    const startDate = isoDateToUtcDate(startIso);
+    const endDate = isoDateToUtcDate(endIso);
+    if (!startDate || !endDate) return 'Selected period';
+
+    if (mode === 'month') {
+        return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'America/New_York' }).format(startDate);
+    }
+    if (mode === 'year') {
+        return String(startDate.getUTCFullYear());
+    }
+
+    const startLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }).format(startDate);
+    const endLabel = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' }).format(endDate);
+    return `${startLabel} - ${endLabel}`;
+}
+
+function getPeriodRange(mode, startIso, endIso) {
+    const fallbackIso = getTodayIsoDate();
+    const safeStartIso = startIso || fallbackIso;
+    const safeEndIso = endIso || safeStartIso;
+    const startDate = isoDateToUtcDate(safeStartIso) || isoDateToUtcDate(fallbackIso);
+    const endDate = isoDateToUtcDate(safeEndIso) || startDate;
+
+    if (mode === 'custom') {
+        const normalizedStart = startDate <= endDate ? startDate : endDate;
+        const normalizedEnd = startDate <= endDate ? endDate : startDate;
+        const normalizedStartIso = dateToIsoUtc(normalizedStart);
+        const normalizedEndIso = dateToIsoUtc(normalizedEnd);
+        const spanDays = diffDaysInclusive(normalizedStartIso, normalizedEndIso);
+        return {
+            mode,
+            startIso: normalizedStartIso,
+            endIso: normalizedEndIso,
+            previousStartIso: addDaysIso(normalizedStartIso, -spanDays),
+            previousEndIso: addDaysIso(normalizedStartIso, -1),
+            label: formatDateRangeLabel(normalizedStartIso, normalizedEndIso),
+            comparisonLabel: `previous ${spanDays}-day period`
+        };
+    }
+
+    let rangeStart = new Date(startDate.getTime());
+    let rangeEnd = new Date(startDate.getTime());
+
+    if (mode === 'week') {
+        rangeStart = startOfWeekUtc(startDate);
+        rangeEnd = new Date(rangeStart.getTime());
+        rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 6);
+    } else if (mode === 'year') {
+        rangeStart = new Date(Date.UTC(startDate.getUTCFullYear(), 0, 1, 12, 0, 0));
+        rangeEnd = new Date(Date.UTC(startDate.getUTCFullYear(), 11, 31, 12, 0, 0));
+    } else {
+        rangeStart = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1, 12, 0, 0));
+        rangeEnd = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0, 12, 0, 0));
+        mode = 'month';
+    }
+
+    const rangeStartIso = dateToIsoUtc(rangeStart);
+    const rangeEndIso = dateToIsoUtc(rangeEnd);
+    const spanDays = diffDaysInclusive(rangeStartIso, rangeEndIso);
+
+    return {
+        mode,
+        startIso: rangeStartIso,
+        endIso: rangeEndIso,
+        previousStartIso: addDaysIso(rangeStartIso, -spanDays),
+        previousEndIso: addDaysIso(rangeStartIso, -1),
+        label: formatDateRangeLabel(rangeStartIso, rangeEndIso, mode),
+        comparisonLabel: mode === 'week' ? 'previous week' : mode === 'year' ? 'previous year' : 'previous month'
+    };
+}
+
+function filterTransactionsByRange(txs, startIso, endIso) {
+    const start = isoDateToUtcDate(startIso);
+    const end = isoDateToUtcDate(endIso);
+    if (!start || !end) return [];
+    return txs.filter(tx => {
+        const date = new Date(tx.date);
+        return !Number.isNaN(date.getTime()) && date >= start && date <= end;
     });
-    return { buckets, total, count };
+}
+
+function getChartBuckets(range) {
+    if (range.mode === 'week') {
+        return {
+            labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+            intervalFn: d => (d.getUTCDay() + 6) % 7
+        };
+    }
+    if (range.mode === 'year') {
+        return {
+            labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+            intervalFn: d => d.getUTCMonth()
+        };
+    }
+
+    if (range.mode === 'custom') {
+        const span = diffDaysInclusive(range.startIso, range.endIso);
+        if (span <= 14) {
+            const labels = [];
+            for (let i = 0; i < span; i++) {
+                const iso = addDaysIso(range.startIso, i);
+                const date = isoDateToUtcDate(iso);
+                labels.push(new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }).format(date));
+            }
+            return {
+                labels,
+                intervalFn: d => Math.max(0, Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0) - isoDateToUtcDate(range.startIso).getTime()) / 86400000))
+            };
+        }
+
+        const weeks = Math.ceil(span / 7);
+        return {
+            labels: Array.from({ length: weeks }, (_, i) => `Wk ${i + 1}`),
+            intervalFn: d => Math.min(weeks - 1, Math.floor(Math.max(0, Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0) - isoDateToUtcDate(range.startIso).getTime()) / 86400000)) / 7))
+        };
+    }
+
+    const startDate = isoDateToUtcDate(range.startIso);
+    const endDate = isoDateToUtcDate(range.endIso);
+    const daysInMonth = endDate && startDate ? endDate.getUTCDate() : 31;
+    const weeks = Math.ceil(daysInMonth / 7);
+    return {
+        labels: Array.from({ length: weeks }, (_, i) => `Wk ${i + 1}`),
+        intervalFn: d => Math.min(weeks - 1, Math.floor((d.getUTCDate() - 1) / 7))
+    };
+}
+
+function computePeriod(txs, range, labels, fn) {
+    const filtered = filterTransactionsByRange(txs, range.startIso, range.endIso);
+    const buckets = new Array(labels.length).fill(0);
+    let total = 0;
+    filtered.forEach(tx => {
+        const date = new Date(tx.date);
+        const amt = parseFloat(tx.amount) || 0;
+        const idx = fn(date);
+        if (idx >= 0 && idx < buckets.length) buckets[idx] += amt;
+        total += amt;
+    });
+    return { filtered, buckets, total, count: filtered.length };
 }
 
 // ── Bar chart ─────────────────────────────────────────────────────────────────
@@ -228,10 +369,17 @@ function drawBarChart(labels, cur, prev) {
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
-function updateStats(period, cur, prev) {
-    const labels = { weekly: ['This week','Last week'], monthly: ['This month','Last month'], annually: ['This year','Last year'] };
-    document.querySelector('#spend-current-label').textContent = labels[period][0];
-    document.querySelector('#spend-prev-label').textContent = labels[period][1];
+function updateStats(range, cur, prev) {
+    const currentLabel = range.label;
+    const previousLabel = range.comparisonLabel === 'previous week'
+        ? 'Previous week'
+        : range.comparisonLabel === 'previous year'
+            ? 'Previous year'
+            : range.comparisonLabel === 'previous month'
+                ? 'Previous month'
+                : 'Previous period';
+    document.querySelector('#spend-current-label').textContent = currentLabel;
+    document.querySelector('#spend-prev-label').textContent = previousLabel;
     document.querySelector('#spend-current-total').textContent = fmtCurrency(cur.total);
     document.querySelector('#spend-prev-total').textContent = fmtCurrency(prev.total);
     document.querySelector('#spend-current-count').textContent = cur.count + ' transaction' + (cur.count !== 1 ? 's' : '');
@@ -249,26 +397,22 @@ function updateStats(period, cur, prev) {
         const pct = ((cur.total - prev.total) / prev.total) * 100;
         changeEl.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
         changeEl.className = 'spend-stat-value ' + (pct > 0 ? 'spend-stat-negative' : 'spend-stat-positive');
-        descEl.textContent = 'vs previous ' + period.replace('ly','').replace('ually','al');
+        descEl.textContent = 'vs ' + range.comparisonLabel;
     }
 }
 
 // ── Top vendors ───────────────────────────────────────────────────────────────
-function updateVendors(period, txs, bounds) {
+function updateVendors(range, txs) {
     const list = document.querySelector('#spend-vendors-list');
     const title = document.querySelector('#spend-vendors-title');
-    const periodLabel = { weekly: 'this week', monthly: 'this month', annually: 'this year' }[period];
-    if (title) title.textContent = `Top vendors ${periodLabel}`;
+    if (title) title.textContent = `Top vendors for ${range.label}`;
 
     const map = {};
     txs.forEach(tx => {
-        const d = new Date(tx.date);
-        if (d >= bounds.curStart && d <= bounds.curEnd) {
-            const v = tx.vendor || 'Unknown';
-            if (!map[v]) map[v] = { total: 0, count: 0 };
-            map[v].total += parseFloat(tx.amount) || 0;
-            map[v].count++;
-        }
+        const v = tx.vendor || 'Unknown';
+        if (!map[v]) map[v] = { total: 0, count: 0 };
+        map[v].total += parseFloat(tx.amount) || 0;
+        map[v].count++;
     });
     const sorted = Object.entries(map).sort((a,b) => b[1].total - a[1].total).slice(0, 8);
 
@@ -340,21 +484,53 @@ function buildPieChart(txs, groupBy) {
 
 // ── Main render ───────────────────────────────────────────────────────────────
 let allTx = [];
-let currentPeriod = 'monthly';
+let currentPeriodMode = 'month';
+let currentStartIso = '';
+let currentEndIso = '';
+let currentPeriodTransactions = [];
 
-function renderPeriod(period) {
-    currentPeriod = period;
-    const bounds = getPeriodBounds(period);
-    const cur = computePeriod(allTx, bounds.curStart, bounds.curEnd, bounds.labels, bounds.intervalFn);
-    const prev = computePeriod(allTx, bounds.prevStart, bounds.prevEnd, bounds.labels, bounds.intervalFn);
+function updatePeriodControls() {
+    document.querySelectorAll('[data-period-mode]').forEach(btn => {
+        const isActive = btn.dataset.periodMode === currentPeriodMode;
+        btn.classList.toggle('date-filter-active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+    const endInput = document.querySelector('#period-end-date');
+    if (endInput) endInput.disabled = currentPeriodMode !== 'custom';
+    const summary = document.querySelector('#period-summary');
+    if (summary) {
+        const range = getPeriodRange(currentPeriodMode, currentStartIso, currentEndIso);
+        summary.textContent = `Showing ${range.label} compared with the ${range.comparisonLabel}.`;
+    }
+}
 
-    updateStats(period, cur, prev);
-    drawBarChart(bounds.labels, cur.buckets, prev.buckets);
-    updateVendors(period, allTx, bounds);
+function renderPeriod(mode = currentPeriodMode, startIso = currentStartIso, endIso = currentEndIso) {
+    currentPeriodMode = mode;
+    const range = getPeriodRange(mode, startIso, endIso);
+    currentStartIso = range.startIso;
+    currentEndIso = range.endIso;
 
-    document.querySelectorAll('.spend-tab').forEach(btn =>
-        btn.classList.toggle('spend-tab-active', btn.dataset.period === period)
-    );
+    const startInput = document.querySelector('#period-start-date');
+    const endInput = document.querySelector('#period-end-date');
+    if (startInput) startInput.value = currentStartIso;
+    if (endInput) endInput.value = currentEndIso;
+    updatePeriodControls();
+
+    const currentBuckets = getChartBuckets(range);
+    const previousRange = {
+        ...range,
+        startIso: range.previousStartIso,
+        endIso: range.previousEndIso
+    };
+    const previousBuckets = getChartBuckets(previousRange);
+    const cur = computePeriod(allTx, range, currentBuckets.labels, currentBuckets.intervalFn);
+    const prev = computePeriod(allTx, previousRange, previousBuckets.labels, previousBuckets.intervalFn);
+    currentPeriodTransactions = cur.filtered;
+
+    updateStats(range, cur, prev);
+    drawBarChart(currentBuckets.labels, cur.buckets, prev.buckets);
+    updateVendors(range, currentPeriodTransactions);
+    buildPieChart(currentPeriodTransactions, document.querySelector('#csv-group')?.value || 'vendor');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -381,16 +557,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Period tabs
-    document.querySelectorAll('.spend-tab').forEach(btn =>
-        btn.addEventListener('click', () => renderPeriod(btn.dataset.period))
+    // Period controls
+    document.querySelectorAll('[data-period-mode]').forEach(btn =>
+        btn.addEventListener('click', () => renderPeriod(btn.dataset.periodMode, currentStartIso, currentEndIso))
     );
+    const periodStartInput = document.querySelector('#period-start-date');
+    const periodEndInput = document.querySelector('#period-end-date');
+    const periodCurrentBtn = document.querySelector('#period-current-btn');
+    if (periodStartInput) {
+        periodStartInput.addEventListener('change', () => {
+            const seed = periodStartInput.value || getTodayIsoDate();
+            const endSeed = currentPeriodMode === 'custom' ? (periodEndInput?.value || seed) : seed;
+            renderPeriod(currentPeriodMode, seed, endSeed);
+        });
+    }
+    if (periodEndInput) {
+        periodEndInput.addEventListener('change', () => {
+            const seedStart = periodStartInput?.value || currentStartIso || getTodayIsoDate();
+            const seedEnd = periodEndInput.value || seedStart;
+            renderPeriod(currentPeriodMode, seedStart, seedEnd);
+        });
+    }
+    if (periodCurrentBtn) {
+        periodCurrentBtn.addEventListener('click', () => {
+            const today = getTodayIsoDate();
+            renderPeriod(currentPeriodMode, today, today);
+        });
+    }
 
     // Pie chart build
     const buildBtn = document.querySelector('#csv-build');
     if (buildBtn) buildBtn.addEventListener('click', () => {
         const g = document.querySelector('#csv-group')?.value || 'vendor';
-        buildPieChart(allTx, g);
+        buildPieChart(currentPeriodTransactions, g);
     });
 
     // Load transactions
@@ -413,6 +612,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (contentEl) contentEl.hidden = false;
-    renderPeriod('monthly');
-    buildPieChart(allTx, 'vendor');
+    const today = getTodayIsoDate();
+    renderPeriod('month', today, today);
 });

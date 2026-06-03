@@ -40,11 +40,27 @@
         <h1 class="page-title">Spend Analytics</h1>
         <p class="page-sub">Compare your spending across periods, track top vendors, and visualize category breakdowns.</p>
 
-        <!-- Period tabs -->
-        <div class="spend-period-tabs" style="margin-bottom:28px;">
-            <button class="spend-tab spend-tab-active" data-period="monthly">Monthly</button>
-            <button class="spend-tab" data-period="weekly">Weekly</button>
-            <button class="spend-tab" data-period="annually">Annually</button>
+        <div class="period-toolbar" style="margin-bottom:28px;">
+            <div class="period-toolbar-top">
+                <div class="period-mode-group" role="tablist" aria-label="Spend analytics period selector">
+                    <button class="date-filter-btn date-filter-active" data-period-mode="month" type="button">Month</button>
+                    <button class="date-filter-btn" data-period-mode="week" type="button">Week</button>
+                    <button class="date-filter-btn" data-period-mode="year" type="button">Year</button>
+                    <button class="date-filter-btn" data-period-mode="custom" type="button">Date range</button>
+                </div>
+                <button id="period-current-btn" class="btn-action period-current-btn" type="button">Current period</button>
+            </div>
+            <div class="period-input-row">
+                <div class="period-input-group">
+                    <label class="parse-date-label" for="period-start-date">Start</label>
+                    <input type="date" id="period-start-date" class="parse-date-input">
+                </div>
+                <div class="period-input-group">
+                    <label class="parse-date-label" for="period-end-date">End</label>
+                    <input type="date" id="period-end-date" class="parse-date-input">
+                </div>
+            </div>
+            <p id="period-summary" class="period-summary">Showing the current month compared with the previous month.</p>
         </div>
 
         <!-- Loading state -->

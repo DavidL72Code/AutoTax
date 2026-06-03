@@ -80,6 +80,7 @@ let demoParsePollTimer = null;
 let activeDemoRunId = null;
 let currentBudgetSpend = 0;
 let latestTopVendors = [];
+let activeDateFilter = 'all';
 let activeSearchTerm = '';
 let currentPage = 1;
 let pageSize = (() => { try { return Number(localStorage.getItem('TABLE_PAGE_SIZE')) || 25; } catch(e) { return 25; } })();
@@ -161,8 +162,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize animations
     initAnimations();
-    setInitialPeriodSelection();
-    
     // Setup event listeners
     setupEventListeners();
     setupTour();
@@ -647,30 +646,15 @@ function setupEventListeners() {
         });
     });
 
-    // Period controls
-    document.querySelectorAll('[data-period-mode]').forEach(function(btn) {
+    // Date filter buttons
+    document.querySelectorAll('.date-filter-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            setActivePeriodMode(btn.getAttribute('data-period-mode') || 'week');
+            activeDateFilter = btn.getAttribute('data-filter') || 'all';
+            document.querySelectorAll('.date-filter-btn').forEach(b => b.classList.remove('date-filter-active'));
+            btn.classList.add('date-filter-active');
+            renderTransactionsTable();
         });
     });
-    const periodStartInput = document.querySelector('#period-start-date');
-    const periodEndInput = document.querySelector('#period-end-date');
-    const periodCurrentBtn = document.querySelector('#period-current-btn');
-    if (periodStartInput) {
-        periodStartInput.addEventListener('change', function() {
-            handlePeriodInputChange('start');
-        });
-    }
-    if (periodEndInput) {
-        periodEndInput.addEventListener('change', function() {
-            handlePeriodInputChange('end');
-        });
-    }
-    if (periodCurrentBtn) {
-        periodCurrentBtn.addEventListener('click', function() {
-            resetPeriodToCurrent();
-        });
-    }
 
     // Duplicate warning dismiss
     const duplicateDismissBtn = document.querySelector('#duplicate-dismiss');
@@ -1109,7 +1093,11 @@ let _lastDashboardErrorShown = 0;
 async function loadDashboardData() {
     setDashboardLoading(true);
     try {
-        await loadTransactions();
+        await Promise.all([
+            loadTransactions(),
+            loadStats(),
+            loadTopVendors()
+        ]);
         _lastDashboardErrorShown = 0;
     } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -1123,56 +1111,6 @@ async function loadDashboardData() {
     } finally {
         setDashboardLoading(false);
     }
-}
-
-function applyDashboardPeriod() {
-    const period = getActivePeriodRange();
-    const currentTransactions = filterTransactionsByRange(allTransactions, period.startIso, period.endIso);
-    const previousTransactions = filterTransactionsByRange(allTransactions, period.previousStartIso, period.previousEndIso);
-    const currentStats = buildStatsFromTransactions(currentTransactions);
-    const previousStats = buildStatsFromTransactions(previousTransactions);
-
-    currentPage = 1;
-    updateStatCards(currentStats, previousStats, period);
-    updateHeroSummary(currentStats, period);
-    renderTransactionsTable();
-    renderExpensePreview(currentTransactions, period);
-    refreshVendorInsights(currentTransactions);
-    renderSpendingTrends(currentTransactions, period);
-}
-
-function filterTransactionsByRange(transactions, startIso, endIso) {
-    const startValue = toComparableDateValue(startIso);
-    const endValue = toComparableDateValue(endIso);
-    return (transactions || []).filter(function(transaction) {
-        const value = toComparableDateValue(transaction.date);
-        return value >= startValue && value <= endValue;
-    });
-}
-
-function buildStatsFromTransactions(transactions) {
-    const totals = {
-        total_spent: 0,
-        total_receipts: 0,
-        unique_vendors: 0,
-        avg_transaction: 0
-    };
-    const vendors = new Set();
-
-    (transactions || []).forEach(function(transaction) {
-        const amount = Number(transaction.amount) || 0;
-        if (amount > 0) {
-            totals.total_spent += amount;
-        }
-        totals.total_receipts += 1;
-        if (transaction.vendor) {
-            vendors.add(normalizeVendorKey(transaction.vendor));
-        }
-    });
-
-    totals.unique_vendors = vendors.size;
-    totals.avg_transaction = totals.total_receipts > 0 ? totals.total_spent / totals.total_receipts : 0;
-    return totals;
 }
 
 // Load transactions from API
@@ -1195,10 +1133,13 @@ async function loadTransactions() {
         console.log(`Loaded ${allTransactions.length} transactions`);
         
         if (tableBody) {
+            renderTransactionsTable();
             updateSortArrows();
         }
 
-        applyDashboardPeriod();
+        renderExpensePreview(allTransactions);
+        refreshVendorInsights();
+        renderSpendingTrends(allTransactions);
 
         // Duplicate detection
         const dupWarning = document.querySelector('#duplicate-warning');
@@ -1264,7 +1205,7 @@ async function loadTopVendors() {
 }
 
 // Update stat cards with real data
-function updateStatCards(stats, previousStats = {}, period = getActivePeriodRange()) {
+function updateStatCards(stats, previousStats = null, period = null) {
     const statCards = document.querySelectorAll('.stat-card-hero');
     
     if (statCards.length >= 4) {
@@ -1292,14 +1233,16 @@ function updateStatCards(stats, previousStats = {}, period = getActivePeriodRang
             avgTransactionValue.textContent = formatCurrency(stats.avg_transaction || 0);
         }
 
-        setStatCardComparison(statCards[0], Number(stats.total_spent) || 0, Number(previousStats && previousStats.total_spent) || 0, period.comparisonLabel, 'currency');
-        setStatCardComparison(statCards[1], Number(stats.total_receipts) || 0, Number(previousStats && previousStats.total_receipts) || 0, period.comparisonLabel, 'count');
-        setStatCardComparison(statCards[2], Number(stats.unique_vendors) || 0, Number(previousStats && previousStats.unique_vendors) || 0, period.comparisonLabel, 'count');
-        setStatCardComparison(statCards[3], Number(stats.avg_transaction) || 0, Number(previousStats && previousStats.avg_transaction) || 0, period.comparisonLabel, 'currency');
+        if (previousStats && period && period.comparisonLabel) {
+            setStatCardComparison(statCards[0], Number(stats.total_spent) || 0, Number(previousStats.total_spent) || 0, period.comparisonLabel, 'currency');
+            setStatCardComparison(statCards[1], Number(stats.total_receipts) || 0, Number(previousStats.total_receipts) || 0, period.comparisonLabel, 'count');
+            setStatCardComparison(statCards[2], Number(stats.unique_vendors) || 0, Number(previousStats.unique_vendors) || 0, period.comparisonLabel, 'count');
+            setStatCardComparison(statCards[3], Number(stats.avg_transaction) || 0, Number(previousStats.avg_transaction) || 0, period.comparisonLabel, 'currency');
+        }
     }
 }
 
-function updateHeroSummary(stats, period = getActivePeriodRange()) {
+function updateHeroSummary(stats, period = null) {
     if (heroTotalSpentEl) {
         heroTotalSpentEl.textContent = formatCurrency(stats.total_spent || 0);
     }
@@ -1307,9 +1250,11 @@ function updateHeroSummary(stats, period = getActivePeriodRange()) {
         const receiptCount = Number(stats.total_receipts) || 0;
         const vendorCount = Number(stats.unique_vendors) || 0;
         const average = formatCurrency(stats.avg_transaction || 0);
-        heroSummaryLineEl.textContent = `${period.label}: ${receiptCount} receipt${receiptCount === 1 ? '' : 's'} across ${vendorCount} vendor${vendorCount === 1 ? '' : 's'}. Average ticket ${average}.`;
+        heroSummaryLineEl.textContent = period && period.label
+            ? `${period.label}: ${receiptCount} receipt${receiptCount === 1 ? '' : 's'} across ${vendorCount} vendor${vendorCount === 1 ? '' : 's'}. Average ticket ${average}.`
+            : `${receiptCount} receipt${receiptCount === 1 ? '' : 's'} across ${vendorCount} vendor${vendorCount === 1 ? '' : 's'}. Average ticket ${average}.`;
     }
-    updateBudgetSummary(Number(stats.total_spent) || 0, period);
+    updateBudgetSummary(Number(stats.total_spent) || 0, period || { mode: 'month', budgetLabel: 'Monthly Budget' });
 }
 
 function setStatCardComparison(card, currentValue, previousValue, comparisonLabel, format) {
@@ -1342,7 +1287,7 @@ function formatSignedValue(value, format) {
     return `${amount > 0 ? '+' : ''}${Math.round(amount)}`;
 }
 
-function renderExpensePreview(transactions, period) {
+function renderExpensePreview(transactions, period = null) {
     if (!expensePreviewListEl) return;
 
     const sorted = [...(transactions || [])].sort(compareTransactionsByNewest);
@@ -1391,7 +1336,7 @@ function renderExpensePreview(transactions, period) {
     updateBudgetSummary(totalSpend, period);
 }
 
-function updateBudgetSummary(totalSpend, period = getActivePeriodRange()) {
+function updateBudgetSummary(totalSpend, period = { mode: 'month', budgetLabel: 'Monthly Budget' }) {
     const spend = Math.max(0, Number(totalSpend) || 0);
     const storedTarget = getScaledBudgetTarget(getStoredMonthlyBudget(), period);
     const target = storedTarget || getAutomaticBudgetTarget(spend, period);
@@ -1420,7 +1365,7 @@ function updateBudgetSummary(totalSpend, period = getActivePeriodRange()) {
     refreshBudgetEditor({ preserveInput: true });
 }
 
-function getScaledBudgetTarget(baseMonthlyTarget, period = getActivePeriodRange()) {
+function getScaledBudgetTarget(baseMonthlyTarget, period = { mode: 'month' }) {
     const monthlyTarget = Number(baseMonthlyTarget) || 0;
     if (monthlyTarget <= 0) return 0;
     if (!period) return monthlyTarget;
@@ -1432,7 +1377,7 @@ function getScaledBudgetTarget(baseMonthlyTarget, period = getActivePeriodRange(
     return monthlyTarget;
 }
 
-function getAutomaticBudgetTarget(spend, period = getActivePeriodRange()) {
+function getAutomaticBudgetTarget(spend, period = { mode: 'month' }) {
     const monthlyEstimate = spend > 0 ? Math.ceil((spend * 1.35) / 500) * 500 : 1500;
     return getScaledBudgetTarget(monthlyEstimate, period) || monthlyEstimate;
 }
@@ -1542,7 +1487,9 @@ function updatePasswordRequirementState(password) {
 
 function refreshVendorInsights(transactions = allTransactions) {
     const insights = buildVendorInsights(transactions);
-    latestTopVendors = buildTopVendorsFromTransactions(transactions);
+    latestTopVendors = transactions === allTransactions && latestTopVendors.length
+        ? latestTopVendors
+        : buildTopVendorsFromTransactions(transactions);
     updateVendorCards(latestTopVendors, insights);
     updateHeroVendors(latestTopVendors, insights);
     updateInsightVisual(latestTopVendors, transactions);
@@ -1792,8 +1739,20 @@ function getCategoryForVendor(vendor) {
 }
 
 function getFilteredTransactions() {
-    const period = getActivePeriodRange();
-    return filterTransactionsByRange(allTransactions, period.startIso, period.endIso);
+    if (activeDateFilter === 'all') return allTransactions;
+    const d = new Date();
+    let cutoff;
+    if (activeDateFilter === '30d') {
+        cutoff = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 30).getTime();
+    } else if (activeDateFilter === '3m') {
+        cutoff = new Date(d.getFullYear(), d.getMonth() - 3, d.getDate()).getTime();
+    } else if (activeDateFilter === '1y') {
+        cutoff = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()).getTime();
+    }
+    if (!cutoff) return allTransactions;
+    return allTransactions.filter(function(t) {
+        return toComparableDateValue(t.date) >= cutoff;
+    });
 }
 
 function detectDuplicates(transactions) {
@@ -2559,14 +2518,18 @@ async function clearAllTransactions() {
     // Snapshot and optimistically clear the UI
     _clearUndoSnapshot = [...allTransactions];
     allTransactions = [];
-    applyDashboardPeriod();
+    renderTransactionsTable();
+    renderExpensePreview([]);
+    renderSpendingTrends([]);
     setSyncStatus('Cleared', 'Tap Undo within 5 seconds to restore.');
 
     showUndoToast('All transactions cleared.', function() {
         if (_clearUndoTimer) { clearTimeout(_clearUndoTimer); _clearUndoTimer = null; }
         allTransactions = _clearUndoSnapshot || [];
         _clearUndoSnapshot = null;
-        applyDashboardPeriod();
+        renderTransactionsTable();
+        renderExpensePreview(allTransactions);
+        renderSpendingTrends(allTransactions);
         setSyncStatus('Restored', 'Transactions have been restored.');
     });
 
@@ -2856,7 +2819,7 @@ function drawPieChart(canvas, legendEl, entries) {
     });
 }
 
-function renderSpendingTrends(transactions, period = getActivePeriodRange()) {
+function renderSpendingTrends(transactions, period = null) {
     const canvas = document.querySelector('#trends-chart');
     const emptyEl = document.querySelector('#trends-empty');
     if (!canvas) return;
