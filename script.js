@@ -1004,7 +1004,13 @@ async function submitLogin() {
         return;
     }
     if (!firebaseAuth || !hasUsableFirebaseConfig()) {
-        setAuthFeedback('Firebase Auth is not configured yet.');
+        setAuthFeedback('Connecting to auth service…');
+        await loadRuntimeConfig();
+        initializeFirebaseAuth();
+        await firebaseReadyPromise;
+    }
+    if (!firebaseAuth || !hasUsableFirebaseConfig()) {
+        setAuthFeedback('Firebase Auth is not configured yet. Please refresh and try again.');
         return;
     }
     try {
@@ -1038,7 +1044,13 @@ async function submitSignup() {
         return;
     }
     if (!firebaseAuth || !hasUsableFirebaseConfig()) {
-        setAuthFeedback('Firebase Auth is not configured yet.');
+        setAuthFeedback('Connecting to auth service…');
+        await loadRuntimeConfig();
+        initializeFirebaseAuth();
+        await firebaseReadyPromise;
+    }
+    if (!firebaseAuth || !hasUsableFirebaseConfig()) {
+        setAuthFeedback('Firebase Auth is not configured yet. Please refresh and try again.');
         return;
     }
     try {
@@ -1059,7 +1071,13 @@ async function submitSignup() {
 async function submitGoogleAuth() {
     clearAuthFeedback();
     if (!firebaseAuth || !hasUsableFirebaseConfig()) {
-        setAuthFeedback('Firebase Auth is not configured yet.');
+        setAuthFeedback('Connecting to auth service…');
+        await loadRuntimeConfig();
+        initializeFirebaseAuth();
+        await firebaseReadyPromise;
+    }
+    if (!firebaseAuth || !hasUsableFirebaseConfig()) {
+        setAuthFeedback('Firebase Auth is not configured yet. Please refresh and try again.');
         return;
     }
     const provider = new window.firebase.auth.GoogleAuthProvider();
