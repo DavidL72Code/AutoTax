@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Required settings :str must be string and gets value from .env using pydantic
     database_url: str = f"sqlite:///{_DEFAULT_DB}"
     google_api_key: Optional[str] = None
-    gemini_model: str = "gemini-2.5-flash-lite"
+    gemini_model: str = "gemini-3.1-flash-lite"
     google_oauth_client_id: Optional[str] = None
     google_oauth_client_secret: Optional[str] = None
     google_oauth_redirect_uri: Optional[str] = None
