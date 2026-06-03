@@ -1817,11 +1817,12 @@ def _build_spend_summary(transactions) -> str:
                 date = None
 
         if date:
-            if date >= this_month_start:
+            cmp_date = date.replace(tzinfo=None) if getattr(date, 'tzinfo', None) else date
+            if cmp_date >= this_month_start:
                 this_month_total += amt
-            if last_month_start <= date < last_month_end:
+            if last_month_start <= cmp_date < last_month_end:
                 last_month_total += amt
-            key = date.strftime('%b %Y')
+            key = cmp_date.strftime('%b %Y')
             monthly_totals[key] += amt
 
         cat = (getattr(t, 'category', None) or 'Uncategorized').strip()
