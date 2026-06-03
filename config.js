@@ -8,8 +8,9 @@ window.API_BASE_URL = (() => {
     const search = new URLSearchParams(window.location.search);
 
     function normalizeApiBaseUrl(value) {
+        if (!value) return null;
         try {
-            const parsed = new URL(String(value || ''), window.location.href);
+            const parsed = new URL(String(value), window.location.href);
             if (!/^https?:$/.test(parsed.protocol)) return null;
             if (!isLocalHost && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1')) {
                 return null;
