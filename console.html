@@ -168,7 +168,7 @@
                     <!-- Budget mini-bar -->
                     <div class="budget-mini-bar">
                         <div class="budget-mini-header">
-                            <span class="budget-mini-label">Monthly Budget</span>
+                            <span id="expense-budget-label" class="budget-mini-label">Monthly Budget</span>
                             <span id="expense-budget-used" class="budget-mini-pct">0% used</span>
                             <span id="expense-budget-current" class="budget-mini-current">$0</span>
                             <span class="budget-mini-sep">/</span>
@@ -212,11 +212,27 @@
                         <button id="duplicate-dismiss" class="duplicate-dismiss" type="button">Dismiss</button>
                     </div>
 
-                    <div class="date-filter-bar">
-                        <button class="date-filter-btn date-filter-active" data-filter="all">All time</button>
-                        <button class="date-filter-btn" data-filter="1y">This year</button>
-                        <button class="date-filter-btn" data-filter="3m">3 months</button>
-                        <button class="date-filter-btn" data-filter="30d">Last 30 days</button>
+                    <div class="period-toolbar">
+                        <div class="period-toolbar-top">
+                            <div class="period-mode-group" role="tablist" aria-label="Period selector">
+                                <button class="date-filter-btn" data-period-mode="week" type="button">Week</button>
+                                <button class="date-filter-btn date-filter-active" data-period-mode="month" type="button">Month</button>
+                                <button class="date-filter-btn" data-period-mode="year" type="button">Year</button>
+                                <button class="date-filter-btn" data-period-mode="custom" type="button">Date range</button>
+                            </div>
+                            <button id="period-current-btn" class="btn-action period-current-btn" type="button">Current period</button>
+                        </div>
+                        <div class="period-input-row">
+                            <div class="period-input-group">
+                                <label class="parse-date-label" for="period-start-date">Start</label>
+                                <input type="date" id="period-start-date" class="parse-date-input">
+                            </div>
+                            <div class="period-input-group">
+                                <label class="parse-date-label" for="period-end-date">End</label>
+                                <input type="date" id="period-end-date" class="parse-date-input">
+                            </div>
+                        </div>
+                        <p id="period-summary" class="period-summary">Showing the current week compared with the previous week.</p>
                     </div>
 
                     <div class="demo-run-panel">

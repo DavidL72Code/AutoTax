@@ -46,6 +46,7 @@ let expenseBudgetUsedEl;
 let expenseBudgetCurrentEl;
 let expenseBudgetTargetEl;
 let expenseBudgetFillEl;
+let expenseBudgetLabelEl;
 let expenseBudgetInputEl;
 let expenseBudgetSaveBtn;
 let expenseBudgetResetBtn;
@@ -79,13 +80,15 @@ let demoParsePollTimer = null;
 let activeDemoRunId = null;
 let currentBudgetSpend = 0;
 let latestTopVendors = [];
-let activeDateFilter = 'all';
 let activeSearchTerm = '';
 let currentPage = 1;
 let pageSize = (() => { try { return Number(localStorage.getItem('TABLE_PAGE_SIZE')) || 25; } catch(e) { return 25; } })();
 let idlePollTimer = null;
 let syncRunId = null;
 let editCategoryInput = null;
+let activePeriodMode = 'month';
+let activePeriodStart = '';
+let activePeriodEnd = '';
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DOM references
@@ -127,6 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseBudgetCurrentEl = document.querySelector('#expense-budget-current');
     expenseBudgetTargetEl = document.querySelector('#expense-budget-target');
     expenseBudgetFillEl = document.querySelector('#expense-budget-fill');
+    expenseBudgetLabelEl = document.querySelector('#expense-budget-label');
     expenseBudgetInputEl = document.querySelector('#expense-budget-input');
     expenseBudgetSaveBtn = document.querySelector('#expense-budget-save');
     expenseBudgetResetBtn = document.querySelector('#expense-budget-reset');
@@ -157,6 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize animations
     initAnimations();
+    setInitialPeriodSelection();
     
     // Setup event listeners
     setupEventListeners();
@@ -219,6 +224,151 @@ function initAnimations() {
             card.style.transform = 'translateY(0)';
         }, index * 100);
     });
+}
+
+function setInitialPeriodSelection() {
+    const todayIso = getTodayIsoDate();
+    const currentRange = getPeriodRange(activePeriodMode, todayIso, todayIso);
+    activePeriodStart = currentRange.startIso;
+    activePeriodEnd = currentRange.endIso;
+
+    const startInput = document.querySelector('#period-start-date');
+    const endInput = document.querySelector('#period-end-date');
+    if (startInput) startInput.value = activePeriodStart;
+    if (endInput) endInput.value = activePeriodEnd;
+
+    updatePeriodControls();
+}
+
+function getTodayIsoDate() {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    return formatter.format(new Date());
+}
+
+function isoDateToUtcDate(isoDate) {
+    const parts = parseIsoDateParts(isoDate);
+    if (!parts) return null;
+    return new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0));
+}
+
+function dateToIsoUtc(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+}
+
+function addDaysIso(isoDate, days) {
+    const date = isoDateToUtcDate(isoDate);
+    if (!date) return '';
+    date.setUTCDate(date.getUTCDate() + days);
+    return dateToIsoUtc(date);
+}
+
+function diffDaysInclusive(startIso, endIso) {
+    const start = isoDateToUtcDate(startIso);
+    const end = isoDateToUtcDate(endIso);
+    if (!start || !end) return 0;
+    return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+function startOfWeekUtc(date) {
+    const copy = new Date(date.getTime());
+    const day = copy.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    copy.setUTCDate(copy.getUTCDate() + diff);
+    return copy;
+}
+
+function getPeriodRange(mode, startIso, endIso) {
+    const fallbackIso = getTodayIsoDate();
+    const safeStartIso = startIso || fallbackIso;
+    const safeEndIso = endIso || safeStartIso;
+    const startDate = isoDateToUtcDate(safeStartIso) || isoDateToUtcDate(fallbackIso);
+    const endDate = isoDateToUtcDate(safeEndIso) || startDate;
+
+    if (mode === 'custom') {
+        const normalizedStart = startDate <= endDate ? startDate : endDate;
+        const normalizedEnd = startDate <= endDate ? endDate : startDate;
+        const normalizedStartIso = dateToIsoUtc(normalizedStart);
+        const normalizedEndIso = dateToIsoUtc(normalizedEnd);
+        const spanDays = diffDaysInclusive(normalizedStartIso, normalizedEndIso);
+        return {
+            mode,
+            startIso: normalizedStartIso,
+            endIso: normalizedEndIso,
+            previousStartIso: addDaysIso(normalizedStartIso, -spanDays),
+            previousEndIso: addDaysIso(normalizedStartIso, -1),
+            label: formatDateRangeLabel(normalizedStartIso, normalizedEndIso),
+            comparisonLabel: `previous ${spanDays}-day period`,
+            budgetLabel: 'Period Budget'
+        };
+    }
+
+    let rangeStart = new Date(startDate.getTime());
+    let rangeEnd = new Date(startDate.getTime());
+
+    if (mode === 'week') {
+        rangeStart = startOfWeekUtc(startDate);
+        rangeEnd = new Date(rangeStart.getTime());
+        rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 6);
+    } else if (mode === 'year') {
+        rangeStart = new Date(Date.UTC(startDate.getUTCFullYear(), 0, 1, 12, 0, 0));
+        rangeEnd = new Date(Date.UTC(startDate.getUTCFullYear(), 11, 31, 12, 0, 0));
+    } else {
+        rangeStart = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1, 12, 0, 0));
+        rangeEnd = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0, 12, 0, 0));
+        mode = 'month';
+    }
+
+    const rangeStartIso = dateToIsoUtc(rangeStart);
+    const rangeEndIso = dateToIsoUtc(rangeEnd);
+    const spanDays = diffDaysInclusive(rangeStartIso, rangeEndIso);
+
+    return {
+        mode,
+        startIso: rangeStartIso,
+        endIso: rangeEndIso,
+        previousStartIso: addDaysIso(rangeStartIso, -spanDays),
+        previousEndIso: addDaysIso(rangeStartIso, -1),
+        label: formatDateRangeLabel(rangeStartIso, rangeEndIso, mode),
+        comparisonLabel: mode === 'week' ? 'previous week' : mode === 'year' ? 'previous year' : 'previous month',
+        budgetLabel: mode === 'week' ? 'Weekly Budget' : mode === 'year' ? 'Yearly Budget' : 'Monthly Budget'
+    };
+}
+
+function formatDateRangeLabel(startIso, endIso, mode) {
+    const startDate = isoDateToUtcDate(startIso);
+    const endDate = isoDateToUtcDate(endIso);
+    if (!startDate || !endDate) return 'Selected period';
+
+    if (mode === 'month') {
+        return new Intl.DateTimeFormat('en-US', {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'America/New_York'
+        }).format(startDate);
+    }
+
+    if (mode === 'year') {
+        return String(startDate.getUTCFullYear());
+    }
+
+    const startLabel = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'America/New_York'
+    }).format(startDate);
+    const endLabel = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'America/New_York'
+    }).format(endDate);
+    return `${startLabel} - ${endLabel}`;
 }
 
 // Setup all event listeners
@@ -497,15 +647,30 @@ function setupEventListeners() {
         });
     });
 
-    // Date filter buttons
-    document.querySelectorAll('.date-filter-btn').forEach(function(btn) {
+    // Period controls
+    document.querySelectorAll('[data-period-mode]').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            activeDateFilter = btn.getAttribute('data-filter') || 'all';
-            document.querySelectorAll('.date-filter-btn').forEach(b => b.classList.remove('date-filter-active'));
-            btn.classList.add('date-filter-active');
-            renderTransactionsTable();
+            setActivePeriodMode(btn.getAttribute('data-period-mode') || 'week');
         });
     });
+    const periodStartInput = document.querySelector('#period-start-date');
+    const periodEndInput = document.querySelector('#period-end-date');
+    const periodCurrentBtn = document.querySelector('#period-current-btn');
+    if (periodStartInput) {
+        periodStartInput.addEventListener('change', function() {
+            handlePeriodInputChange('start');
+        });
+    }
+    if (periodEndInput) {
+        periodEndInput.addEventListener('change', function() {
+            handlePeriodInputChange('end');
+        });
+    }
+    if (periodCurrentBtn) {
+        periodCurrentBtn.addEventListener('click', function() {
+            resetPeriodToCurrent();
+        });
+    }
 
     // Duplicate warning dismiss
     const duplicateDismissBtn = document.querySelector('#duplicate-dismiss');
@@ -530,6 +695,82 @@ function setupEventListeners() {
         }, { threshold: 0.2 });
         chartObserver.observe(csvSection);
     }
+}
+
+function setActivePeriodMode(mode) {
+    activePeriodMode = mode || 'week';
+    const startInput = document.querySelector('#period-start-date');
+    const endInput = document.querySelector('#period-end-date');
+    const nextRange = getPeriodRange(activePeriodMode, startInput ? startInput.value : activePeriodStart, endInput ? endInput.value : activePeriodEnd);
+    activePeriodStart = nextRange.startIso;
+    activePeriodEnd = nextRange.endIso;
+    if (startInput) startInput.value = activePeriodStart;
+    if (endInput) endInput.value = activePeriodEnd;
+    updatePeriodControls();
+    applyDashboardPeriod();
+}
+
+function handlePeriodInputChange(changedField) {
+    const startInput = document.querySelector('#period-start-date');
+    const endInput = document.querySelector('#period-end-date');
+    const startValue = startInput ? startInput.value : activePeriodStart;
+    const endValue = endInput ? endInput.value : activePeriodEnd;
+
+    let seedStart = startValue || activePeriodStart || getTodayIsoDate();
+    let seedEnd = endValue || activePeriodEnd || seedStart;
+
+    if (activePeriodMode !== 'custom') {
+        if (changedField === 'end' && endValue) {
+            seedStart = endValue;
+        }
+        seedEnd = seedStart;
+    }
+
+    const nextRange = getPeriodRange(activePeriodMode, seedStart, seedEnd);
+    activePeriodStart = nextRange.startIso;
+    activePeriodEnd = nextRange.endIso;
+    if (startInput) startInput.value = activePeriodStart;
+    if (endInput) endInput.value = activePeriodEnd;
+    updatePeriodControls();
+    applyDashboardPeriod();
+}
+
+function resetPeriodToCurrent() {
+    const todayIso = getTodayIsoDate();
+    const nextRange = getPeriodRange(activePeriodMode, todayIso, todayIso);
+    activePeriodStart = nextRange.startIso;
+    activePeriodEnd = nextRange.endIso;
+    const startInput = document.querySelector('#period-start-date');
+    const endInput = document.querySelector('#period-end-date');
+    if (startInput) startInput.value = activePeriodStart;
+    if (endInput) endInput.value = activePeriodEnd;
+    updatePeriodControls();
+    applyDashboardPeriod();
+}
+
+function updatePeriodControls() {
+    document.querySelectorAll('[data-period-mode]').forEach(function(btn) {
+        const isActive = btn.getAttribute('data-period-mode') === activePeriodMode;
+        btn.classList.toggle('date-filter-active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+
+    const endInput = document.querySelector('#period-end-date');
+    if (endInput) {
+        const isCustom = activePeriodMode === 'custom';
+        endInput.disabled = !isCustom;
+        endInput.title = isCustom ? '' : 'End date is set automatically for this period.';
+    }
+
+    const summaryEl = document.querySelector('#period-summary');
+    if (summaryEl) {
+        const range = getActivePeriodRange();
+        summaryEl.textContent = `Showing ${range.label} compared with the ${range.comparisonLabel}.`;
+    }
+}
+
+function getActivePeriodRange() {
+    return getPeriodRange(activePeriodMode, activePeriodStart, activePeriodEnd);
 }
 
 async function loadRuntimeConfig() {
@@ -868,11 +1109,7 @@ let _lastDashboardErrorShown = 0;
 async function loadDashboardData() {
     setDashboardLoading(true);
     try {
-        await Promise.all([
-            loadTransactions(),
-            loadStats(),
-            loadTopVendors()
-        ]);
+        await loadTransactions();
         _lastDashboardErrorShown = 0;
     } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -886,6 +1123,56 @@ async function loadDashboardData() {
     } finally {
         setDashboardLoading(false);
     }
+}
+
+function applyDashboardPeriod() {
+    const period = getActivePeriodRange();
+    const currentTransactions = filterTransactionsByRange(allTransactions, period.startIso, period.endIso);
+    const previousTransactions = filterTransactionsByRange(allTransactions, period.previousStartIso, period.previousEndIso);
+    const currentStats = buildStatsFromTransactions(currentTransactions);
+    const previousStats = buildStatsFromTransactions(previousTransactions);
+
+    currentPage = 1;
+    updateStatCards(currentStats, previousStats, period);
+    updateHeroSummary(currentStats, period);
+    renderTransactionsTable();
+    renderExpensePreview(currentTransactions, period);
+    refreshVendorInsights(currentTransactions);
+    renderSpendingTrends(currentTransactions, period);
+}
+
+function filterTransactionsByRange(transactions, startIso, endIso) {
+    const startValue = toComparableDateValue(startIso);
+    const endValue = toComparableDateValue(endIso);
+    return (transactions || []).filter(function(transaction) {
+        const value = toComparableDateValue(transaction.date);
+        return value >= startValue && value <= endValue;
+    });
+}
+
+function buildStatsFromTransactions(transactions) {
+    const totals = {
+        total_spent: 0,
+        total_receipts: 0,
+        unique_vendors: 0,
+        avg_transaction: 0
+    };
+    const vendors = new Set();
+
+    (transactions || []).forEach(function(transaction) {
+        const amount = Number(transaction.amount) || 0;
+        if (amount > 0) {
+            totals.total_spent += amount;
+        }
+        totals.total_receipts += 1;
+        if (transaction.vendor) {
+            vendors.add(normalizeVendorKey(transaction.vendor));
+        }
+    });
+
+    totals.unique_vendors = vendors.size;
+    totals.avg_transaction = totals.total_receipts > 0 ? totals.total_spent / totals.total_receipts : 0;
+    return totals;
 }
 
 // Load transactions from API
@@ -908,13 +1195,10 @@ async function loadTransactions() {
         console.log(`Loaded ${allTransactions.length} transactions`);
         
         if (tableBody) {
-            renderTransactionsTable();
             updateSortArrows();
         }
 
-        renderExpensePreview(allTransactions);
-        refreshVendorInsights();
-        renderSpendingTrends(allTransactions);
+        applyDashboardPeriod();
 
         // Duplicate detection
         const dupWarning = document.querySelector('#duplicate-warning');
@@ -980,7 +1264,7 @@ async function loadTopVendors() {
 }
 
 // Update stat cards with real data
-function updateStatCards(stats) {
+function updateStatCards(stats, previousStats = {}, period = getActivePeriodRange()) {
     const statCards = document.querySelectorAll('.stat-card-hero');
     
     if (statCards.length >= 4) {
@@ -1007,10 +1291,15 @@ function updateStatCards(stats) {
         if (avgTransactionValue) {
             avgTransactionValue.textContent = formatCurrency(stats.avg_transaction || 0);
         }
+
+        setStatCardComparison(statCards[0], Number(stats.total_spent) || 0, Number(previousStats && previousStats.total_spent) || 0, period.comparisonLabel, 'currency');
+        setStatCardComparison(statCards[1], Number(stats.total_receipts) || 0, Number(previousStats && previousStats.total_receipts) || 0, period.comparisonLabel, 'count');
+        setStatCardComparison(statCards[2], Number(stats.unique_vendors) || 0, Number(previousStats && previousStats.unique_vendors) || 0, period.comparisonLabel, 'count');
+        setStatCardComparison(statCards[3], Number(stats.avg_transaction) || 0, Number(previousStats && previousStats.avg_transaction) || 0, period.comparisonLabel, 'currency');
     }
 }
 
-function updateHeroSummary(stats) {
+function updateHeroSummary(stats, period = getActivePeriodRange()) {
     if (heroTotalSpentEl) {
         heroTotalSpentEl.textContent = formatCurrency(stats.total_spent || 0);
     }
@@ -1018,12 +1307,42 @@ function updateHeroSummary(stats) {
         const receiptCount = Number(stats.total_receipts) || 0;
         const vendorCount = Number(stats.unique_vendors) || 0;
         const average = formatCurrency(stats.avg_transaction || 0);
-        heroSummaryLineEl.textContent = `${receiptCount} receipt${receiptCount === 1 ? '' : 's'} across ${vendorCount} vendor${vendorCount === 1 ? '' : 's'}. Average ticket ${average}.`;
+        heroSummaryLineEl.textContent = `${period.label}: ${receiptCount} receipt${receiptCount === 1 ? '' : 's'} across ${vendorCount} vendor${vendorCount === 1 ? '' : 's'}. Average ticket ${average}.`;
     }
-    updateBudgetSummary(Number(stats.total_spent) || 0);
+    updateBudgetSummary(Number(stats.total_spent) || 0, period);
 }
 
-function renderExpensePreview(transactions) {
+function setStatCardComparison(card, currentValue, previousValue, comparisonLabel, format) {
+    if (!card) return;
+    const changeEl = card.querySelector('.stat-change-positive, .stat-change-neutral, .stat-change-negative');
+    if (!changeEl) return;
+
+    const delta = currentValue - previousValue;
+    let text = `No change vs ${comparisonLabel}`;
+    let tone = 'neutral';
+
+    if (delta > 0) {
+        text = `${formatSignedValue(delta, format)} vs ${comparisonLabel}`;
+        tone = 'positive';
+    } else if (delta < 0) {
+        text = `${formatSignedValue(delta, format)} vs ${comparisonLabel}`;
+        tone = 'negative';
+    }
+
+    changeEl.textContent = text;
+    changeEl.classList.remove('stat-change-positive', 'stat-change-neutral', 'stat-change-negative');
+    changeEl.classList.add(`stat-change-${tone}`);
+}
+
+function formatSignedValue(value, format) {
+    const amount = Number(value) || 0;
+    if (format === 'currency') {
+        return `${amount > 0 ? '+' : '-'}${formatCurrency(Math.abs(amount))}`;
+    }
+    return `${amount > 0 ? '+' : ''}${Math.round(amount)}`;
+}
+
+function renderExpensePreview(transactions, period) {
     if (!expensePreviewListEl) return;
 
     const sorted = [...(transactions || [])].sort(compareTransactionsByNewest);
@@ -1032,9 +1351,9 @@ function renderExpensePreview(transactions) {
     if (!previewItems.length) {
         expensePreviewListEl.innerHTML = '<div class="expense-empty">No synced receipts yet. Connect Gmail and run a sync to populate this feed.</div>';
         if (expensePeriodLabelEl) {
-            expensePeriodLabelEl.textContent = formatMonthLabel();
+            expensePeriodLabelEl.textContent = period && period.label ? period.label : formatMonthLabel();
         }
-        updateBudgetSummary(0);
+        updateBudgetSummary(0, period);
         return;
     }
 
@@ -1062,24 +1381,27 @@ function renderExpensePreview(transactions) {
     }).join('');
 
     if (expensePeriodLabelEl) {
-        expensePeriodLabelEl.textContent = formatMonthLabel(previewItems[0].date);
+        expensePeriodLabelEl.textContent = period && period.label ? period.label : formatMonthLabel(previewItems[0].date);
     }
 
     const totalSpend = sorted.reduce(function(sum, transaction) {
         const amount = Number(transaction.amount) || 0;
         return amount > 0 ? sum + amount : sum;
     }, 0);
-    updateBudgetSummary(totalSpend);
+    updateBudgetSummary(totalSpend, period);
 }
 
-function updateBudgetSummary(totalSpend) {
+function updateBudgetSummary(totalSpend, period = getActivePeriodRange()) {
     const spend = Math.max(0, Number(totalSpend) || 0);
-    const storedTarget = getStoredMonthlyBudget();
-    const target = storedTarget || getAutomaticBudgetTarget(spend);
+    const storedTarget = getScaledBudgetTarget(getStoredMonthlyBudget(), period);
+    const target = storedTarget || getAutomaticBudgetTarget(spend, period);
     const usageRatio = target > 0 ? spend / target : 0;
     const progressRatio = Math.max(0, Math.min(usageRatio, 1));
     currentBudgetSpend = spend;
 
+    if (expenseBudgetLabelEl) {
+        expenseBudgetLabelEl.textContent = period && period.budgetLabel ? period.budgetLabel : 'Monthly Budget';
+    }
     if (expenseBudgetUsedEl) {
         expenseBudgetUsedEl.textContent = `${Math.round(Math.max(usageRatio, 0) * 100)}% used`;
         expenseBudgetUsedEl.classList.toggle('budget-over', usageRatio > 1);
@@ -1098,8 +1420,21 @@ function updateBudgetSummary(totalSpend) {
     refreshBudgetEditor({ preserveInput: true });
 }
 
-function getAutomaticBudgetTarget(spend) {
-    return spend > 0 ? Math.ceil((spend * 1.35) / 500) * 500 : 1500;
+function getScaledBudgetTarget(baseMonthlyTarget, period = getActivePeriodRange()) {
+    const monthlyTarget = Number(baseMonthlyTarget) || 0;
+    if (monthlyTarget <= 0) return 0;
+    if (!period) return monthlyTarget;
+    if (period.mode === 'week') return Math.max(1, Math.round(monthlyTarget * 12 / 52));
+    if (period.mode === 'year') return monthlyTarget * 12;
+    if (period.mode === 'custom') {
+        return Math.max(1, Math.round(monthlyTarget * (diffDaysInclusive(period.startIso, period.endIso) / 30.44)));
+    }
+    return monthlyTarget;
+}
+
+function getAutomaticBudgetTarget(spend, period = getActivePeriodRange()) {
+    const monthlyEstimate = spend > 0 ? Math.ceil((spend * 1.35) / 500) * 500 : 1500;
+    return getScaledBudgetTarget(monthlyEstimate, period) || monthlyEstimate;
 }
 
 function getStoredMonthlyBudget() {
@@ -1145,8 +1480,8 @@ function refreshBudgetEditor(options = {}) {
 
     if (expenseBudgetNoteEl) {
         expenseBudgetNoteEl.textContent = storedTarget
-            ? 'Manual budget saved on this device.'
-            : 'Auto target based on current spend.';
+            ? 'Manual monthly budget saved on this device and scaled to the selected period.'
+            : 'Auto target based on current period spend.';
     }
 }
 
@@ -1205,11 +1540,12 @@ function updatePasswordRequirementState(password) {
     });
 }
 
-function refreshVendorInsights() {
-    const insights = buildVendorInsights(allTransactions);
+function refreshVendorInsights(transactions = allTransactions) {
+    const insights = buildVendorInsights(transactions);
+    latestTopVendors = buildTopVendorsFromTransactions(transactions);
     updateVendorCards(latestTopVendors, insights);
     updateHeroVendors(latestTopVendors, insights);
-    updateInsightVisual(latestTopVendors, allTransactions);
+    updateInsightVisual(latestTopVendors, transactions);
 }
 
 function updateHeroVendors(vendors, insights) {
@@ -1402,6 +1738,29 @@ function buildVendorInsights(transactions) {
     return summary;
 }
 
+function buildTopVendorsFromTransactions(transactions) {
+    const totals = {};
+
+    (transactions || []).forEach(function(transaction) {
+        const key = normalizeVendorKey(transaction.vendor);
+        const amount = Number(transaction.amount) || 0;
+        if (!key || amount <= 0) return;
+        if (!totals[key]) {
+            totals[key] = {
+                vendor: transaction.vendor || 'Unknown vendor',
+                total: 0,
+                count: 0
+            };
+        }
+        totals[key].total += amount;
+        totals[key].count += 1;
+    });
+
+    return Object.values(totals)
+        .sort(function(a, b) { return b.total - a.total; })
+        .slice(0, 5);
+}
+
 function getPositiveSpendTotal(transactions) {
     return (transactions || []).reduce(function(sum, transaction) {
         const amount = Number(transaction.amount) || 0;
@@ -1433,20 +1792,8 @@ function getCategoryForVendor(vendor) {
 }
 
 function getFilteredTransactions() {
-    if (activeDateFilter === 'all') return allTransactions;
-    const d = new Date();
-    let cutoff;
-    if (activeDateFilter === '30d') {
-        cutoff = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 30).getTime();
-    } else if (activeDateFilter === '3m') {
-        cutoff = new Date(d.getFullYear(), d.getMonth() - 3, d.getDate()).getTime();
-    } else if (activeDateFilter === '1y') {
-        cutoff = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate()).getTime();
-    }
-    if (!cutoff) return allTransactions;
-    return allTransactions.filter(function(t) {
-        return toComparableDateValue(t.date) >= cutoff;
-    });
+    const period = getActivePeriodRange();
+    return filterTransactionsByRange(allTransactions, period.startIso, period.endIso);
 }
 
 function detectDuplicates(transactions) {
@@ -2212,18 +2559,14 @@ async function clearAllTransactions() {
     // Snapshot and optimistically clear the UI
     _clearUndoSnapshot = [...allTransactions];
     allTransactions = [];
-    renderTransactionsTable();
-    renderExpensePreview([]);
-    renderSpendingTrends([]);
+    applyDashboardPeriod();
     setSyncStatus('Cleared', 'Tap Undo within 5 seconds to restore.');
 
     showUndoToast('All transactions cleared.', function() {
         if (_clearUndoTimer) { clearTimeout(_clearUndoTimer); _clearUndoTimer = null; }
         allTransactions = _clearUndoSnapshot || [];
         _clearUndoSnapshot = null;
-        renderTransactionsTable();
-        renderExpensePreview(allTransactions);
-        renderSpendingTrends(allTransactions);
+        applyDashboardPeriod();
         setSyncStatus('Restored', 'Transactions have been restored.');
     });
 
@@ -2513,22 +2856,23 @@ function drawPieChart(canvas, legendEl, entries) {
     });
 }
 
-function renderSpendingTrends(transactions) {
+function renderSpendingTrends(transactions, period = getActivePeriodRange()) {
     const canvas = document.querySelector('#trends-chart');
     const emptyEl = document.querySelector('#trends-empty');
     if (!canvas) return;
 
-    const monthlyTotals = {};
+    const bucketTotals = {};
+    const bucketMode = getTrendBucketMode(period);
     (transactions || []).forEach(function(t) {
         const parts = parseIsoDateParts(t.date);
         if (!parts) return;
         const amount = Number(t.amount) || 0;
         if (amount <= 0) return;
-        const key = `${parts.year}-${String(parts.month).padStart(2, '0')}`;
-        monthlyTotals[key] = (monthlyTotals[key] || 0) + amount;
+        const key = getTrendBucketKey(parts, bucketMode);
+        bucketTotals[key] = (bucketTotals[key] || 0) + amount;
     });
 
-    const entries = Object.entries(monthlyTotals).sort((a, b) => a[0].localeCompare(b[0]));
+    const entries = Object.entries(bucketTotals).sort((a, b) => a[0].localeCompare(b[0]));
 
     if (!entries.length) {
         canvas.style.display = 'none';
@@ -2590,20 +2934,68 @@ function renderSpendingTrends(transactions) {
         ctx.fill();
 
         // Month label
-        const [yr, mo] = key.split('-');
-        const monthLabel = new Date(Number(yr), Number(mo) - 1).toLocaleString('en-US', { month: 'short' });
+        const axisLabel = formatTrendBucketLabel(key, bucketMode);
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.font = '10px IBM Plex Sans, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(monthLabel, x + barW / 2, padT + chartH + 16);
+        ctx.fillText(axisLabel.primary, x + barW / 2, padT + chartH + 16);
 
-        // Year label only on Jan or first bar
-        if (mo === '01' || i === 0) {
+        if (axisLabel.secondary) {
             ctx.fillStyle = 'rgba(255,255,255,0.22)';
             ctx.font = '9px IBM Plex Sans, sans-serif';
-            ctx.fillText(yr, x + barW / 2, padT + chartH + 28);
+            ctx.fillText(axisLabel.secondary, x + barW / 2, padT + chartH + 28);
         }
     });
+}
+
+function getTrendBucketMode(period) {
+    if (!period) return 'month';
+    if (period.mode === 'week') return 'day';
+    if (period.mode === 'year') return 'month';
+    if (period.mode === 'custom') {
+        return diffDaysInclusive(period.startIso, period.endIso) <= 45 ? 'day' : 'week';
+    }
+    return 'week';
+}
+
+function getTrendBucketKey(parts, bucketMode) {
+    if (bucketMode === 'day') {
+        return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+    }
+
+    if (bucketMode === 'week') {
+        const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0));
+        const weekStart = startOfWeekUtc(date);
+        return dateToIsoUtc(weekStart);
+    }
+
+    return `${parts.year}-${String(parts.month).padStart(2, '0')}`;
+}
+
+function formatTrendBucketLabel(key, bucketMode) {
+    if (bucketMode === 'day') {
+        const date = isoDateToUtcDate(key);
+        if (!date) return { primary: key, secondary: '' };
+        return {
+            primary: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }).format(date),
+            secondary: ''
+        };
+    }
+
+    if (bucketMode === 'week') {
+        const date = isoDateToUtcDate(key);
+        if (!date) return { primary: key, secondary: '' };
+        return {
+            primary: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }).format(date),
+            secondary: ''
+        };
+    }
+
+    const [year, month] = key.split('-');
+    return {
+        primary: new Date(Number(year), Number(month) - 1).toLocaleString('en-US', { month: 'short' }),
+        secondary: month === '01' ? year : ''
+    };
 }
 
 function generateCsvFromTransactions(transactions) {

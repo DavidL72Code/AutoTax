@@ -1930,12 +1930,51 @@ html.light-mode .parse-date-input {
     white-space: nowrap;
 }
 
-/* ── Date filter bar ─────────────────────────────────────────────────────── */
-.date-filter-bar {
+/* ── Period toolbar ─────────────────────────────────────────────────────── */
+.period-toolbar {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding: 18px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.period-toolbar-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.period-mode-group {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 20px;
+}
+
+.period-input-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 220px));
+    gap: 12px;
+}
+
+.period-input-group {
+    display: grid;
+    gap: 8px;
+}
+
+.period-summary {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.period-current-btn {
+    min-height: 36px;
 }
 
 .date-filter-btn {
@@ -2131,13 +2170,17 @@ html.light-mode .parse-date-input {
         justify-content: center;
     }
 
-    .date-filter-bar {
-        gap: 6px;
+    .period-toolbar {
+        padding: 16px;
     }
 
     .date-filter-btn {
         font-size: 0.82rem;
         padding: 0 12px;
+    }
+
+    .period-input-row {
+        grid-template-columns: 1fr;
     }
 
     .onboarding-card {
@@ -2789,6 +2832,11 @@ html.light-mode .date-filter-btn {
 html.light-mode .date-filter-btn.date-filter-active {
     background: var(--text);
     color: var(--bg);
+}
+
+html.light-mode .period-toolbar {
+    background: var(--panel);
+    border-color: var(--border);
 }
 
 html.light-mode .modal-card,
