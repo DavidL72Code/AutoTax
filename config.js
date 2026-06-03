@@ -20,7 +20,7 @@ window.API_BASE_URL = (() => {
     }
 
     if (isLocalHost) {
-        return normalizeApiBaseUrl(localStorage.getItem('API_BASE_URL')) || 'http://localhost:8000';
+        return normalizeApiBaseUrl(localStorage.getItem('API_BASE_URL')) || window.DEFAULT_REMOTE_API_BASE_URL;
     }
     return normalizeApiBaseUrl(localStorage.getItem('API_BASE_URL')) || window.DEFAULT_REMOTE_API_BASE_URL;
 })();
