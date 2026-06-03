@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Body, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .data_helper import (
     clear_transactions_for_user,
@@ -90,6 +90,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 PASSWORD_ITERATIONS = 120_000
 TOKEN_TTL_DAYS = 30
@@ -1860,7 +1868,10 @@ def advisor_chat(request: Request, body: dict = Body(...)):
     if len(message) > 2000:
         raise HTTPException(status_code=400, detail="Message too long.")
 
-    transactions = get_all_transactions(user_id=user.id)
+    try:
+        transactions = get_all_transactions(user_id=user.id)
+    except Exception:
+        transactions = []
     spend_summary = _build_spend_summary(transactions)
 
     history_text = ""
