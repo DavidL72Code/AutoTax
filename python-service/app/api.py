@@ -1784,6 +1784,22 @@ def delete_transaction(request: Request, transaction_id: str):
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"status": "success", "id": str(transaction_id)}
 
+def _category_for_vendor(vendor: str) -> str:
+    v = (vendor or '').lower()
+    if any(x in v for x in ('uber eats', 'ubereats', 'doordash', 'grubhub', 'postmates', 'door dash', 'instacart')): return 'Food & Dining'
+    if any(x in v for x in ('starbucks', 'dunkin', 'coffee', 'chipotle', 'mcdonald', 'chick-fil', 'subway', 'taco bell', 'burger king', 'wendy')): return 'Food & Dining'
+    if any(x in v for x in ('whole foods', 'trader joe', 'kroger', 'safeway', 'grocery', 'aldi', 'publix')): return 'Food & Dining'
+    if any(x in v for x in ('uber', 'lyft', 'metro', 'transit')): return 'Transportation'
+    if any(x in v for x in ('shell', 'chevron', 'bp ', 'exxon', 'mobil', ' gas', 'sunoco')): return 'Transportation'
+    if any(x in v for x in ('delta', 'united air', 'southwest', 'american airlines', 'jetblue', 'spirit air')): return 'Travel'
+    if any(x in v for x in ('hotel', 'airbnb', 'marriott', 'hilton', 'hyatt', 'expedia', 'booking.com')): return 'Travel'
+    if any(x in v for x in ('netflix', 'spotify', 'hulu', 'disney', 'apple music', 'youtube premium', 'hbo', 'paramount', 'peacock')): return 'Subscriptions'
+    if any(x in v for x in ('amazon', 'walmart', 'target', 'costco', 'best buy', 'bestbuy', 'ebay', 'etsy')): return 'Shopping'
+    if any(x in v for x in ('cvs', 'walgreens', 'pharmacy', 'rite aid', 'health', 'medical', 'doctor', 'dental')): return 'Health'
+    if any(x in v for x in ('paypal', 'venmo', 'stripe', 'bank', 'insurance', 'loan', 'credit')): return 'Finance'
+    if any(x in v for x in ('at&t', 'verizon', 't-mobile', 'comcast', 'xfinity', 'electric', 'water bill', 'internet')): return 'Bills & Utilities'
+    return 'Other'
+
 def _build_spend_summary(transactions) -> str:
     """Build aggregated spend summary for the advisor — no raw email content or IDs."""
     if not transactions:
@@ -1825,7 +1841,7 @@ def _build_spend_summary(transactions) -> str:
             key = cmp_date.strftime('%b %Y')
             monthly_totals[key] += amt
 
-        cat = (getattr(t, 'category', None) or 'Uncategorized').strip()
+        cat = (getattr(t, 'category', None) or '').strip() or _category_for_vendor(getattr(t, 'vendor', ''))
         cat_totals[cat] += amt
         vendor = (getattr(t, 'vendor', None) or 'Unknown').strip()
         vendor_totals[vendor] += amt

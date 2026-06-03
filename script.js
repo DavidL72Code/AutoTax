@@ -1739,20 +1739,18 @@ function normalizeVendorKey(value) {
 
 function getCategoryForVendor(vendor) {
     const v = (vendor || '').toLowerCase();
-    if (v.includes('amazon')) return 'Shopping';
-    if (v.includes('uber') && (v.includes('eat') || v.includes('eats'))) return 'Food Delivery';
-    if (v.includes('doordash') || v.includes('grubhub') || v.includes('postmates') || v.includes('door dash')) return 'Food Delivery';
-    if (v.includes('uber') || v.includes('lyft')) return 'Transport';
-    if (v.includes('starbucks') || v.includes('coffee') || v.includes('dunkin')) return 'Coffee';
-    if (v.includes('netflix') || v.includes('spotify') || v.includes('hulu') || v.includes('disney') || v.includes('apple music') || v.includes('youtube premium')) return 'Subscriptions';
-    if (v.includes('walmart') || v.includes('target') || v.includes('costco')) return 'Shopping';
-    if (v.includes('best buy') || v.includes('bestbuy')) return 'Electronics';
-    if (v.includes('paypal') || v.includes('venmo') || v.includes('stripe')) return 'Finance';
-    if (v.includes('whole foods') || v.includes('trader joe') || v.includes('kroger') || v.includes('safeway') || v.includes('grocery')) return 'Groceries';
-    if (v.includes('shell') || v.includes('chevron') || v.includes('bp ') || v.includes('exxon') || v.includes(' gas')) return 'Gas';
-    if (v.includes('cvs') || v.includes('walgreens') || v.includes('pharmacy')) return 'Health';
-    if (v.includes('hotel') || v.includes('airbnb') || v.includes('marriott') || v.includes('hilton')) return 'Travel';
-    if (v.includes('delta') || v.includes('united air') || v.includes('southwest') || v.includes('american airlines')) return 'Travel';
+    if (v.includes('uber eats') || v.includes('ubereats') || v.includes('doordash') || v.includes('grubhub') || v.includes('postmates') || v.includes('door dash') || v.includes('instacart')) return 'Food & Dining';
+    if (v.includes('starbucks') || v.includes('dunkin') || v.includes('coffee') || v.includes('chipotle') || v.includes('mcdonald') || v.includes('chick-fil') || v.includes('subway') || v.includes('taco bell') || v.includes('burger king') || v.includes('wendy')) return 'Food & Dining';
+    if (v.includes('whole foods') || v.includes('trader joe') || v.includes('kroger') || v.includes('safeway') || v.includes('grocery') || v.includes('aldi') || v.includes('publix')) return 'Food & Dining';
+    if (v.includes('uber') || v.includes('lyft') || v.includes('metro') || v.includes('transit')) return 'Transportation';
+    if (v.includes('shell') || v.includes('chevron') || v.includes('bp ') || v.includes('exxon') || v.includes('mobil') || v.includes(' gas') || v.includes('sunoco')) return 'Transportation';
+    if (v.includes('delta') || v.includes('united air') || v.includes('southwest') || v.includes('american airlines') || v.includes('jetblue') || v.includes('spirit air')) return 'Travel';
+    if (v.includes('hotel') || v.includes('airbnb') || v.includes('marriott') || v.includes('hilton') || v.includes('hyatt') || v.includes('expedia') || v.includes('booking.com')) return 'Travel';
+    if (v.includes('netflix') || v.includes('spotify') || v.includes('hulu') || v.includes('disney') || v.includes('apple music') || v.includes('youtube premium') || v.includes('hbo') || v.includes('paramount') || v.includes('peacock')) return 'Subscriptions';
+    if (v.includes('amazon') || v.includes('walmart') || v.includes('target') || v.includes('costco') || v.includes('best buy') || v.includes('bestbuy') || v.includes('ebay') || v.includes('etsy')) return 'Shopping';
+    if (v.includes('cvs') || v.includes('walgreens') || v.includes('pharmacy') || v.includes('rite aid') || v.includes('health') || v.includes('medical') || v.includes('doctor') || v.includes('dental')) return 'Health';
+    if (v.includes('paypal') || v.includes('venmo') || v.includes('stripe') || v.includes('bank') || v.includes('insurance') || v.includes('loan') || v.includes('credit')) return 'Finance';
+    if (v.includes('at&t') || v.includes('verizon') || v.includes('t-mobile') || v.includes('comcast') || v.includes('xfinity') || v.includes('electric') || v.includes('water bill') || v.includes('internet')) return 'Bills & Utilities';
     return 'Other';
 }
 
@@ -2988,7 +2986,7 @@ function generateCsvFromTransactions(transactions) {
         const vendor = tx.vendor || '';
         const amount = Number(tx.amount || 0).toFixed(2);
         const tax = Number(tx.tax || 0).toFixed(2);
-        const category = tx.category || '';
+        const category = tx.category || getCategoryForVendor(tx.vendor);
         const status = 'Processed';
 
         const rowData = [date, vendor, amount, tax, category, status].map(content => {
