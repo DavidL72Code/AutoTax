@@ -61,6 +61,25 @@ function fmtCurrency(v) {
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function getCategoryForVendor(vendor) {
+    const v = (vendor || '').toLowerCase();
+    if (v.includes('amazon')) return 'Shopping';
+    if (v.includes('uber') && (v.includes('eat') || v.includes('eats'))) return 'Food Delivery';
+    if (v.includes('doordash') || v.includes('grubhub') || v.includes('postmates') || v.includes('door dash')) return 'Food Delivery';
+    if (v.includes('uber') || v.includes('lyft')) return 'Transport';
+    if (v.includes('starbucks') || v.includes('coffee') || v.includes('dunkin')) return 'Coffee';
+    if (v.includes('netflix') || v.includes('spotify') || v.includes('hulu') || v.includes('disney') || v.includes('apple music') || v.includes('youtube premium')) return 'Subscriptions';
+    if (v.includes('walmart') || v.includes('target') || v.includes('costco')) return 'Shopping';
+    if (v.includes('best buy') || v.includes('bestbuy')) return 'Electronics';
+    if (v.includes('paypal') || v.includes('venmo') || v.includes('stripe')) return 'Finance';
+    if (v.includes('whole foods') || v.includes('trader joe') || v.includes('kroger') || v.includes('safeway') || v.includes('grocery')) return 'Groceries';
+    if (v.includes('shell') || v.includes('chevron') || v.includes('bp ') || v.includes('exxon') || v.includes(' gas')) return 'Gas';
+    if (v.includes('cvs') || v.includes('walgreens') || v.includes('pharmacy')) return 'Health';
+    if (v.includes('hotel') || v.includes('airbnb') || v.includes('marriott') || v.includes('hilton')) return 'Travel';
+    if (v.includes('delta') || v.includes('united air') || v.includes('southwest') || v.includes('american airlines')) return 'Travel';
+    return 'Other';
+}
+
 // ── Nav dropdown ─────────────────────────────────────────────────────────────
 function setupNav() {
     const hamburger = document.querySelector('#nav-hamburger');
@@ -282,7 +301,7 @@ function buildPieChart(txs, groupBy) {
 
     const map = {};
     txs.forEach(tx => {
-        const key = groupBy === 'category' ? (tx.category || 'Uncategorized') : (tx.vendor || 'Unknown');
+        const key = groupBy === 'category' ? (tx.category || getCategoryForVendor(tx.vendor)) : (tx.vendor || 'Unknown');
         map[key] = (map[key] || 0) + (parseFloat(tx.amount) || 0);
     });
     const entries = Object.entries(map).sort((a,b) => b[1] - a[1]).slice(0, 12);
