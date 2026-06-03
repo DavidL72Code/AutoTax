@@ -1,6 +1,7 @@
 'use strict';
 
 const API_BASE_URL = window.API_BASE_URL;
+const FALLBACK_API_BASE_URL = window.DEFAULT_REMOTE_API_BASE_URL || 'https://autotax-xwly.onrender.com';
 
 let _firebaseAuth = null;
 let _firebaseReadyPromise = null;
@@ -53,7 +54,7 @@ async function _initFirebase() {
     if (_firebaseReadyPromise) return _firebaseReadyPromise;
     _firebaseReadyPromise = (async () => {
         try {
-            const res = await fetch(API_BASE_URL + '/api/public-config', { cache: 'no-store' });
+            const res = await fetchWithApiFallback('/api/public-config', { cache: 'no-store' });
             if (!res.ok) return;
             const cfg = await res.json().catch(() => ({}));
             const fb = cfg && cfg.firebase;
@@ -95,7 +96,7 @@ async function getToken() {
 
 async function apiFetch(path, opts = {}) {
     const token = await getToken();
-    const res = await fetch(API_BASE_URL + path, {
+    const res = await fetchWithApiFallback(path, {
         ...opts,
         headers: { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
@@ -107,6 +108,27 @@ async function apiFetch(path, opts = {}) {
         throw new Error(body.detail || `API ${res.status}`);
     }
     return res.json();
+}
+
+async function fetchWithApiFallback(path, opts = {}) {
+    const candidates = [API_BASE_URL];
+    if (FALLBACK_API_BASE_URL && FALLBACK_API_BASE_URL !== API_BASE_URL) {
+        candidates.push(FALLBACK_API_BASE_URL);
+    }
+
+    let lastError = null;
+    for (const baseUrl of candidates) {
+        try {
+            const response = await fetch(baseUrl + path, opts);
+            if (baseUrl !== API_BASE_URL && response.ok) {
+                try { localStorage.setItem('API_BASE_URL', baseUrl); } catch (error) {}
+            }
+            return response;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError || new Error('Failed to fetch');
 }
 
 // ── Nav dropdown ──────────────────────────────────────────────────────────────
