@@ -581,7 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (periodCurrentBtn) {
         periodCurrentBtn.addEventListener('click', () => {
             const today = getTodayIsoDate();
-            renderPeriod(currentPeriodMode, today, today);
+            renderPeriod('month', today, today);
         });
     }
 
