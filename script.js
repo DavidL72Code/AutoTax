@@ -633,14 +633,7 @@ function setupEventListeners() {
         });
     }
 
-    if (connectGoogleBtn) {
-        connectGoogleBtn.addEventListener('click', function() {
-            connectGoogle();
-        });
-    }
-
-    // Hero and onboarding connect Gmail buttons
-    document.querySelectorAll('.btn-connect-google-hero, .btn-connect-google-onboard').forEach(function(btn) {
+    document.querySelectorAll('.btn-connect-google, .btn-connect-google-hero, .btn-connect-google-onboard').forEach(function(btn) {
         btn.addEventListener('click', function() {
             connectGoogle();
         });
