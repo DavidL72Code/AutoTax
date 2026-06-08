@@ -1925,6 +1925,10 @@ OUT OF SCOPE — politely decline and redirect if asked about:
 PRIVACY — never repeat raw transaction details verbatim. Reference spending patterns and categories to give personalized advice, but keep responses focused on actionable guidance.
 
 FORMAT — be concise, warm, and practical. Use bullet points for action steps. Keep responses under 250 words. End with a short disclaimer line.
+FORMATTING RULES — follow exactly:
+- Use - for bullet points, never *
+- Use *word* for bold text (single asterisk each side), never **word**
+- Do not use headers or # symbols
 {history_text}
 User: {message}
 Advisor:"""

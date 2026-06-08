@@ -148,10 +148,9 @@ function setupNav() {
 function renderMarkdown(text) {
     return text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/\*(.+?)\*/g, '<strong>$1</strong>')
         .replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>')
-        .replace(/^[-•] (.+)$/gm, '<li>$1</li>')
+        .replace(/^[*\-•] (.+)$/gm, '<li>$1</li>')
         .replace(/(<li>.*<\/li>(\n|$))+/g, m => '<ul>' + m + '</ul>')
         .replace(/\n\n/g, '</p><p>')
         .replace(/\n/g, '<br>')
