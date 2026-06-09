@@ -53,6 +53,24 @@ async function apiFetch(path, opts = {}) {
 
 const BUDGET_KEY = 'MONTHLY_BUDGET_TARGET';
 const PAGE_SIZE_KEY = 'TABLE_PAGE_SIZE';
+const CATEGORY_BUDGETS_KEY = 'CATEGORY_BUDGETS';
+const RA_NOTIFICATIONS_KEY = 'RA_NOTIFICATIONS';
+const ALL_CATEGORIES = ['Food & Dining','Transportation','Travel','Subscriptions','Shopping','Health','Finance','Bills & Utilities','Other'];
+
+function getCategoryBudgets() {
+    try { return JSON.parse(localStorage.getItem(CATEGORY_BUDGETS_KEY) || '{}'); } catch(e) { return {}; }
+}
+
+function updateBellBadge() {
+    const badge = document.getElementById('bell-badge');
+    if (!badge) return;
+    try {
+        const list = JSON.parse(localStorage.getItem(RA_NOTIFICATIONS_KEY) || '[]');
+        const unread = list.filter(function(n) { return !n.read; }).length;
+        badge.textContent = unread;
+        badge.hidden = unread === 0;
+    } catch(e) { badge.hidden = true; }
+}
 
 // ── Nav dropdown ──────────────────────────────────────────────────────────────
 function setupNav() {
@@ -77,6 +95,7 @@ function applyTheme(theme) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     setupNav();
+    updateBellBadge();
 
     // Auth guard
     if (!getToken()) { location.href = 'index.html'; return; }
@@ -131,6 +150,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { localStorage.removeItem(BUDGET_KEY); } catch(e) {}
         if (budgetInput) budgetInput.value = '';
         showFeedback('budget-feedback', '✓ Budget set to auto', false);
+    });
+
+    // Category Limits
+    const catLimitsRows = document.querySelector('#category-limits-rows');
+    if (catLimitsRows) {
+        const saved = getCategoryBudgets();
+        ALL_CATEGORIES.forEach(function(cat) {
+            const row = document.createElement('div');
+            row.className = 'category-limit-row';
+            row.innerHTML = '<span class="category-limit-label">' + cat + '</span>' +
+                '<input class="category-limit-input" type="number" min="0" step="1" placeholder="No limit" data-cat="' + cat + '" value="' + (saved[cat] || '') + '" />';
+            catLimitsRows.appendChild(row);
+        });
+    }
+    document.querySelector('#category-limits-save-btn')?.addEventListener('click', function() {
+        const inputs = document.querySelectorAll('.category-limit-input');
+        const obj = {};
+        inputs.forEach(function(inp) {
+            const val = parseFloat(inp.value);
+            if (!isNaN(val) && val > 0) obj[inp.dataset.cat] = val;
+        });
+        try { localStorage.setItem(CATEGORY_BUDGETS_KEY, JSON.stringify(obj)); } catch(e) {}
+        showFeedback('category-limits-feedback', 'Category limits saved', false);
     });
 
     // Account email

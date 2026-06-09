@@ -4,6 +4,8 @@
 const API_BASE_URL = window.API_BASE_URL;
 const DEMO_MODE = Boolean(window.DEMO_MODE);
 const MONTHLY_BUDGET_STORAGE_KEY = 'MONTHLY_BUDGET_TARGET';
+const CATEGORY_BUDGETS_KEY = 'CATEGORY_BUDGETS';
+const RA_NOTIFICATIONS_KEY = 'RA_NOTIFICATIONS';
 let firebaseConfig = null;
 
 // DOM Elements
@@ -1158,9 +1160,18 @@ async function loadTransactions() {
 
         // Duplicate detection
         const dupWarning = document.querySelector('#duplicate-warning');
+        const hasDups = detectDuplicates(allTransactions);
         if (dupWarning) {
-            dupWarning.hidden = !detectDuplicates(allTransactions);
+            dupWarning.hidden = !hasDups;
         }
+        if (hasDups) {
+            const existing = getNotifications().find(function(n) { return n.type === 'duplicate_detected'; });
+            if (!existing) {
+                addNotification('duplicate_detected', 'Duplicate transactions detected', 'Some transactions appear more than once. Review and remove duplicates.');
+            }
+        }
+
+        checkCategoryBudgets(allTransactions);
 
         return allTransactions;
     } catch (error) {
@@ -1424,6 +1435,78 @@ function clearStoredMonthlyBudget() {
     } catch (error) {
         // Ignore storage removal failures and keep the dashboard usable.
     }
+}
+
+function getCategoryBudgets() {
+    try {
+        return JSON.parse(localStorage.getItem(CATEGORY_BUDGETS_KEY) || '{}');
+    } catch(e) { return {}; }
+}
+
+function saveCategoryBudgets(obj) {
+    try { localStorage.setItem(CATEGORY_BUDGETS_KEY, JSON.stringify(obj)); } catch(e) {}
+}
+
+function getNotifications() {
+    try {
+        return JSON.parse(localStorage.getItem(RA_NOTIFICATIONS_KEY) || '[]');
+    } catch(e) { return []; }
+}
+
+function addNotification(type, title, message) {
+    const list = getNotifications();
+    list.push({ id: Date.now() + Math.random().toString(36).slice(2), type, title, message, read: false, createdAt: Date.now() });
+    while (list.length > 50) list.shift();
+    try { localStorage.setItem(RA_NOTIFICATIONS_KEY, JSON.stringify(list)); } catch(e) {}
+    updateBellBadge();
+}
+
+function markAllRead() {
+    const list = getNotifications().map(function(n) { return Object.assign({}, n, { read: true }); });
+    try { localStorage.setItem(RA_NOTIFICATIONS_KEY, JSON.stringify(list)); } catch(e) {}
+    updateBellBadge();
+}
+
+function clearNotifications() {
+    try { localStorage.setItem(RA_NOTIFICATIONS_KEY, '[]'); } catch(e) {}
+    updateBellBadge();
+}
+
+function updateBellBadge() {
+    const badge = document.getElementById('bell-badge');
+    if (!badge) return;
+    const unread = getNotifications().filter(function(n) { return !n.read; }).length;
+    badge.textContent = unread;
+    badge.hidden = unread === 0;
+}
+
+function checkCategoryBudgets(transactions) {
+    const budgets = getCategoryBudgets();
+    if (!Object.keys(budgets).length) return;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const spend = {};
+    (transactions || []).forEach(function(t) {
+        const cat = t.category || getCategoryForVendor(t.vendor);
+        const d = new Date(t.date || 0).getTime();
+        if (d >= monthStart) {
+            spend[cat] = (spend[cat] || 0) + Math.abs(Number(t.amount) || 0);
+        }
+    });
+    Object.keys(budgets).forEach(function(cat) {
+        const limit = Number(budgets[cat]);
+        const total = spend[cat] || 0;
+        if (limit > 0 && total > limit) {
+            const existing = getNotifications().find(function(n) {
+                return n.type === 'budget_exceeded' && n.title.startsWith(cat) &&
+                    new Date(n.createdAt).getMonth() === now.getMonth() &&
+                    new Date(n.createdAt).getFullYear() === now.getFullYear();
+            });
+            if (!existing) {
+                addNotification('budget_exceeded', cat + ' budget exceeded', 'You spent $' + total.toFixed(2) + ' of your $' + limit.toFixed(2) + ' limit this month.');
+            }
+        }
+    });
 }
 
 function refreshBudgetEditor(options = {}) {
@@ -2614,6 +2697,9 @@ function startSyncRefreshLoop(previousSignature, originalHTML) {
                                 failed ? 'Sync failed' : 'New receipts loaded',
                                 failed ? (statusData.message || 'Sync did not complete.') : `${allTransactions.length} receipts ready.`
                             );
+                            if (!failed) {
+                                addNotification('sync_complete', 'Sync complete', allTransactions.length + ' receipts loaded.');
+                            }
                             setTimeout(function() { syncBtn.innerHTML = originalHTML; syncBtn.disabled = false; }, 1800);
                             return;
                         }
@@ -2630,6 +2716,7 @@ function startSyncRefreshLoop(previousSignature, originalHTML) {
                 syncRunId = null;
                 syncBtn.textContent = 'Updated';
                 setSyncStatus('New receipts loaded', `${allTransactions.length} receipts ready.`);
+                addNotification('sync_complete', 'Sync complete', allTransactions.length + ' receipts loaded.');
                 setTimeout(function() { syncBtn.innerHTML = originalHTML; syncBtn.disabled = false; }, 1500);
                 return;
             }
@@ -3788,6 +3875,7 @@ function setupNavDrawer() {
 document.addEventListener('DOMContentLoaded', function() {
     initTheme();
     setupNavDrawer();
+    updateBellBadge();
 
     // On first load without auth, show landing. setAuthState will correct this when auth resolves.
     const appContainer = document.querySelector('#app-container');

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications — ReceiptAuto</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .notifications-page { max-width: 680px; margin: 0 auto; padding: 40px 24px 80px; }
+        .page-title { font-size: 1.6rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+        .page-sub   { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 24px; }
+        .notif-actions { display: flex; gap: 8px; margin-bottom: 24px; }
+        .notification-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 16px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .notification-item.unread { border-left: 3px solid var(--accent-amber); }
+        .notification-item.unread.type-budget_exceeded { border-left-color: var(--accent-red); }
+        .notification-item.unread.type-sync_complete { border-left-color: var(--accent-green); }
+        .notification-item.unread.type-duplicate_detected { border-left-color: var(--accent-amber); }
+        .notification-item.unread.type-info { border-left-color: var(--text-faint); }
+        .notification-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.06);
+        }
+        .notification-icon.type-budget_exceeded { background: rgba(248, 113, 113, 0.15); color: var(--accent-red); }
+        .notification-icon.type-duplicate_detected { background: rgba(251, 146, 60, 0.15); color: var(--accent-amber); }
+        .notification-icon.type-sync_complete { background: rgba(74, 222, 128, 0.15); color: var(--accent-green); }
+        .notification-icon.type-info { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+        .notification-content { flex: 1; min-width: 0; }
+        .notification-title { font-size: 0.9rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+        .notification-message { font-size: 0.84rem; color: var(--text-muted); }
+        .notification-time { font-size: 0.75rem; color: var(--text-faint); margin-top: 4px; }
+        .notif-empty { text-align: center; padding: 60px 0; color: var(--text-faint); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="nav-container">
+            <button id="nav-hamburger" class="btn-hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <a class="logo" href="index.html">
+                <div class="logo-icon">RA</div>
+                <h1>Receipt<span>Auto</span></h1>
+            </a>
+            <div class="nav-auth">
+                <button id="nav-bell" class="btn-bell" aria-label="Notifications" title="Notifications" onclick="window.location.href='notifications.html'">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <span class="bell-badge" id="bell-badge" hidden>0</span>
+                </button>
+                <span id="nav-user-label" class="nav-user-label"></span>
+            </div>
+        </div>
+        <div id="nav-menu" class="nav-dropdown" hidden>
+            <a href="index.html" class="nav-dropdown-item">Home</a>
+            <a href="console.html" class="nav-dropdown-item">Transaction Console</a>
+            <a href="transactions.html" class="nav-dropdown-item">Spend Analytics</a>
+            <a href="advisor.html" class="nav-dropdown-item">Not a Financial Advisor</a>
+            <div class="nav-dropdown-divider"></div>
+            <a href="settings.html" class="nav-dropdown-item">Settings</a>
+        </div>
+    </nav>
+
+    <div class="notifications-page">
+        <h1 class="page-title">Notifications</h1>
+        <p class="page-sub">Activity and alerts from ReceiptAuto.</p>
+        <div class="notif-actions">
+            <button id="mark-all-read-btn" class="btn-action">Mark all read</button>
+            <button id="clear-all-btn" class="btn-action btn-danger">Clear all</button>
+        </div>
+        <div id="notif-list"></div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script>
+    function relativeTime(ts) {
+        const diff = Math.floor((Date.now() - ts) / 1000);
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return Math.floor(diff / 60) + ' minutes ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
+        return Math.floor(diff / 86400) + ' days ago';
+    }
+
+    function typeIcon(type) {
+        if (type === 'budget_exceeded') {
+            return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        }
+        if (type === 'duplicate_detected') {
+            return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+        }
+        if (type === 'sync_complete') {
+            return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        }
+        return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    }
+
+    function renderNotifications() {
+        const list = getNotifications().slice().reverse();
+        const container = document.getElementById('notif-list');
+        if (!list.length) {
+            container.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+            return;
+        }
+        container.innerHTML = list.map(function(n) {
+            return '<div class="notification-item ' + (n.read ? '' : 'unread') + ' type-' + n.type + '">' +
+                '<div class="notification-icon type-' + n.type + '">' + typeIcon(n.type) + '</div>' +
+                '<div class="notification-content">' +
+                    '<div class="notification-title">' + escapeHtml(n.title) + '</div>' +
+                    '<div class="notification-message">' + escapeHtml(n.message) + '</div>' +
+                    '<div class="notification-time">' + relativeTime(n.createdAt) + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        markAllRead();
+        updateBellBadge();
+        renderNotifications();
+
+        const hamburger = document.querySelector('#nav-hamburger');
+        const menu = document.querySelector('#nav-menu');
+        if (hamburger && menu) {
+            hamburger.addEventListener('click', function() { menu.hidden = !menu.hidden; });
+            document.addEventListener('click', function(e) {
+                if (!hamburger.contains(e.target) && !menu.contains(e.target)) menu.hidden = true;
+            });
+        }
+
+        document.getElementById('mark-all-read-btn')?.addEventListener('click', function() {
+            markAllRead();
+            renderNotifications();
+        });
+
+        document.getElementById('clear-all-btn')?.addEventListener('click', function() {
+            clearNotifications();
+            renderNotifications();
+        });
+    });
+    </script>
+</body>
+</html>

@@ -20,6 +20,9 @@
         .settings-select { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-soft); font-size: 0.83rem; font-family: inherit; }
         .settings-budget-row { display: flex; align-items: center; gap: 8px; width: 100%; }
         .settings-feedback { font-size: 0.78rem; color: var(--accent-green); margin-top: 4px; min-height: 18px; }
+        .category-limit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 0; }
+        .category-limit-label { font-size: 0.88rem; font-weight: 600; color: var(--text-soft); flex: 1; }
+        .category-limit-input { width: 100px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-soft); font-size: 0.83rem; font-family: inherit; text-align: right; }
     </style>
 </head>
 <body>
@@ -33,6 +36,10 @@
                 <h1>Receipt<span>Auto</span></h1>
             </a>
             <div class="nav-auth">
+                <button id="nav-bell" class="btn-bell" aria-label="Notifications" title="Notifications" onclick="window.location.href='notifications.html'">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <span class="bell-badge" id="bell-badge" hidden>0</span>
+                </button>
                 <span id="nav-user-label" class="nav-user-label"></span>
             </div>
         </div>
@@ -114,6 +121,19 @@
                     <button id="budget-auto-btn" class="btn-action" type="button">Auto</button>
                 </div>
                 <div id="budget-feedback" class="settings-feedback"></div>
+            </div>
+        </div>
+
+        <!-- Category Limits -->
+        <div class="settings-card" id="category-limits-card">
+            <div class="settings-card-title">Category Limits</div>
+            <div class="settings-row settings-row-stacked" id="category-limits-rows">
+            </div>
+            <div class="settings-row">
+                <div class="settings-row-actions" style="width:100%;justify-content:space-between;align-items:center;">
+                    <div id="category-limits-feedback" class="settings-feedback"></div>
+                    <button id="category-limits-save-btn" class="btn-action-primary" type="button">Save</button>
+                </div>
             </div>
         </div>
 
