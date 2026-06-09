@@ -169,10 +169,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle redirect back from Google OAuth
     const _gmailParam = new URLSearchParams(window.location.search).get('gmail');
+    const _autoStartScan = _gmailParam === 'connected';
     if (_gmailParam) {
         history.replaceState(null, '', window.location.pathname);
         if (_gmailParam === 'connected') {
-            showSuccess('Gmail connected! Click Scan Emails to import your receipts.');
+            showSuccess('Gmail connected! Starting scan…');
         } else {
             showError('Gmail connection failed. Please try again.');
         }
@@ -190,6 +191,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (_landing) _landing.hidden = true;
             if (_app) _app.hidden = false;
             loadDashboardData();
+            if (_autoStartScan) {
+                startParse(null, null, syncBtn, document.querySelector('#stop-parse-btn'));
+            }
             if (DEMO_MODE) {
                 loadDemoEmails();
             }
@@ -2252,7 +2256,16 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
             body: JSON.stringify(body),
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.detail || `API ${response.status}`);
+        if (!response.ok) {
+            if (response.status === 400 && (result.detail || '').toLowerCase().includes('google oauth not connected')) {
+                if (parseBtn) { parseBtn.textContent = originalLabel; parseBtn.disabled = false; }
+                if (stopParseBtn) stopParseBtn.hidden = true;
+                if (logEl) logEl.textContent = 'Connecting Gmail…';
+                await connectGoogle();
+                return;
+            }
+            throw new Error(result.detail || `API ${response.status}`);
+        }
 
         _activeSyncRunId = result.run_id || null;
         const previousSignature = buildTransactionSignature(allTransactions);
@@ -2262,6 +2275,15 @@ async function startParse(dateFrom, dateTo, parseBtn, stopParseBtn) {
             if (!_activeSyncRunId) { clearInterval(pollLog); return; }
             try {
                 const sr = await authFetch(`${API_BASE_URL}/api/sync-status?run_id=${_activeSyncRunId}`);
+                if (sr.status === 404) {
+                    clearInterval(pollLog);
+                    _activeSyncRunId = null;
+                    if (parseBtn) { parseBtn.textContent = originalLabel; parseBtn.disabled = false; }
+                    if (stopParseBtn) stopParseBtn.hidden = true;
+                    if (logEl) logEl.textContent = 'Sync completed.';
+                    loadDashboardData();
+                    return;
+                }
                 const s = await sr.json().catch(() => ({}));
                 if (logEl) {
                     if (s.logs && s.logs.length) {
