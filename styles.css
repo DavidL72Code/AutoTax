@@ -1,28 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
 
 :root {
-    --bg: #050505;
-    --bg-soft: #0b0b0d;
-    --panel: rgba(17, 17, 19, 0.94);
-    --panel-strong: rgba(21, 21, 24, 0.98);
-    --panel-elevated: rgba(29, 29, 33, 0.9);
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.12);
-    --text: #f4f2ec;
-    --text-soft: #d5d1ca;
-    --text-muted: #a29d96;
-    --text-faint: #72706b;
-    --accent: #f6f1e8;
-    --accent-ink: #101012;
-    --accent-green: #4ade80;
-    --accent-lime: #d9f667;
-    --accent-amber: #fb923c;
+    --bg: #060a14;
+    --bg-soft: #0a101f;
+    --panel: rgba(13, 19, 34, 0.92);
+    --panel-strong: rgba(16, 24, 42, 0.97);
+    --panel-elevated: rgba(23, 33, 56, 0.92);
+    --border: rgba(148, 163, 184, 0.12);
+    --border-strong: rgba(148, 163, 184, 0.22);
+    --text: #eaeff8;
+    --text-soft: #c4cdde;
+    --text-muted: #8d99b0;
+    --text-faint: #5f6a82;
+    --accent: #3b82f6;
+    --accent-ink: #ffffff;
+    --accent-green: #34d399;
+    --accent-lime: #60a5fa;
+    --accent-amber: #fbbf24;
     --accent-red: #f87171;
-    --shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
-    --radius-xl: 32px;
-    --radius-lg: 24px;
-    --radius-md: 18px;
-    --radius-sm: 14px;
+    --shadow: 0 20px 60px rgba(2, 6, 23, 0.55);
+    --radius-xl: 20px;
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 9px;
 }
 
 * {
@@ -38,12 +38,12 @@ html {
 body {
     position: relative;
     min-height: 100vh;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     color: var(--text);
     background:
-        radial-gradient(circle at top left, rgba(79, 70, 229, 0.08), transparent 30%),
-        radial-gradient(circle at 85% 12%, rgba(74, 222, 128, 0.12), transparent 24%),
-        radial-gradient(circle at bottom center, rgba(251, 146, 60, 0.08), transparent 30%),
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 32%),
+        radial-gradient(circle at 85% 12%, rgba(99, 102, 241, 0.1), transparent 26%),
+        radial-gradient(circle at bottom center, rgba(14, 165, 233, 0.07), transparent 32%),
         var(--bg);
     line-height: 1.55;
     overflow-x: hidden;
@@ -154,13 +154,13 @@ nav,
     height: 40px;
     display: grid;
     place-items: center;
-    border-radius: 14px;
     font-size: 0.82rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     color: var(--accent-ink);
-    background: linear-gradient(180deg, #f7f3ea, #d7d1c5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    background: linear-gradient(180deg, #60a5fa, #2563eb);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    border-radius: 12px;
 }
 
 .logo h1 {
@@ -487,8 +487,8 @@ nav,
     width: 0;
     height: 100%;
     border-radius: inherit;
-    background: linear-gradient(90deg, var(--accent-amber), #d6f56f 60%, var(--accent-green));
-    box-shadow: 0 0 14px rgba(74, 222, 128, 0.3);
+    background: linear-gradient(90deg, var(--accent-amber), #6ee7b7 60%, var(--accent-green));
+    box-shadow: 0 0 14px rgba(52, 211, 153, 0.3);
 }
 
 .budget-footer {
@@ -520,9 +520,9 @@ nav,
 }
 
 .budget-input-shell:focus-within {
-    border-color: rgba(217, 246, 103, 0.34);
+    border-color: rgba(96, 165, 250, 0.34);
     background: rgba(255, 255, 255, 0.055);
-    box-shadow: 0 0 0 4px rgba(217, 246, 103, 0.08);
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.08);
 }
 
 .budget-currency {
@@ -606,12 +606,12 @@ nav,
     margin-top: 8px;
     border-radius: 50%;
     background: var(--accent-lime);
-    box-shadow: 0 0 14px rgba(217, 246, 103, 0.45);
+    box-shadow: 0 0 14px rgba(96, 165, 250, 0.45);
 }
 
 .hero-vendor-dot-secondary {
     background: var(--accent-green);
-    box-shadow: 0 0 14px rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 14px rgba(52, 211, 153, 0.4);
 }
 
 .hero-vendor-name {
@@ -1165,8 +1165,8 @@ html.light-mode .parse-date-input {
 }
 
 .badge-amazon {
-    background: rgba(251, 146, 60, 0.12);
-    border: 1px solid rgba(251, 146, 60, 0.18);
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.18);
     color: #fdba74;
 }
 
@@ -1195,14 +1195,14 @@ html.light-mode .parse-date-input {
 }
 
 .status {
-    border: 1px solid rgba(74, 222, 128, 0.18);
-    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid rgba(52, 211, 153, 0.18);
+    background: rgba(52, 211, 153, 0.12);
     color: #b7f7cb;
 }
 
 .status-warning {
-    border-color: rgba(251, 146, 60, 0.2);
-    background: rgba(251, 146, 60, 0.12);
+    border-color: rgba(251, 191, 36, 0.2);
+    background: rgba(251, 191, 36, 0.12);
     color: #fdba74;
 }
 
@@ -1388,8 +1388,8 @@ html.light-mode .parse-date-input {
 .progress-fill-new {
     height: 100%;
     border-radius: inherit;
-    background: linear-gradient(90deg, var(--accent-amber), #d6f56f 60%, var(--accent-green));
-    box-shadow: 0 0 14px rgba(74, 222, 128, 0.25);
+    background: linear-gradient(90deg, var(--accent-amber), #6ee7b7 60%, var(--accent-green));
+    box-shadow: 0 0 14px rgba(52, 211, 153, 0.25);
 }
 
 .vendor-card-footer {
@@ -1679,7 +1679,7 @@ html.light-mode .parse-date-input {
 
 .password-rule-valid::before {
     background: var(--accent-green);
-    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.16);
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
 }
 
 .modal-actions {
@@ -1873,8 +1873,8 @@ html.light-mode .parse-date-input {
     min-height: 52px;
     padding: 0 20px;
     border-radius: 999px;
-    background: linear-gradient(135deg, rgba(217, 246, 103, 0.15), rgba(74, 222, 128, 0.15));
-    border: 1px solid rgba(217, 246, 103, 0.3);
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(52, 211, 153, 0.15));
+    border: 1px solid rgba(96, 165, 250, 0.3);
     color: var(--accent-lime);
     font-weight: 700;
     font-size: 0.9rem;
@@ -1886,8 +1886,8 @@ html.light-mode .parse-date-input {
 
 .btn-try-demo:hover {
     transform: translateY(-1px);
-    border-color: rgba(217, 246, 103, 0.5);
-    background: linear-gradient(135deg, rgba(217, 246, 103, 0.22), rgba(74, 222, 128, 0.22));
+    border-color: rgba(96, 165, 250, 0.5);
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.22), rgba(52, 211, 153, 0.22));
 }
 
 /* ── Hero CTA ────────────────────────────────────────────────────────────── */
@@ -1995,8 +1995,8 @@ html.light-mode .parse-date-input {
 }
 
 .date-filter-active {
-    background: rgba(217, 246, 103, 0.12);
-    border-color: rgba(217, 246, 103, 0.3);
+    background: rgba(96, 165, 250, 0.12);
+    border-color: rgba(96, 165, 250, 0.3);
     color: var(--accent-lime);
 }
 
@@ -2008,8 +2008,8 @@ html.light-mode .parse-date-input {
     margin-bottom: 18px;
     padding: 14px 18px;
     border-radius: 14px;
-    background: rgba(251, 146, 60, 0.1);
-    border: 1px solid rgba(251, 146, 60, 0.22);
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.22);
     color: #fdba74;
     font-size: 0.92rem;
     font-weight: 600;
@@ -2029,8 +2029,8 @@ html.light-mode .parse-date-input {
     min-height: 30px;
     padding: 0 12px;
     border-radius: 8px;
-    background: rgba(251, 146, 60, 0.18);
-    border: 1px solid rgba(251, 146, 60, 0.25);
+    background: rgba(251, 191, 36, 0.18);
+    border: 1px solid rgba(251, 191, 36, 0.25);
     color: #fdba74;
     font-size: 0.82rem;
     font-weight: 700;
@@ -2038,7 +2038,7 @@ html.light-mode .parse-date-input {
 }
 
 .duplicate-dismiss:hover {
-    background: rgba(251, 146, 60, 0.28);
+    background: rgba(251, 191, 36, 0.28);
 }
 
 /* ── Onboarding card ─────────────────────────────────────────────────────── */
@@ -2046,8 +2046,8 @@ html.light-mode .parse-date-input {
     margin-bottom: 28px;
     padding: 32px;
     border-radius: var(--radius-xl);
-    background: linear-gradient(135deg, rgba(217, 246, 103, 0.05), rgba(74, 222, 128, 0.05));
-    border: 1px solid rgba(217, 246, 103, 0.18);
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.05), rgba(52, 211, 153, 0.05));
+    border: 1px solid rgba(96, 165, 250, 0.18);
 }
 
 .onboarding-title {
@@ -2079,8 +2079,8 @@ html.light-mode .parse-date-input {
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: rgba(217, 246, 103, 0.15);
-    border: 1px solid rgba(217, 246, 103, 0.3);
+    background: rgba(96, 165, 250, 0.15);
+    border: 1px solid rgba(96, 165, 250, 0.3);
     color: var(--accent-lime);
     font-family: 'Space Grotesk', sans-serif;
     font-size: 0.9rem;
@@ -2274,8 +2274,8 @@ html.light-mode .parse-date-input {
     min-height: 34px;
     padding: 0 14px;
     border-radius: 8px;
-    background: rgba(217, 246, 103, 0.14);
-    border: 1px solid rgba(217, 246, 103, 0.28);
+    background: rgba(96, 165, 250, 0.14);
+    border: 1px solid rgba(96, 165, 250, 0.28);
     color: var(--accent-lime);
     font-size: 0.86rem;
     font-weight: 700;
@@ -2283,7 +2283,7 @@ html.light-mode .parse-date-input {
 }
 
 .undo-toast-btn:hover {
-    background: rgba(217, 246, 103, 0.22);
+    background: rgba(96, 165, 250, 0.22);
 }
 
 /* ── Pagination footer ───────────────────────────────────────────────────── */
@@ -2792,26 +2792,26 @@ html.light-mode .parse-date-input {
 
 /* ── Light mode CSS variable overrides ──────────────────────────────────── */
 html.light-mode {
-    --bg: #f5f4f0;
-    --bg-soft: #eeece6;
+    --bg: #f4f6fa;
+    --bg-soft: #eaeef5;
     --panel: rgba(255, 255, 255, 0.92);
-    --panel-strong: rgba(250, 248, 244, 0.98);
-    --panel-elevated: rgba(245, 242, 236, 0.95);
-    --border: rgba(0, 0, 0, 0.08);
-    --border-strong: rgba(0, 0, 0, 0.13);
-    --text: #1a1916;
-    --text-soft: #383530;
-    --text-muted: #5e5b53;
-    --text-faint: #8c8980;
-    --accent: #1a1916;
-    --accent-ink: #f5f4f0;
-    --shadow: 0 30px 90px rgba(0, 0, 0, 0.14);
+    --panel-strong: rgba(250, 251, 253, 0.98);
+    --panel-elevated: rgba(241, 244, 249, 0.95);
+    --border: rgba(15, 23, 42, 0.08);
+    --border-strong: rgba(15, 23, 42, 0.14);
+    --text: #0f172a;
+    --text-soft: #2b3650;
+    --text-muted: #55607a;
+    --text-faint: #8590a8;
+    --accent: #2563eb;
+    --accent-ink: #ffffff;
+    --shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
 }
 
 html.light-mode body {
     background:
         radial-gradient(circle at top left, rgba(79, 70, 229, 0.04), transparent 30%),
-        radial-gradient(circle at 85% 12%, rgba(74, 222, 128, 0.06), transparent 24%),
+        radial-gradient(circle at 85% 12%, rgba(52, 211, 153, 0.06), transparent 24%),
         var(--bg);
 }
 
