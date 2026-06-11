@@ -6,23 +6,50 @@
     <title>Settings — ReceiptAuto</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        .page-shell    { max-width: 680px; margin: 0 auto; padding: 40px 24px 80px; }
-        .page-title    { font-size: 1.6rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-        .page-sub      { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 40px; }
-        .settings-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 20px; overflow: hidden; }
-        .settings-card-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
-        .settings-row  { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .settings-card {
+            background: linear-gradient(180deg, rgba(17, 25, 43, 0.7), rgba(11, 17, 31, 0.5));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            margin-bottom: 18px;
+            overflow: hidden;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+        .settings-card-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.66rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #93c5fd;
+            padding: 16px 20px 12px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(148, 163, 184, 0.03);
+        }
+        .settings-row  { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
         .settings-row:last-child { border-bottom: none; }
         .settings-row-stacked { flex-direction: column; align-items: flex-start; gap: 10px; }
-        .settings-row-info .settings-row-title { font-size: 0.88rem; font-weight: 600; color: var(--text-soft); }
-        .settings-row-info .settings-row-desc  { font-size: 0.78rem; color: var(--text-faint); margin-top: 2px; }
+        .settings-row-info .settings-row-title { font-size: 0.88rem; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+        .settings-row-info .settings-row-desc  { font-size: 0.78rem; color: var(--text-faint); margin-top: 3px; }
         .settings-row-actions { display: flex; gap: 8px; flex-shrink: 0; }
-        .settings-select { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-soft); font-size: 0.83rem; font-family: inherit; }
+        .settings-select, .category-limit-input {
+            padding: 7px 12px;
+            border-radius: 9px;
+            border: 1px solid var(--border-strong);
+            background: rgba(148, 163, 184, 0.07);
+            color: var(--text-soft);
+            font-size: 0.83rem;
+            font-family: inherit;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .settings-select:focus, .category-limit-input:focus {
+            border-color: rgba(96, 165, 250, 0.55);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14);
+        }
         .settings-budget-row { display: flex; align-items: center; gap: 8px; width: 100%; }
         .settings-feedback { font-size: 0.78rem; color: var(--accent-green); margin-top: 4px; min-height: 18px; }
         .category-limit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 0; }
         .category-limit-label { font-size: 0.88rem; font-weight: 600; color: var(--text-soft); flex: 1; }
-        .category-limit-input { width: 100px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-soft); font-size: 0.83rem; font-family: inherit; text-align: right; }
+        .category-limit-input { width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
@@ -53,9 +80,14 @@
         </div>
     </nav>
 
-    <div class="page-shell">
-        <h1 class="page-title">Settings</h1>
-        <p class="page-sub">Manage your preferences, account, and data.</p>
+    <div class="page-shell page-shell-narrow">
+        <div class="page-header">
+            <div>
+                <div class="page-eyebrow">Preferences</div>
+                <h1 class="page-title">Settings</h1>
+                <p class="page-sub">Manage your preferences, account, and data.</p>
+            </div>
+        </div>
 
         <!-- Appearance -->
         <div class="settings-card">

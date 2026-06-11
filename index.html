@@ -159,44 +159,125 @@
         <!-- ── Landing: shown when logged out ──────────────────────────── -->
         <section id="landing" class="landing-section">
             <div class="landing-hero">
-                <div class="landing-badge">AI-powered · Gmail receipt parsing</div>
-                <h1 class="landing-title">Your spending,<br>automatically tracked.</h1>
+                <div class="landing-badge"><span class="landing-badge-dot"></span>AI-powered Gmail receipt parsing</div>
+                <h1 class="landing-title">Your spending,<br><span class="landing-title-accent">automatically tracked.</span></h1>
                 <p class="landing-sub">ReceiptAuto reads your Gmail receipts and extracts every purchase — vendor, amount, category, date — with zero manual input.</p>
                 <div class="landing-cta" id="landing-cta-loggedout">
-                    <button id="landing-get-started" class="btn-action-primary">Get Started</button>
-                    <a href="demo.html" class="btn-action">Try Demo</a>
-                    <button id="landing-tour-btn" class="btn-action">How it works</button>
+                    <button id="landing-get-started" class="btn-action-primary">Get started free<span class="cta-arrow">→</span></button>
+                    <a href="demo.html" class="btn-action">View live demo</a>
+                    <button id="landing-tour-btn" class="btn-action btn-ghost">How it works</button>
                 </div>
                 <div class="landing-cta" id="landing-cta-loggedin" hidden>
-                    <a href="console.html" class="btn-action-primary">Open Console</a>
+                    <a href="console.html" class="btn-action-primary">Open Console<span class="cta-arrow">→</span></a>
                     <a href="transactions.html" class="btn-action">Spend Analytics</a>
                     <a href="demo.html" class="btn-action">Try Demo</a>
                 </div>
+                <div class="landing-trust">
+                    <span>Read-only Gmail access</span>
+                    <span>AI categorization</span>
+                    <span>Budgets &amp; alerts</span>
+                    <span>CSV export</span>
+                </div>
             </div>
+
+            <div class="landing-preview" aria-hidden="true">
+                <div class="preview-window">
+                    <div class="preview-titlebar">
+                        <span class="preview-dot"></span><span class="preview-dot"></span><span class="preview-dot"></span>
+                        <span class="preview-url">app.receiptauto.com/console</span>
+                    </div>
+                    <div class="preview-body">
+                        <div class="preview-stats">
+                            <div class="preview-stat">
+                                <div class="preview-stat-label">Total spend · May</div>
+                                <div class="preview-stat-value">$2,418.06</div>
+                                <div class="preview-stat-delta delta-down">↓ 8.2% vs April</div>
+                            </div>
+                            <div class="preview-stat">
+                                <div class="preview-stat-label">Transactions</div>
+                                <div class="preview-stat-value">147</div>
+                                <div class="preview-stat-delta">38 vendors</div>
+                            </div>
+                            <div class="preview-stat">
+                                <div class="preview-stat-label">Top category</div>
+                                <div class="preview-stat-value">Food &amp; Dining</div>
+                                <div class="preview-stat-delta">$612.40</div>
+                            </div>
+                            <div class="preview-stat">
+                                <div class="preview-stat-label">Budget used</div>
+                                <div class="preview-stat-value">68%</div>
+                                <div class="preview-budget-track"><span style="width:68%"></span></div>
+                            </div>
+                        </div>
+                        <div class="preview-grid">
+                            <div class="preview-chart">
+                                <div class="preview-card-label">Monthly spend</div>
+                                <div class="preview-bars">
+                                    <span style="height:42%"></span><span style="height:58%"></span><span style="height:36%"></span><span style="height:71%"></span><span style="height:54%"></span><span style="height:80%"></span><span style="height:63%"></span><span style="height:47%"></span><span style="height:69%"></span><span style="height:91%"></span><span style="height:57%"></span><span class="preview-bar-active" style="height:74%"></span>
+                                </div>
+                            </div>
+                            <div class="preview-list">
+                                <div class="preview-card-label">Latest receipts</div>
+                                <div class="preview-row"><span class="preview-chip">UE</span><span class="preview-row-name">Uber Eats</span><span class="preview-row-cat">Food &amp; Dining</span><span class="preview-row-amt">$24.18</span></div>
+                                <div class="preview-row"><span class="preview-chip">AM</span><span class="preview-row-name">Amazon</span><span class="preview-row-cat">Shopping</span><span class="preview-row-amt">$83.99</span></div>
+                                <div class="preview-row"><span class="preview-chip">SP</span><span class="preview-row-name">Spotify</span><span class="preview-row-cat">Subscriptions</span><span class="preview-row-amt">$11.99</span></div>
+                                <div class="preview-row"><span class="preview-chip">TJ</span><span class="preview-row-name">Trader Joe's</span><span class="preview-row-cat">Groceries</span><span class="preview-row-amt">$67.42</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="landing-steps">
                 <div class="landing-step">
-                    <div class="landing-step-num">01</div>
+                    <div class="landing-step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m2 7 10 6 10-6"/></svg>
+                    </div>
                     <div class="landing-step-content">
+                        <div class="landing-step-num">Step 01</div>
                         <h3>Connect Gmail</h3>
                         <p>Grant read-only access once. We only scan receipt-type emails — never personal messages.</p>
                     </div>
                 </div>
                 <div class="landing-step">
-                    <div class="landing-step-num">02</div>
+                    <div class="landing-step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"/><path d="M21 3v6h-6"/></svg>
+                    </div>
                     <div class="landing-step-content">
-                        <h3>Click Scan Emails</h3>
-                        <p>One click scans your inbox and automatically extracts every receipt transaction via AI.</p>
+                        <div class="landing-step-num">Step 02</div>
+                        <h3>Scan your inbox</h3>
+                        <p>One click scans your inbox and AI extracts every receipt — vendor, amount, tax, category.</p>
                     </div>
                 </div>
                 <div class="landing-step">
-                    <div class="landing-step-num">03</div>
+                    <div class="landing-step-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 3 5-6"/></svg>
+                    </div>
                     <div class="landing-step-content">
+                        <div class="landing-step-num">Step 03</div>
                         <h3>Track your spend</h3>
-                        <p>Browse your full transaction log, view weekly / monthly / annual spend charts, set budgets.</p>
+                        <p>Browse your transaction log, view weekly / monthly / annual charts, set budgets and alerts.</p>
                     </div>
                 </div>
             </div>
         </section>
+
+        <footer class="landing-footer">
+            <div class="section-container landing-footer-inner">
+                <div class="landing-footer-brand">
+                    <div class="logo-icon logo-icon-sm">RA</div>
+                    <span>ReceiptAuto</span>
+                </div>
+                <div class="landing-footer-links">
+                    <a href="demo.html">Demo</a>
+                    <a href="console.html">Console</a>
+                    <a href="transactions.html">Analytics</a>
+                    <a href="advisor.html">Advisor</a>
+                    <a href="settings.html">Settings</a>
+                </div>
+                <div class="landing-footer-note">Built for effortless expense tracking.</div>
+            </div>
+        </footer>
 
     </main>
 
