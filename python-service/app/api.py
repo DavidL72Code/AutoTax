@@ -1,3 +1,4 @@
+import html
 import os
 import time
 import threading
@@ -68,7 +69,14 @@ except Exception:
     firebase_credentials = None
     firebase_firestore = None
 
-app = FastAPI()
+_IS_PROD = settings.app_env.strip().lower() == "production"
+
+# Hide interactive API docs in production to avoid free API-surface enumeration.
+app = FastAPI(
+    docs_url=None if _IS_PROD else "/docs",
+    redoc_url=None if _IS_PROD else "/redoc",
+    openapi_url=None if _IS_PROD else "/openapi.json",
+)
 DEMO_PARSE_RUNS = {}
 DEMO_PARSE_LOCK = threading.Lock()
 SYNC_RUNS = {}
@@ -90,6 +98,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if _IS_PROD:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+def _audit(event: str, request: Request, **fields):
+    parts = " ".join(f"{k}={v}" for k, v in fields.items())
+    print(f"AUDIT {event} ip={_client_ip(request)} {parts}".rstrip())
 
 @app.exception_handler(Exception)
 async def _unhandled_exception_handler(request: Request, exc: Exception):
@@ -440,9 +462,11 @@ def _require_user(request: Request) -> User:
     return user
 
 def _client_ip(request: Request) -> str:
+    # Use the RIGHTMOST X-Forwarded-For entry: it's appended by our own proxy
+    # (e.g. Render) and can't be spoofed, unlike the leftmost client-supplied ones.
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:
-        return fwd.split(",")[0].strip()
+        return fwd.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 def _rate_limit(request: Request, bucket: str, max_calls: int, window_seconds: int):
@@ -547,7 +571,8 @@ def public_config():
     }
 
 @app.post("/api/auth/register")
-def register(payload: dict = Body(...)):
+def register(request: Request, payload: dict = Body(...)):
+    _rate_limit(request, "auth", max_calls=10, window_seconds=60)
     username = _normalize_username(payload.get("username") or "")
     email = _normalize_email(payload.get("email") or "")
     password = payload.get("password") or ""
@@ -574,6 +599,7 @@ def register(payload: dict = Body(...)):
         user = create_user_record(username=username, email=email, password_hash=_hash_password(password))
         _claim_legacy_transactions(user.id)
         token = _create_token(user.id)
+        _audit("register", request, user_id=user.id)
         return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
 
     db = SessionLocal()
@@ -590,30 +616,36 @@ def register(payload: dict = Body(...)):
         db.refresh(user)
         _claim_legacy_transactions(user.id)
         token = _create_token(user.id)
+        _audit("register", request, user_id=user.id)
         return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
     finally:
         db.close()
 
 @app.post("/api/auth/login")
-def login(payload: dict = Body(...)):
+def login(request: Request, payload: dict = Body(...)):
+    _rate_limit(request, "auth", max_calls=10, window_seconds=60)
     username = _normalize_username(payload.get("username") or payload.get("email") or "")
     password = payload.get("password") or ""
 
     if firestore_enabled():
         user = get_user_by_username(username) or get_user_by_email(username)
         if not user or not _verify_password(password, user.password_hash):
+            _audit("login_failed", request, username=username)
             raise HTTPException(status_code=401, detail="Invalid username/email or password.")
         _claim_legacy_transactions(user.id)
         token = _create_token(user.id)
+        _audit("login_success", request, user_id=user.id)
         return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
 
     db = SessionLocal()
     try:
         user = db.query(User).filter(or_(User.username == username, User.email == username)).first()
         if not user or not _verify_password(password, user.password_hash):
+            _audit("login_failed", request, username=username)
             raise HTTPException(status_code=401, detail="Invalid username/email or password.")
         _claim_legacy_transactions(user.id)
         token = _create_token(user.id)
+        _audit("login_success", request, user_id=user.id)
         return {"token": token, "user": {"id": user.id, "username": user.username, "email": user.email}}
     finally:
         db.close()
@@ -710,6 +742,7 @@ def google_oauth_callback(code: str = None, state: str = None, error: str = None
     frontend = (settings.frontend_url or "").rstrip("/")
 
     def _page(success: bool, message: str):
+        message = html.escape(message)
         color = "#4ade80" if success else "#f87171"
         label = "Gmail Connected" if success else "Connection Failed"
         redirect = f'<script>setTimeout(()=>{{window.location.href="{frontend}";}},2500);</script>' if frontend else ""
@@ -761,7 +794,8 @@ h2{{margin:0;font-size:1.2rem;}}p{{margin:0;color:#aaa;font-size:0.88rem;}}</sty
         email = getattr(creds, "account", None)
         _save_google_refresh_token_for_user(user_id, email, enc_refresh)
     except Exception as e:
-        print(f"❌ Token exchange failed: {e}")
+        # Log only the exception type — the message can echo OAuth codes/tokens.
+        print(f"❌ Token exchange failed: {type(e).__name__}")
         return _page(False, "Could not connect your Gmail account. Please try again.")
 
     return _page(True, "Your Gmail is connected. You can now sync receipts." + (" Redirecting…" if frontend else ""))
@@ -1877,6 +1911,7 @@ def _build_spend_summary(transactions) -> str:
 def advisor_chat(request: Request, body: dict = Body(...)):
     """AI financial advisor. Uses aggregated spend data only — no raw email content."""
     user = _require_user(request)
+    _rate_limit(request, "advisor", max_calls=20, window_seconds=60)
     message = (body.get("message") or "").strip()
     history = body.get("history") or []
 
