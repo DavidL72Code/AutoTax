@@ -18,9 +18,12 @@ from .store import repository
 
 
 class Run:
-    def __init__(self, run_id: str, user_id: str) -> None:
+    def __init__(self, run_id: str, user_id: str, user_ids: Optional[list[str]] = None) -> None:
         self.id = run_id
         self.user_id = user_id
+        # Writes go to the v2 id; the skip-list spans any linked v1 ids too, so
+        # a message v1 already parsed is not fetched or re-parsed.
+        self.user_ids = user_ids or [user_id]
         self.status = "starting"
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.total = 0
@@ -75,8 +78,8 @@ def get_run(run_id: str) -> Optional[Run]:
     return _runs.get(run_id)
 
 
-def start(user_id: str, **options) -> Run:
-    run = Run(uuid.uuid4().hex[:12], user_id)
+def start(user_id: str, user_ids: Optional[list[str]] = None, **options) -> Run:
+    run = Run(uuid.uuid4().hex[:12], user_id, user_ids)
     _runs[run.id] = run
     asyncio.create_task(_execute(run, **options))
     return run
@@ -98,7 +101,7 @@ async def _execute(
                 raise RuntimeError("Gmail is not connected for this account")
             run.status = "fetching"
             run.emit({"type": "state", **run.snapshot()})
-            known = await repository.existing_email_ids(run.user_id)
+            known = await repository.existing_email_ids(run.user_ids)
             emails = await gmail.fetch_receipts(
                 refresh_token,
                 max_results=max_results,

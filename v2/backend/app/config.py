@@ -5,7 +5,8 @@ from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[3]
+_ROOT = ROOT
 
 
 class Settings(BaseSettings):
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     firebase_service_account_path: Optional[str] = None
     firebase_service_account_json: Optional[str] = None
     firebase_transactions_collection: str = "transactions"
+    firebase_demo_collection: str = "receipts_v2_demo"
 
     fernet_key: Optional[str] = None
     frontend_url: str = "http://localhost:3000"

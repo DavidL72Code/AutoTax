@@ -3,27 +3,22 @@
 v2 has one identity: the Gmail account you connect. There is no separate
 username/password to forget, and no second copy of your inbox behind a
 password we'd have to store. The refresh token is encrypted at rest with the
-same Fernet key v1 uses.
+same Fernet key v1 uses, and is only ever decrypted to mint a Gmail client.
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
-import json
 import secrets
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
 
 from .config import settings
-from .store.repository import DATA_DIR
+from .store import accounts
 
 SESSION_COOKIE = "receipts_session"
 SESSION_TTL = timedelta(days=30)
-_ACCOUNTS = DATA_DIR / "accounts.json"
-_lock = asyncio.Lock()
 
 
 class AuthError(RuntimeError):
@@ -52,85 +47,75 @@ def user_id_for(email: str) -> str:
     return hashlib.sha256((email or "").strip().lower().encode()).hexdigest()[:16]
 
 
-def _read() -> dict:
-    if not _ACCOUNTS.exists():
-        return {"users": {}, "sessions": {}}
-    try:
-        data = json.loads(_ACCOUNTS.read_text() or "{}")
-    except json.JSONDecodeError:
-        return {"users": {}, "sessions": {}}
-    data.setdefault("users", {})
-    data.setdefault("sessions", {})
-    return data
-
-
-def _write(data: dict) -> None:
-    _ACCOUNTS.parent.mkdir(parents=True, exist_ok=True)
-    tmp = _ACCOUNTS.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2))
-    tmp.chmod(0o600)
-    tmp.replace(_ACCOUNTS)
-
-
-async def link_google_account(email: str, refresh_token: str) -> str:
+async def link_google_account(email: str, refresh_token: str, user_id: Optional[str] = None) -> str:
     """Store the credential and hand back a fresh session token."""
-    user_id = user_id_for(email)
+    user_id = user_id or user_id_for(email)
+    store = accounts.store()
+    existing = await store.get_account(user_id) or {}
+
+    account = {
+        "email": email,
+        "connected_at": existing.get("connected_at") or accounts.now_iso(),
+        "legacy_user_ids": existing.get("legacy_user_ids") or await accounts.legacy_user_ids(email),
+    }
+    if refresh_token:
+        account["refresh_token_enc"] = encrypt(refresh_token)
+    elif existing.get("refresh_token_enc"):
+        account["refresh_token_enc"] = existing["refresh_token_enc"]
+
+    await store.put_account(user_id, account)
+
     token = secrets.token_urlsafe(32)
-    async with _lock:
-        data = _read()
-        existing = data["users"].get(user_id, {})
-        data["users"][user_id] = {
-            "email": email,
-            "refresh_token_enc": encrypt(refresh_token) if refresh_token else existing.get("refresh_token_enc"),
-            "connected_at": existing.get("connected_at") or datetime.now(timezone.utc).isoformat(),
-        }
-        data["sessions"][token] = {
-            "user_id": user_id,
-            "expires_at": (datetime.now(timezone.utc) + SESSION_TTL).isoformat(),
-        }
-        _write(data)
+    await store.put_session(
+        token,
+        {"user_id": user_id, "expires_at": (datetime.now(timezone.utc) + SESSION_TTL).isoformat()},
+    )
     return token
 
 
 async def resolve_session(token: Optional[str]) -> Optional[dict]:
     if not token:
         return None
-    data = _read()
-    session = data["sessions"].get(token)
+    store = accounts.store()
+    session = await store.get_session(token)
     if not session:
         return None
     try:
         expires = datetime.fromisoformat(session["expires_at"])
-    except (KeyError, ValueError):
+    except (KeyError, TypeError, ValueError):
         return None
     if expires < datetime.now(timezone.utc):
-        await end_session(token)
+        await store.drop_session(token)
         return None
-    user = data["users"].get(session["user_id"])
-    if not user:
+
+    account = await store.get_account(session["user_id"])
+    if not account:
         return None
-    return {"user_id": session["user_id"], "email": user.get("email"), "connected_at": user.get("connected_at")}
+    return {
+        "user_id": session["user_id"],
+        # Reads span v2's id plus any v1 ids for the same address, so an
+        # existing ledger is visible instead of looking empty.
+        "user_ids": [session["user_id"], *(account.get("legacy_user_ids") or [])],
+        "email": account.get("email"),
+        "connected_at": account.get("connected_at"),
+        "gmail_connected": bool(account.get("refresh_token_enc")),
+    }
 
 
 async def end_session(token: Optional[str]) -> None:
-    if not token:
-        return
-    async with _lock:
-        data = _read()
-        if data["sessions"].pop(token, None) is not None:
-            _write(data)
+    if token:
+        await accounts.store().drop_session(token)
 
 
 async def refresh_token_for(user_id: str) -> Optional[str]:
-    user = _read()["users"].get(user_id)
-    encrypted = (user or {}).get("refresh_token_enc")
+    account = await accounts.store().get_account(user_id)
+    encrypted = (account or {}).get("refresh_token_enc")
     return decrypt(encrypted) if encrypted else None
 
 
 async def disconnect_google(user_id: str) -> None:
-    async with _lock:
-        data = _read()
-        user = data["users"].get(user_id)
-        if user:
-            user.pop("refresh_token_enc", None)
-            _write(data)
+    store = accounts.store()
+    account = await store.get_account(user_id)
+    if account:
+        account.pop("refresh_token_enc", None)
+        await store.put_account(user_id, {**account, "refresh_token_enc": None})

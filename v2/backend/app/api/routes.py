@@ -37,8 +37,10 @@ async def session_info(receipts_session: Optional[str] = Cookie(default=None)):
     return {
         "signed_in": bool(user),
         "email": (user or {}).get("email"),
-        "gmail_connected": bool(user and await auth.refresh_token_for(user["user_id"])),
+        "gmail_connected": bool((user or {}).get("gmail_connected")),
         "model_configured": llm.available(),
+        "storage": repository.describe(),
+        "linked_legacy_accounts": max(len((user or {}).get("user_ids") or []) - 1, 0),
     }
 
 
@@ -132,6 +134,7 @@ async def start_sync(
     user = await _require_user(receipts_session)
     run = sync.start(
         user["user_id"],
+        user_ids=user["user_ids"],
         max_results=int(payload.get("max_results", 50)),
         days_back=int(payload.get("days_back", 180)),
         date_from=payload.get("date_from"),
@@ -179,7 +182,7 @@ async def list_transactions(
     search: Optional[str] = Query(default=None),
 ):
     user = await _require_user(receipts_session)
-    rows = await repository.list_records(user["user_id"])
+    rows = await repository.list_records(user["user_ids"])
     if status:
         rows = [r for r in rows if r.get("status") == status]
     if vendor:
@@ -232,7 +235,7 @@ async def remove_transaction(record_id: str, receipts_session: Optional[str] = C
 @router.get("/stats")
 async def stats(receipts_session: Optional[str] = Cookie(default=None), months: int = Query(default=6)):
     user = await _require_user(receipts_session)
-    rows = [r for r in await repository.list_records(user["user_id"]) if r.get("status") != "skipped"]
+    rows = [r for r in await repository.list_records(user["user_ids"]) if r.get("status") != "skipped"]
     amounts = [float(r.get("amount") or 0) for r in rows]
     total = round(sum(amounts), 2)
 
@@ -277,7 +280,8 @@ async def start_demo(response: Response, receipts_session: Optional[str] = Cooki
     required beyond whatever the server already has."""
     user = await auth.resolve_session(receipts_session)
     if not user:
-        token = await auth.link_google_account(f"demo-{secrets.token_hex(4)}@example.com", "")
+        demo_id = f"demo_{secrets.token_hex(6)}"
+        token = await auth.link_google_account(f"{demo_id}@sample.local", "", user_id=demo_id)
         response.set_cookie(
             auth.SESSION_COOKIE,
             token,
@@ -292,5 +296,5 @@ async def start_demo(response: Response, receipts_session: Optional[str] = Cooki
     from ..demo_data import demo_emails
 
     emails: list[Email] = demo_emails()
-    run = sync.start(user["user_id"], emails=emails)
+    run = sync.start(user["user_id"], user_ids=user["user_ids"], emails=emails)
     return run.snapshot()

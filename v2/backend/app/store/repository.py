@@ -13,14 +13,37 @@ from pathlib import Path
 from typing import Any, Optional, Protocol
 
 from ..config import settings
+from . import firestore_client
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
+DEMO_PREFIX = "demo_"
+
+UserIds = str | list[str]
+
+
+def _as_list(user_id: UserIds) -> list[str]:
+    return [user_id] if isinstance(user_id, str) else list(user_id)
+
+
+def _normalise(record: dict[str, Any]) -> dict[str, Any]:
+    """Fill in the fields v1 never wrote, so a v1 row renders in v2."""
+    record.setdefault("status", "parsed")
+    record.setdefault("confidence", 0.7 if record.get("vendor") and record.get("amount") else 0.3)
+    record.setdefault("issues", [])
+    record.setdefault("sources", {})
+    record.setdefault("steps", [])
+    record.setdefault("llm_calls", 0)
+    record.setdefault("currency", "USD")
+    record.setdefault("origin", "v1" if not record.get("steps") else "v2")
+    return record
+
+
 class Backend(Protocol):
     async def save(self, user_id: str, record: dict[str, Any]) -> Optional[str]: ...
-    async def list(self, user_id: str) -> list[dict[str, Any]]: ...
-    async def existing_email_ids(self, user_id: str) -> set[str]: ...
+    async def list(self, user_id: UserIds) -> list[dict[str, Any]]: ...
+    async def existing_email_ids(self, user_id: UserIds) -> set[str]: ...
     async def update(self, user_id: str, record_id: str, patch: dict[str, Any]) -> Optional[dict]: ...
     async def delete(self, user_id: str, record_id: str) -> bool: ...
 
@@ -62,12 +85,13 @@ class JsonBackend:
             self._write(data)
             return record_id
 
-    async def list(self, user_id: str) -> list[dict[str, Any]]:
-        rows = self._read().get(user_id, [])
+    async def list(self, user_id: UserIds) -> list[dict[str, Any]]:
+        data = self._read()
+        rows = [_normalise(dict(row)) for key in _as_list(user_id) for row in data.get(key, [])]
         return sorted(rows, key=lambda r: (r.get("date") or ""), reverse=True)
 
-    async def existing_email_ids(self, user_id: str) -> set[str]:
-        return {r.get("email_id") for r in self._read().get(user_id, []) if r.get("email_id")}
+    async def existing_email_ids(self, user_id: UserIds) -> set[str]:
+        return {r.get("email_id") for r in await self.list(user_id) if r.get("email_id")}
 
     async def update(self, user_id: str, record_id: str, patch: dict[str, Any]) -> Optional[dict]:
         async with self._lock:
@@ -92,72 +116,92 @@ class JsonBackend:
 
 
 class FirestoreBackend:
-    """Mirrors v1's collection layout so both versions can read the same data."""
+    """Shares v1's `transactions` collection.
+
+    v2 writes extra fields (status, confidence, issues, sources, steps); v1
+    ignores unknown keys when it reads, so both versions can run against the
+    same data. Document ids are `{user_id}__{email_id}`, which makes a re-sync
+    of the same Gmail message an idempotent overwrite rather than a duplicate.
+    """
 
     def __init__(self) -> None:
-        import firebase_admin
-        from firebase_admin import credentials, firestore
-
-        if not firebase_admin._apps:
-            if settings.firebase_service_account_json:
-                cred = credentials.Certificate(json.loads(settings.firebase_service_account_json))
-            elif settings.firebase_service_account_path:
-                cred = credentials.Certificate(settings.firebase_service_account_path)
-            else:
-                cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
-        self._db = firestore.client()
+        self._db = firestore_client.client()
         self._collection = settings.firebase_transactions_collection
 
-    def _col(self):
+    def _col(self, user_id: str = ""):
+        # Sample-inbox runs are throwaway. They must never land in the same
+        # collection as someone's real ledger.
+        if str(user_id).startswith(DEMO_PREFIX):
+            return self._db.collection(settings.firebase_demo_collection)
         return self._db.collection(self._collection)
-
-    def _doc_id(self, user_id: str, email_id: str) -> str:
-        return f"{user_id}__{email_id}"
 
     async def save(self, user_id: str, record: dict[str, Any]) -> Optional[str]:
         email_id = record.get("email_id") or uuid.uuid4().hex
-        doc_id = self._doc_id(user_id, email_id)
-        payload = {**record, "user_id": user_id, "email_id": email_id}
-        await asyncio.to_thread(self._col().document(doc_id).set, payload, merge=True)
+        doc_id = f"{user_id}__{email_id}"
+        payload = {**record, "user_id": user_id, "email_id": email_id, "updated_at": _now()}
+        await asyncio.to_thread(self._col(user_id).document(doc_id).set, payload, merge=True)
         return doc_id
 
-    async def list(self, user_id: str) -> list[dict[str, Any]]:
-        docs = await asyncio.to_thread(lambda: list(self._col().where("user_id", "==", user_id).stream()))
-        rows = [{"id": d.id, **d.to_dict()} for d in docs]
-        return sorted(rows, key=lambda r: (r.get("date") or ""), reverse=True)
+    def _query_rows(self, user_ids: list[str]) -> list[dict[str, Any]]:
+        from google.cloud.firestore_v1.base_query import FieldFilter
 
-    async def existing_email_ids(self, user_id: str) -> set[str]:
-        rows = await self.list(user_id)
-        return {r.get("email_id") for r in rows if r.get("email_id")}
+        rows: list[dict[str, Any]] = []
+        # Firestore caps `in` at 30 values; batch rather than assume.
+        for index in range(0, len(user_ids), 30):
+            chunk = user_ids[index : index + 30]
+            query = self._col(chunk[0]).where(filter=FieldFilter("user_id", "in", chunk))
+            rows.extend({"id": doc.id, **(doc.to_dict() or {})} for doc in query.stream())
+        return rows
+
+    async def list(self, user_id: UserIds) -> list[dict[str, Any]]:
+        user_ids = _as_list(user_id)
+        rows = await asyncio.to_thread(self._query_rows, user_ids)
+        return sorted(
+            (_normalise(row) for row in rows),
+            key=lambda r: str(r.get("date") or ""),
+            reverse=True,
+        )
+
+    async def existing_email_ids(self, user_id: UserIds) -> set[str]:
+        return {r.get("email_id") for r in await self.list(user_id) if r.get("email_id")}
 
     async def update(self, user_id: str, record_id: str, patch: dict[str, Any]) -> Optional[dict]:
-        ref = self._col().document(record_id)
+        ref = self._col(user_id).document(record_id)
         snapshot = await asyncio.to_thread(ref.get)
-        if not snapshot.exists or (snapshot.to_dict() or {}).get("user_id") != user_id:
+        if not snapshot.exists:
             return None
-        await asyncio.to_thread(ref.set, {k: v for k, v in patch.items() if k != "id"}, merge=True)
+        await asyncio.to_thread(
+            ref.set, {k: v for k, v in patch.items() if k != "id"} | {"updated_at": _now()}, merge=True
+        )
         refreshed = await asyncio.to_thread(ref.get)
-        return {"id": record_id, **(refreshed.to_dict() or {})}
+        return _normalise({"id": record_id, **(refreshed.to_dict() or {})})
 
     async def delete(self, user_id: str, record_id: str) -> bool:
-        ref = self._col().document(record_id)
+        ref = self._col(user_id).document(record_id)
         snapshot = await asyncio.to_thread(ref.get)
-        if not snapshot.exists or (snapshot.to_dict() or {}).get("user_id") != user_id:
+        if not snapshot.exists:
             return False
         await asyncio.to_thread(ref.delete)
         return True
 
 
 def _build() -> Backend:
-    if settings.firebase_project_id and (
-        settings.firebase_service_account_json or settings.firebase_service_account_path
-    ):
+    if firestore_client.configured():
         try:
             return FirestoreBackend()
         except Exception as exc:  # noqa: BLE001 - never let storage setup kill boot
             print(f"[store] Firestore unavailable ({exc}); falling back to JSON store")
     return JsonBackend()
+
+
+def describe() -> str:
+    return "firestore" if isinstance(backend(), FirestoreBackend) else "json"
+
+
+def _now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
 
 
 _backend: Optional[Backend] = None
@@ -180,11 +224,11 @@ async def save(user_id: str, record: dict[str, Any]) -> Optional[str]:
     return await backend().save(user_id, record)
 
 
-async def list_records(user_id: str) -> list[dict[str, Any]]:
+async def list_records(user_id: UserIds) -> list[dict[str, Any]]:
     return await backend().list(user_id)
 
 
-async def existing_email_ids(user_id: str) -> set[str]:
+async def existing_email_ids(user_id: UserIds) -> set[str]:
     return await backend().existing_email_ids(user_id)
 
 
