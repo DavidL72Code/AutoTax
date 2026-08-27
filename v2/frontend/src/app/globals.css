@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* Design tokens.
+   Restrained on purpose: one ink scale, one accent, hairline rules, no
+   gradients. The accent (#0F7B5F) is the only saturated colour and is
+   reserved for data marks and the primary action — it passes the chroma,
+   lightness and 3:1 contrast checks against this surface. */
+@theme {
+  --color-canvas: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-line: #e7e5e1;
+  --color-line-strong: #d6d3cd;
+
+  --color-ink: #16161a;
+  --color-ink-2: #4a4a52;
+  --color-ink-3: #77777f;
+
+  --color-accent: #0f7b5f;
+  --color-accent-soft: #e6f1ec;
+  --color-accent-ink: #0a5843;
+
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf3e7;
+  --color-danger: #b3261e;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-card: 6px;
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Money and counts must line up column to column. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Scrollbars that don't shout. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}

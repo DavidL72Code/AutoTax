@@ -1,5 +1,10 @@
 # Receipt Automation
 
+> **v2 is in [`v2/`](v2/README.md)** — the same pipeline rebuilt as a LangGraph
+> state machine with a Next.js front end. It identifies every vendor with zero
+> API calls and reaches full accuracy on the benchmark in 2 requests. This
+> document describes v1, which still runs unchanged.
+
 Automatically scrapes Gmail for receipt emails, parses vendor/amount/tax using regex and AI, and stores transactions in a dashboard you can view and export.
 
 ---

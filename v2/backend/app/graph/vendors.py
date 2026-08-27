@@ -29,6 +29,7 @@ KNOWN_VENDORS: dict[str, tuple[str, str]] = {
     "chipotle": ("Chipotle", "Dining"),
     "costco": ("Costco", "Groceries"),
     "cvs": ("CVS Pharmacy", "Health"),
+    "cvspharmacy": ("CVS Pharmacy", "Health"),
     "delta": ("Delta", "Travel"),
     "dominos": ("Domino's", "Dining"),
     "doordash": ("DoorDash", "Dining"),
@@ -81,6 +82,7 @@ KNOWN_VENDORS: dict[str, tuple[str, str]] = {
     "walmart": ("Walmart", "Shopping"),
     "wayfair": ("Wayfair", "Shopping"),
     "wholefoods": ("Whole Foods", "Groceries"),
+    "wholefoodsmarket": ("Whole Foods", "Groceries"),
     "xbox": ("Xbox", "Entertainment"),
     "zoom": ("Zoom", "Subscriptions"),
 }
