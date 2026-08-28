@@ -309,5 +309,6 @@
   "review.arithmeticOk": "{subtotal} + {tax} = {amount} ✓",
   "nav.demoBadge": "Sample inbox",
   "nav.demoNote": "Demo data, not an account. Signing in replaces it.",
-  "nav.leaveDemo": "Leave the demo"
+  "nav.leaveDemo": "Leave the demo",
+  "nav.home2": "Home"
 }

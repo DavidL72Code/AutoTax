@@ -17,10 +17,11 @@ type Item = { href: string; key: string; badge?: boolean };
 /* Five destinations, each doing one job. "Overview" and "Activity" used to be
    two pages describing the same run from different angles; they are now one
    dashboard. */
-const SECTIONS: { key: string; items: Item[] }[] = [
+const sections = (showHome: boolean): { key: string; items: Item[] }[] => [
   {
     key: "nav.workspace",
     items: [
+      ...(showHome ? [{ href: "/welcome", key: "nav.home2" }] : []),
       { href: "/", key: "nav.dashboard" },
       { href: "/review", key: "nav.review", badge: true },
     ],
@@ -67,6 +68,11 @@ function RunTicker() {
 function Rail({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { t } = useT();
+  const { session: nav } = useApp();
+  /* Reachable while there is still something to explain: before you have
+     connected anything, and during a demo — when "/" is the dashboard and the
+     landing would otherwise be lost. */
+  const showHome = !nav?.signed_in || Boolean(nav?.is_demo);
   const { session, stats, startSync, startDemo, run } = useApp();
   const syncing = Boolean(run && ["starting", "fetching", "parsing"].includes(run.status));
 
@@ -91,7 +97,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
         </div>
 
         <nav className="px-3">
-          {SECTIONS.map((section) => (
+          {sections(showHome).map((section) => (
             <div key={section.key} className="mb-5">
               <div className="eyebrow px-3 pb-2">{t(section.key)}</div>
               <div className="space-y-1">

@@ -309,5 +309,6 @@
   "review.arithmeticOk": "{subtotal} + {tax} = {amount} ✓",
   "nav.demoBadge": "Bandeja de ejemplo",
   "nav.demoNote": "Datos de ejemplo, no una cuenta. Iniciar sesión la reemplaza.",
-  "nav.leaveDemo": "Salir del ejemplo"
+  "nav.leaveDemo": "Salir del ejemplo",
+  "nav.home2": "Inicio"
 }
