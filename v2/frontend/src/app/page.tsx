@@ -82,7 +82,7 @@ function Home() {
 
 /** The live run: counters, then every email as the graph finishes with it. */
 function Processing() {
-  const { run, liveRecords, stopSync, startDemo, session } = useApp();
+  const { run, liveRecords, stopSync, startDemo, session, activeNodes } = useApp();
   const { t } = useT();
   const trace = useTrace();
   const active = Boolean(run && ["starting", "fetching", "parsing"].includes(run.status));
@@ -117,7 +117,7 @@ function Processing() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Panel title={t("dashboard.graphTitle")} flush>
-          <GraphDiagram records={liveRecords} active={active} />
+          <GraphDiagram records={liveRecords} active={active} activeNodes={activeNodes} />
         </Panel>
 
         <Panel

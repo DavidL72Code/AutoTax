@@ -47,11 +47,38 @@ def _record_from(result: dict[str, Any], user_id: str, email_id: str) -> dict[st
     return record
 
 
-async def run_one(email: Email, user_id: str = "local", *, interactive: bool = True) -> dict[str, Any]:
+NodeFn = Callable[[str, str], None]
+
+
+async def run_one(
+    email: Email,
+    user_id: str = "local",
+    *,
+    interactive: bool = True,
+    on_node: Optional[NodeFn] = None,
+) -> dict[str, Any]:
     graph = receipt_graph(interactive=interactive)
-    config = _config(user_id, str(email.get("id") or ""))
-    result: ReceiptState = await graph.ainvoke(new_state(email, user_id), config=config)
-    return _record_from(result, user_id, str(email.get("id") or ""))
+    email_id = str(email.get("id") or "")
+    config = _config(user_id, email_id)
+    state = new_state(email, user_id)
+
+    if on_node is None:
+        result: ReceiptState = await graph.ainvoke(state, config=config)
+        return _record_from(result, user_id, email_id)
+
+    # Two stream modes at once: `updates` names the node that just finished,
+    # `values` carries the state after it. `ainvoke` gives only the second, and
+    # a caller that wants to show where the work is needs the first.
+    result = {}
+    async for mode, chunk in graph.astream(state, config=config, stream_mode=["updates", "values"]):
+        if mode == "updates":
+            for node in chunk or {}:
+                # `__interrupt__` and friends are control signals, not nodes.
+                if not str(node).startswith("__"):
+                    on_node(str(node), email_id)
+        elif isinstance(chunk, dict):
+            result = chunk
+    return _record_from(result, user_id, email_id)
 
 
 async def resume_review(user_id: str, email_id: str, answer: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -104,6 +131,7 @@ async def run_many(
     concurrency: int = 16,
     interactive: bool = True,
     on_result: Optional[ProgressFn] = None,
+    on_node: Optional[NodeFn] = None,
 ) -> list[dict[str, Any]]:
     emails = list(emails)
     gate = asyncio.Semaphore(concurrency)
@@ -112,7 +140,7 @@ async def run_many(
     async def worker(index: int, email: Email) -> None:
         async with gate:
             try:
-                record = await run_one(email, user_id, interactive=interactive)
+                record = await run_one(email, user_id, interactive=interactive, on_node=on_node)
             except Exception as exc:  # noqa: BLE001 - one bad email must not sink the sync
                 record = {
                     "email_id": email.get("id"),

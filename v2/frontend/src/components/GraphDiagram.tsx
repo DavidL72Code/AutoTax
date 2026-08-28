@@ -62,7 +62,17 @@ const EDGES: Edge[] = [
 
 const TONE_COLOR = { normal: "rgba(148,163,184,0.32)", loop: "rgba(251,191,36,0.45)", human: "rgba(96,165,250,0.55)" };
 
-export function GraphDiagram({ records, active }: { records: Transaction[]; active: boolean }) {
+export function GraphDiagram({
+  records,
+  active,
+  activeNodes,
+}: {
+  records: Transaction[];
+  active: boolean;
+  /** Email id -> the node it last cleared, one entry per email still in
+      flight. Absent outside a live run. */
+  activeNodes?: Record<string, string>;
+}) {
   const traffic = useMemo(() => {
     const acc: Record<string, { count: number; ms: number }> = {};
     for (const record of records) {
@@ -75,10 +85,23 @@ export function GraphDiagram({ records, active }: { records: Transaction[]; acti
     return acc;
   }, [records]);
 
-  // liveRecords arrive newest-first, so the most recent step overall is the
-  // last step of the first record. It is the closest honest answer to "where
-  // is it now" — results stream back complete, not mid-node.
-  const latest = records[0]?.steps?.at(-1)?.node;
+  /* Where the run actually is.
+
+     This used to be `records[0].steps.at(-1)` — the last step of the most
+     recently *finished* email, which is `persist` by definition, so the
+     highlight sat on the final node for the whole run.
+
+     Sixteen emails run concurrently, so there is no single current step. A
+     binary highlight lights every node at once and says nothing. Counting how
+     many emails are sitting at each step does say something, and collapses to
+     one obvious highlight when only one email is in flight. */
+  const inFlight = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const node of Object.values(activeNodes ?? {})) {
+      counts[node] = (counts[node] ?? 0) + 1;
+    }
+    return counts;
+  }, [activeNodes]);
 
   const totals = useMemo(() => {
     const parsed = records.filter((r) => r.status === "parsed").length;
@@ -138,7 +161,8 @@ export function GraphDiagram({ records, active }: { records: Transaction[]; acti
 
         {NODES.map((node) => {
           const seen = traffic[node.id];
-          const isLatest = node.id === latest;
+          const here = active ? (inFlight[node.id] ?? 0) : 0;
+          const isLatest = here > 0;
           const touched = Boolean(seen?.count);
           const stroke = isLatest
             ? "#60a5fa"
@@ -151,7 +175,7 @@ export function GraphDiagram({ records, active }: { records: Transaction[]; acti
           return (
             <g key={node.id} opacity={node.terminal || touched || !records.length ? 1 : 0.55}>
               <title>{node.hint}</title>
-              {isLatest && active ? (
+              {isLatest ? (
                 <rect
                   x={node.x - 3}
                   y={node.y - 3}
@@ -164,6 +188,18 @@ export function GraphDiagram({ records, active }: { records: Transaction[]; acti
                 >
                   <animate attributeName="opacity" values="0.9;0.25;0.9" dur="1.6s" repeatCount="indefinite" />
                 </rect>
+              ) : null}
+              {isLatest && here > 1 ? (
+                <text
+                  x={node.x - 9}
+                  y={node.y + NODE_H / 2 + 4}
+                  fontSize="11"
+                  textAnchor="end"
+                  fill="var(--color-accent)"
+                  fontFamily="var(--font-plex-mono), monospace"
+                >
+                  {here}
+                </text>
               ) : null}
 
               <rect
