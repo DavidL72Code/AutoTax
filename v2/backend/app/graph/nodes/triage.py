@@ -28,11 +28,11 @@ async def triage(state: ReceiptState) -> dict:
     money = bool(_HAS_MONEY.search(body))
 
     if purchase and not promo:
-        return _decision(state, True, "purchase signal in body", started, "regex")
+        return _decision(state, True, "purchase_signal", started, "regex")
     if shipping:
-        return _decision(state, False, "shipping status, not a purchase", started, "regex")
+        return _decision(state, False, "shipping_only", started, "regex")
     if promo and not purchase:
-        return _decision(state, False, "marketing copy without purchase evidence", started, "regex")
+        return _decision(state, False, "marketing", started, "regex")
 
     if llm.available():
         try:
@@ -45,20 +45,46 @@ async def triage(state: ReceiptState) -> dict:
             )
             if verdict is not None:
                 is_receipt = bool(verdict.get("receipt"))
-                why = str(verdict.get("why") or "model judgement")[:60]
-                out = _decision(state, is_receipt, why, started, "llm")
+                # A code, not a sentence: it translates, it is countable, and
+                # anything unrecognised degrades to `unclear` rather than to
+                # untranslatable prose.
+                reason = str(verdict.get("why") or "unclear").strip().lower()
+                if reason not in REASONS:
+                    reason = "purchase_confirmed" if is_receipt else "unclear"
+                out = _decision(state, is_receipt, reason, started, "llm")
                 out["llm_calls"] = state.get("llm_calls", 0) + 1
                 return out
         except Exception as exc:  # noqa: BLE001 - fall through to the heuristic
-            return _decision(state, money, f"model unavailable ({type(exc).__name__}), used amount heuristic", started, "heuristic")
+            return _decision(state, money, "model_unavailable", started, "heuristic")
 
-    return _decision(state, money, "amount present but no explicit purchase wording", started, "heuristic")
+    return _decision(state, money, "amount_only", started, "heuristic")
 
 
-def _decision(state: ReceiptState, is_receipt: bool, why: str, started: float, how: str) -> dict:
+# Every reason this node can give, as a code. The English is here so a trace
+# read as text still says something; the code is what a translated UI renders.
+# The model picks from the same list, which is why nothing here is open text.
+REASONS = {
+    "purchase_signal": "purchase signal in body",
+    "shipping_only": "shipping status, not a purchase",
+    "marketing": "marketing copy without purchase evidence",
+    "amount_only": "amount present but no explicit purchase wording",
+    "model_unavailable": "model unavailable, used amount heuristic",
+    # what the model may return
+    "purchase_confirmed": "confirms a completed purchase",
+    "order_placed": "confirms an order was placed",
+    "payment_received": "confirms a payment",
+    "account_notice": "account notice, not a purchase",
+    "unclear": "no clear purchase evidence",
+}
+
+
+def _decision(state: ReceiptState, is_receipt: bool, reason: str, started: float, how: str) -> dict:
+    why = REASONS.get(reason, reason)
     return {
         "is_receipt": is_receipt,
         "triage_reason": why,
         "status": "pending" if is_receipt else "skipped",
-        "steps": [step("triage", f"{'receipt' if is_receipt else 'not a receipt'} — {why} [{how}]", started)],
+        "steps": [step("triage", f"{'receipt' if is_receipt else 'not a receipt'} — {why} [{how}]", started,
+             key="trace.triage.receipt" if is_receipt else "trace.triage.not_receipt",
+             params={"reason": reason, "how": how})],
     }

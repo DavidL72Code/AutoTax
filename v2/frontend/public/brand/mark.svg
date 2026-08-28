@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <!-- ACTIVE LOGO — option M, "notch". This is the file the app reads.
+       A square with a triangular notch struck into each side: one closed path,
+       four-fold symmetric, flat, no gradient. Colour is the single value below;
+       #3b82f6 (blue) and #eaeff8 (white) both work if you change your mind.
+       Other explorations live beside this file as mark-*.svg. -->
+  <path d="M10 10H23L32 19L41 10H54V23L45 32L54 41V54H41L32 45L23 54H10V41L19 32L10 23V10Z"
+        fill="#c6a15b"/>
+</svg>

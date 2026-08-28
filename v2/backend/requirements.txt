@@ -8,6 +8,9 @@ httpx==0.28.1
 langchain-core==1.6.0
 langchain-google-genai==4.3.6
 langgraph==1.2.11
+# Optional: durable checkpoints, so a review paused before a restart can still
+# be resumed. Without it CHECKPOINT_BACKEND falls back to in-process memory.
+langgraph-checkpoint-sqlite
 pydantic-settings==2.15.0
 python-dateutil==2.9.0.post0
 uvicorn[standard]==0.52.4

@@ -81,7 +81,8 @@ async def main() -> int:
 
     llm.reset_calls()
     started = time.perf_counter()
-    records = await run_many(emails)
+    # Benchmarks must never pause at await_review: no human is there to answer.
+    records = await run_many(emails, interactive=False)
     elapsed = time.perf_counter() - started
 
     accuracy = score(records, truth)

@@ -1,6 +1,15 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
 
-export type Step = { node: string; detail: string; ms: number };
+/** `detail` is the English sentence the backend built; `key`+`params` are the
+    same fact for a localised UI to phrase itself. */
+export type Step = {
+  node: string;
+  detail: string;
+  ms: number;
+  confidence?: number;
+  key?: string;
+  params?: Record<string, unknown>;
+};
 
 export type Transaction = {
   id: string;
@@ -14,12 +23,67 @@ export type Transaction = {
   date: string | null;
   category: string | null;
   payment_method: string | null;
-  status: "parsed" | "needs_review" | "skipped" | "failed";
+  status: "parsed" | "needs_review" | "skipped" | "failed" | "discarded";
   confidence: number;
   issues: string[];
   sources: Record<string, string>;
   steps: Step[];
+  model_confidence?: Record<string, number>;
+  blocked_on_model?: boolean;
   llm_calls: number;
+  thread_id?: string;
+  reviewed?: boolean;
+};
+
+export type ReviewAnswer = {
+  action?: "confirm" | "discard";
+  vendor?: string | null;
+  amount?: number | null;
+  tax?: number | null;
+  date?: string | null;
+  category?: string | null;
+  payment_method?: string | null;
+};
+
+export type Notification = {
+  id: string;
+  kind: string;
+  severity: "alert" | "warning" | "info";
+  title: string;
+  body: string;
+  href: string;
+  amount: number | null;
+  at: string;
+  read: boolean;
+};
+
+export type NotificationFeed = {
+  items: Notification[];
+  unread: number;
+};
+
+/** Enough of the email a paused thread stopped on to identify it and open the
+    original in Gmail. Read from the checkpoint, never stored, and deliberately
+    without the body. */
+export type ReviewSource = { sender: string | null; subject: string | null };
+
+/** Not a defect in the receipt: the record stalled because the model could not
+    be reached. Retrying clears it; reading the email will not. */
+export const MODEL_UNAVAILABLE = "model_unavailable";
+
+/* The backend decides this, because it knows which defects `escalate` would
+   have been asked to fix. A total that contradicts itself is not one of them:
+   a working model is asked twice and still cannot settle it. */
+export const blockedOnModel = (row: { blocked_on_model?: boolean; issues: string[] }) =>
+  row.blocked_on_model ?? false;
+
+export type ReviewQueue = {
+  checkpointer: string;
+  items: (Transaction & { live: boolean; source?: ReviewSource | null })[];
+  learned: {
+    vendors: { domain: string; vendor: string; source: string }[];
+    categories: { vendor: string; category: string; source: string }[];
+  };
 };
 
 export type Stats = {
@@ -33,11 +97,96 @@ export type Stats = {
   by_month: { month: string; amount: number }[];
 };
 
+export type Subscription = {
+  vendor: string;
+  cadence: string;
+  interval_days: number;
+  charges: number;
+  typical_amount: number;
+  baseline_amount: number;
+  latest_amount: number;
+  annualised: number;
+  first_charged: string;
+  last_charged: string;
+  next_expected: string;
+  days_overdue: number;
+  price_change_pct: number;
+  category: string | null;
+};
+
+export type Finding = {
+  kind: string;
+  severity: "action" | "watch";
+  title: string;
+  detail: string;
+  amount: number;
+  transaction_ids: string[];
+  vendor?: string | null;
+  params?: Record<string, unknown>;
+};
+
+export type Insights = {
+  subscriptions: Subscription[];
+  subscription_summary: {
+    count: number;
+    annual_commitment: number;
+    monthly_equivalent: number;
+    price_increases: Subscription[];
+    lapsed: Subscription[];
+  };
+  anomalies: Finding[];
+  concentration: {
+    total: number;
+    vendors: number;
+    top_share_pct: number;
+    top: { vendor: string; amount: number; share_pct: number }[];
+  };
+};
+
+export type Statement = {
+  available_months: string[];
+  month: string;
+  total: number;
+  prior_total: number;
+  delta: number;
+  delta_pct: number | null;
+  receipts: number;
+  tax_paid: number;
+  largest: { vendor: string; amount: number; date: string } | null;
+  categories: { name: string; amount: number; prior: number; delta: number; share: number }[];
+  movers: { name: string; amount: number; delta: number }[];
+  daily: { date: string; amount: number }[];
+  per_day: number;
+  projected: number | null;
+};
+
+export type TaxSummary = {
+  year: number;
+  receipts: number;
+  gross: number;
+  sales_tax_paid: number;
+  effective_tax_rate: number;
+  business_apportioned: number;
+  by_month: { month: string; tax: number }[];
+  by_category: {
+    category: string;
+    account: string;
+    account_name: string;
+    business_share: number;
+    gross: number;
+    tax: number;
+    business_apportioned: number;
+  }[];
+  disclaimer: string;
+};
+
 export type Session = {
   signed_in: boolean;
   email: string | null;
   gmail_connected: boolean;
   model_configured: boolean;
+  storage: "firestore" | "json";
+  linked_legacy_accounts: number;
 };
 
 export type RunState = {
@@ -92,6 +241,30 @@ export const api = {
     request<unknown>(`/api/transactions/${id}`, { method: "DELETE" }),
 
   stats: () => request<Stats>("/api/stats"),
+
+  notifications: () => request<NotificationFeed>("/api/notifications"),
+  markRead: (body: { ids?: string[]; all?: boolean }) =>
+    request<NotificationFeed>("/api/notifications/read", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  reviewQueue: () => request<ReviewQueue>("/api/review"),
+  // Resumes the paused graph thread for this email; the answer re-enters the
+  // graph at await_review and is re-validated before anything is written.
+  resolveReview: (emailId: string, answer: ReviewAnswer) =>
+    request<{ resumed: boolean; record: Transaction }>(`/api/review/${encodeURIComponent(emailId)}`, {
+      method: "POST",
+      body: JSON.stringify(answer),
+    }),
+
+  insights: () => request<Insights>("/api/insights"),
+  statement: (month?: string) =>
+    request<Statement>(`/api/statement${month ? `?month=${month}` : ""}`),
+  taxSummary: (year?: number) =>
+    request<TaxSummary>(`/api/tax-summary${year ? `?year=${year}` : ""}`),
+  exportUrl: (shape: "ledger" | "journal" | "expenses", month?: string) =>
+    `${API_BASE}/api/export/${shape}${month ? `?month=${month}` : ""}`,
 };
 
 export { ApiError };

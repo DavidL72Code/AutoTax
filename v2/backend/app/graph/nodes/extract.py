@@ -50,5 +50,6 @@ async def extract(state: ReceiptState) -> dict:
         "draft": draft,
         "sources": sources,
         "missing": missing_fields(merged),
-        "steps": [step("extract", f"regex found {found}", started)],
+        "steps": [step("extract", f"regex found {found}", started,
+                        key="trace.extract.found", params={"found": found})],
     }

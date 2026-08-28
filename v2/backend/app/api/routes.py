@@ -5,16 +5,19 @@ import json
 import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Body, Cookie, HTTPException, Query, Request, Response
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 
-from .. import auth, llm, sync
+from .. import auth, llm, notifications, sync
 from ..config import settings
+from ..graph import persistence, runner
 from ..graph.state import Email
 from ..ingest import gmail
-from ..store import repository
+from ..insights import anomalies, exports, recurring, reporting
+from ..store import accounts, repository
 
 router = APIRouter(prefix="/api")
 
@@ -126,19 +129,32 @@ async def google_disconnect(receipts_session: Optional[str] = Cookie(default=Non
 
 # ── syncing ─────────────────────────────────────────────────────────────────
 
+class SyncRequest(BaseModel):
+    """Bounded on purpose. An unbounded max_results is a way to make the server
+    spend someone else's Gmail quota and this process's memory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_results: int = Field(default=50, ge=1, le=500)
+    days_back: int = Field(default=180, ge=1, le=3650)
+    date_from: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    date_to: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
 @router.post("/sync")
 async def start_sync(
-    payload: dict = Body(default={}),
+    payload: Optional[SyncRequest] = Body(default=None),
     receipts_session: Optional[str] = Cookie(default=None),
 ):
     user = await _require_user(receipts_session)
+    payload = payload or SyncRequest()
     run = sync.start(
         user["user_id"],
         user_ids=user["user_ids"],
-        max_results=int(payload.get("max_results", 50)),
-        days_back=int(payload.get("days_back", 180)),
-        date_from=payload.get("date_from"),
-        date_to=payload.get("date_to"),
+        max_results=payload.max_results,
+        days_back=payload.days_back,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
     )
     return run.snapshot()
 
@@ -272,10 +288,208 @@ async def stats(receipts_session: Optional[str] = Cookie(default=None), months: 
     }
 
 
+# ── review: resuming a paused graph thread ──────────────────────────────────
+
+class ReviewAnswer(BaseModel):
+    """What a reviewer sends back. This becomes the `Command(resume=...)`
+    value, so it is validated tightly — it re-enters the graph."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["confirm", "discard"] = "confirm"
+    vendor: Optional[str] = Field(default=None, max_length=120)
+    amount: Optional[float] = Field(default=None, ge=-1_000_000, le=1_000_000)
+    tax: Optional[float] = Field(default=None, ge=-1_000_000, le=1_000_000)
+    date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    category: Optional[str] = Field(default=None, max_length=40)
+    payment_method: Optional[str] = Field(default=None, max_length=60)
+
+
+@router.get("/review")
+async def review_queue(receipts_session: Optional[str] = Cookie(default=None)):
+    """Receipts the graph stopped on.
+
+    `live` says whether the thread is still sitting in the checkpointer. With
+    the in-process checkpointer a restart loses it, and the answer is applied
+    as a direct edit instead — same outcome for the ledger, minus the
+    re-validation pass.
+    """
+    user = await _require_user(receipts_session)
+    rows = [r for r in await repository.list_records(user["user_ids"]) if r.get("status") == "needs_review"]
+    paused = {
+        item["email_id"]: item
+        for item in await runner.paused_threads(user["user_id"], [r.get("email_id") for r in rows if r.get("email_id")])
+    }
+    return {
+        "checkpointer": persistence.describe(),
+        # `source` is present only while the thread is live: it comes out of the
+        # checkpoint, not out of storage. Once the checkpoint is gone so is it.
+        "items": [
+            {
+                **row,
+                "live": row.get("email_id") in paused,
+                "source": (paused.get(row.get("email_id")) or {}).get("source"),
+            }
+            for row in rows
+        ],
+        "learned": await persistence.learned_for(user["user_id"]),
+    }
+
+
+@router.post("/review/{email_id}")
+async def resolve_review(
+    email_id: str,
+    answer: ReviewAnswer = Body(...),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
+    user = await _require_user(receipts_session)
+    payload = {**answer.model_dump(exclude_none=True), "at": datetime.now(timezone.utc).isoformat()}
+
+    resumed = await runner.resume_review(user["user_id"], email_id, payload)
+    if resumed:
+        return {"resumed": True, "record": resumed}
+
+    # No live thread: apply the same answer straight to the stored record.
+    rows = await repository.list_records(user["user_ids"])
+    row = next((r for r in rows if r.get("email_id") == email_id), None)
+    if not row:
+        raise HTTPException(status_code=404, detail="No such receipt")
+
+    if answer.action == "discard":
+        patch: dict = {"status": "discarded"}
+    else:
+        patch = {k: v for k, v in answer.model_dump(exclude_none=True).items() if k != "action"}
+        patch.update({"status": "parsed", "reviewed": True, "confidence": 1.0, "issues": []})
+        # The learning half still happens, so the next email from this sender
+        # resolves on its own.
+        if patch.get("vendor"):
+            await persistence.remember_vendor(user["user_id"], row.get("sender") or "", patch["vendor"])
+        if patch.get("vendor") and patch.get("category"):
+            await persistence.remember_category(user["user_id"], patch["vendor"], patch["category"])
+
+    updated = await repository.update(user["user_id"], row["id"], patch)
+    return {"resumed": False, "record": updated}
+
+
+# ── notifications ───────────────────────────────────────────────────────────
+
+class ReadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: Optional[list[str]] = Field(default=None, max_length=500)
+    all: bool = False
+
+
+@router.get("/notifications")
+async def list_notifications(receipts_session: Optional[str] = Cookie(default=None)):
+    user = await _require_user(receipts_session)
+    rows = await _ledger(user)
+    notes = notifications.build(rows)
+
+    account = await accounts.store().get_account(user["user_id"]) or {}
+    read_ids = account.get("notifications_read") or []
+    return notifications.apply_read_state(notes, read_ids)
+
+
+@router.post("/notifications/read")
+async def mark_notifications_read(
+    payload: ReadRequest = Body(default=None),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
+    user = await _require_user(receipts_session)
+    payload = payload or ReadRequest()
+
+    rows = await _ledger(user)
+    notes = notifications.build(rows)
+
+    store = accounts.store()
+    account = await store.get_account(user["user_id"]) or {}
+    read_ids = set(notifications.prune_read_state(notes, account.get("notifications_read") or []))
+
+    if payload.all:
+        read_ids |= {note["id"] for note in notes}
+    elif payload.ids:
+        live = {note["id"] for note in notes}
+        read_ids |= {rid for rid in payload.ids if rid in live}
+
+    await store.put_account(user["user_id"], {**account, "notifications_read": sorted(read_ids)})
+    return notifications.apply_read_state(notes, sorted(read_ids))
+
+
+# ── financial outputs ───────────────────────────────────────────────────────
+
+async def _ledger(user: dict) -> list[dict]:
+    """Everything that counts as spend: parsed and flagged rows, never skips."""
+    rows = await repository.list_records(user["user_ids"])
+    return [r for r in rows if r.get("status") != "skipped"]
+
+
+@router.get("/insights")
+async def insights(receipts_session: Optional[str] = Cookie(default=None)):
+    user = await _require_user(receipts_session)
+    rows = await _ledger(user)
+    subscriptions = recurring.detect(rows)
+    return {
+        "subscriptions": subscriptions,
+        "subscription_summary": recurring.summary(subscriptions),
+        "anomalies": anomalies.detect(rows, subscriptions),
+        "concentration": reporting.vendor_concentration(rows),
+    }
+
+
+@router.get("/statement")
+async def statement(
+    month: Optional[str] = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
+    user = await _require_user(receipts_session)
+    rows = await _ledger(user)
+    target = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    months = sorted({str(r.get("date"))[:7] for r in rows if r.get("date")}, reverse=True)
+    return {"available_months": months, **reporting.monthly_statement(rows, target)}
+
+
+@router.get("/tax-summary")
+async def tax_summary(
+    year: Optional[int] = Query(default=None, ge=2000, le=2100),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
+    user = await _require_user(receipts_session)
+    rows = await _ledger(user)
+    return reporting.tax_summary(rows, year or datetime.now(timezone.utc).year)
+
+
+@router.get("/export/{shape}", response_class=PlainTextResponse)
+async def export(
+    shape: str,
+    month: Optional[str] = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
+    user = await _require_user(receipts_session)
+    writer = exports.FORMATS.get(shape)
+    if not writer:
+        raise HTTPException(status_code=404, detail=f"Unknown export: {shape}")
+
+    rows = await _ledger(user)
+    if month:
+        rows = [r for r in rows if str(r.get("date", ""))[:7] == month]
+    rows.sort(key=lambda r: str(r.get("date") or ""))
+    filename = f"receipts-{shape}{f'-{month}' if month else ''}.csv"
+    return PlainTextResponse(
+        writer(rows),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ── demo ────────────────────────────────────────────────────────────────────
 
 @router.post("/demo")
-async def start_demo(response: Response, receipts_session: Optional[str] = Cookie(default=None)):
+async def start_demo(
+    response: Response,
+    months: int = Query(default=6, ge=0, le=12),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
     """Run the graph over sample receipts. No Gmail, no account, no API key
     required beyond whatever the server already has."""
     user = await auth.resolve_session(receipts_session)
@@ -293,8 +507,11 @@ async def start_demo(response: Response, receipts_session: Optional[str] = Cooki
         )
         user = await auth.resolve_session(token)
 
-    from ..demo_data import demo_emails
+    from ..demo_data import demo_emails, history_emails
 
-    emails: list[Email] = demo_emails()
+    # With history the sample inbox can demonstrate what the ledger *learns* —
+    # recurring charges, a price rise, a duplicate billing. months=0 falls back
+    # to the quick ten-receipt set.
+    emails: list[Email] = history_emails(months) if months else demo_emails()
     run = sync.start(user["user_id"], user_ids=user["user_ids"], emails=emails)
     return run.snapshot()

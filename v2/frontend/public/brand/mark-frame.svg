@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — framed</title>
+  <defs>
+    <linearGradient id="f-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#93c5fd"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Inverse of the solid badge: the frame is the outline, the receipt is the
+       colour. Reads as a stamp — something checked and filed. -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="rgba(59,130,246,0.10)"
+        stroke="rgba(96,165,250,0.45)" stroke-width="2"/>
+
+  <path d="M19 14H45V46.4L41.75 44.1L38.5 46.4L35.25 44.1L32 46.4L28.75 44.1L25.5 46.4L22.25 44.1L19 46.4V14Z"
+        fill="url(#f-fill)"/>
+
+  <!-- Line item and total, knocked out of the receipt so they read at 16px. -->
+  <rect x="24" y="21" width="16" height="3.2" rx="1.6" fill="#0b1424" fill-opacity="0.85"/>
+  <rect x="24" y="28.5" width="9" height="3.2" rx="1.6" fill="#0b1424" fill-opacity="0.6"/>
+</svg>

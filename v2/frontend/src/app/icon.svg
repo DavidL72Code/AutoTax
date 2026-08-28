@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Favicon. The mark sits on the app's own near-black rather than on
+       transparency, so it holds up against a light browser tab as well as a
+       dark one. Slightly tighter notches than the full-size mark — at 16px the
+       deep cuts close up into mush. -->
+  <rect width="64" height="64" rx="13" fill="#0a101f"/>
+  <path d="M13 13H25L32 20L39 13H51V25L44 32L51 39V51H39L32 44L25 51H13V39L20 32L13 25V13Z"
+        fill="#c6a15b"/>
+</svg>

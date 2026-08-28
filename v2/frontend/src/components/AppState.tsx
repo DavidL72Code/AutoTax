@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { API_BASE, api, RunState, Session, Stats, Transaction } from "@/lib/api";
+import { API_BASE, api, NotificationFeed, RunState, Session, Stats, Transaction } from "@/lib/api";
 
 type RunEvent = RunState & { type: "state" | "record" | "done"; record?: Transaction };
 
@@ -19,9 +19,13 @@ type Ctx = {
   transactions: Transaction[];
   run: RunState | null;
   liveRecords: Transaction[];
+  notifications: NotificationFeed | null;
+  unreadNotifications: number;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+  markNotificationsRead: (body: { ids?: string[]; all?: boolean }) => Promise<void>;
   startSync: () => Promise<void>;
   startDemo: () => Promise<void>;
   stopSync: () => Promise<void>;
@@ -39,6 +43,7 @@ export function AppState({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [run, setRun] = useState<RunState | null>(null);
   const [liveRecords, setLiveRecords] = useState<Transaction[]>([]);
+  const [notifications, setNotifications] = useState<NotificationFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<EventSource | null>(null);
@@ -50,12 +55,16 @@ export function AppState({ children }: { children: React.ReactNode }) {
       if (!next.signed_in) {
         setStats(null);
         setTransactions([]);
+        setNotifications(null);
         return;
       }
       const [nextStats, nextTransactions] = await Promise.all([api.stats(), api.transactions()]);
       setStats(nextStats);
       setTransactions(nextTransactions.transactions);
       setError(null);
+      // The bell should never be the reason a page fails to load, so this is
+      // deliberately outside the awaited set.
+      api.notifications().then(setNotifications).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach the API");
     } finally {
@@ -146,6 +155,18 @@ export function AppState({ children }: { children: React.ReactNode }) {
     api.stats().then(setStats).catch(() => undefined);
   }, []);
 
+  const refreshNotifications = useCallback(async () => {
+    try {
+      setNotifications(await api.notifications());
+    } catch {
+      // A failed poll leaves the last feed in place rather than blanking it.
+    }
+  }, []);
+
+  const markNotificationsRead = useCallback(async (body: { ids?: string[]; all?: boolean }) => {
+    setNotifications(await api.markRead(body));
+  }, []);
+
   const value = useMemo<Ctx>(
     () => ({
       session,
@@ -153,9 +174,13 @@ export function AppState({ children }: { children: React.ReactNode }) {
       transactions,
       run,
       liveRecords,
+      notifications,
+      unreadNotifications: notifications?.unread ?? 0,
       loading,
       error,
       refresh,
+      refreshNotifications,
+      markNotificationsRead,
       startSync,
       startDemo,
       stopSync,
@@ -164,7 +189,7 @@ export function AppState({ children }: { children: React.ReactNode }) {
       patch,
       remove,
     }),
-    [session, stats, transactions, run, liveRecords, loading, error, refresh, startSync, startDemo, stopSync, connectGmail, signOut, patch, remove],
+    [session, stats, transactions, run, liveRecords, notifications, loading, error, refresh, refreshNotifications, markNotificationsRead, startSync, startDemo, stopSync, connectGmail, signOut, patch, remove],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

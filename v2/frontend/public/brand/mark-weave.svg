@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — weave</title>
+  <!-- Four identical bars, each the previous one turned 90°, offset so they
+       pinwheel rather than meet. The overlaps read as woven ledger rules. -->
+  <g fill="#c6a15b">
+    <rect x="6" y="18" width="40" height="10" rx="1.5"/>
+    <rect x="6" y="18" width="40" height="10" rx="1.5" transform="rotate(90 32 32)"/>
+    <rect x="6" y="18" width="40" height="10" rx="1.5" transform="rotate(180 32 32)"/>
+    <rect x="6" y="18" width="40" height="10" rx="1.5" transform="rotate(270 32 32)"/>
+  </g>
+</svg>

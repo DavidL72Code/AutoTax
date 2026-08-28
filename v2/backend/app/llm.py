@@ -141,38 +141,43 @@ def _parse_array(text: str, expected: int) -> list[Optional[dict]]:
 
 
 class Batcher:
-    """Collects same-kind requests for a short window, then sends one prompt."""
+    """Collects same-kind requests for a short window, then sends one prompt.
+
+    A single worker task owns the queue. It only stands down while holding the
+    lock and only when the queue is empty, so there is no window in which a
+    request is enqueued with nothing scheduled to drain it — an earlier version
+    scheduled the follow-up flush conditionally and could strand the remainder
+    of an over-sized batch forever.
+    """
 
     def __init__(self, spec: BatchSpec) -> None:
         self.spec = spec
         self._queue: list[_Pending] = []
         self._lock = asyncio.Lock()
-        self._flush_task: Optional[asyncio.Task] = None
+        self._worker: Optional[asyncio.Task] = None
 
     async def submit(self, payload: dict[str, Any]) -> Optional[dict]:
         loop = asyncio.get_running_loop()
         pending = _Pending(payload=payload, future=loop.create_future())
         async with self._lock:
             self._queue.append(pending)
-            ready = len(self._queue) >= self.spec.max_batch
-            if self._flush_task is None or self._flush_task.done():
-                self._flush_task = asyncio.create_task(self._flush_after_window())
-        if ready:
-            await self._flush()
-        return await pending.future
+            if self._worker is None or self._worker.done():
+                self._worker = asyncio.create_task(self._drain())
+        # A response that never arrives must not hang the whole sync.
+        return await asyncio.wait_for(pending.future, timeout=settings.llm_request_timeout)
 
-    async def _flush_after_window(self) -> None:
-        await asyncio.sleep(settings.llm_batch_window_ms / 1000)
-        await self._flush()
+    async def _drain(self) -> None:
+        while True:
+            await asyncio.sleep(settings.llm_batch_window_ms / 1000)
+            async with self._lock:
+                if not self._queue:
+                    self._worker = None
+                    return
+                batch = self._queue[: self.spec.max_batch]
+                del self._queue[: self.spec.max_batch]
+            await self._send(batch)
 
-    async def _flush(self) -> None:
-        async with self._lock:
-            batch, self._queue = self._queue[: self.spec.max_batch], self._queue[self.spec.max_batch :]
-            if self._queue and (self._flush_task is None or self._flush_task.done()):
-                self._flush_task = asyncio.create_task(self._flush_after_window())
-        if not batch:
-            return
-
+    async def _send(self, batch: list[_Pending]) -> None:
         body = "\n\n".join(self.spec.render_item(i, p.payload) for i, p in enumerate(batch))
         prompt = (
             f"{self.spec.instructions}\n\n"
@@ -210,12 +215,22 @@ EXTRACT = Batcher(
         instructions=(
             "You read purchase receipt emails and pull out the financial facts.\n"
             'For each email return {"i": <index>, "vendor": <merchant name or null>, '
-            '"amount": <grand total paid as a number or null>, "tax": <tax charged as a number or null>}.\n'
+            '"amount": <grand total paid as a number or null>, "tax": <tax charged as a number or null>, '
+            '"confidence": {"<field>": <0.0-1.0>}}.\n'
             "Rules: vendor is the merchant the buyer paid, not the email platform or payment processor. "
             "amount is the final total charged, never a subtotal, an item price, or a rewards balance. "
-            "tax is 0 when the receipt shows no tax line. Use null when the email genuinely does not say."
+            "tax is 0 when the receipt shows no tax line. Use null when the email genuinely does not say.\n"
+            "HTML receipts arrive flattened, so a label and its value may sit on "
+            "different lines, and one amount may be split across several — a currency "
+            "symbol, then the whole part, then a decimal point, then the cents. "
+            "Reassemble those into one number.\n"
+            "Score confidence per field you filled, and mean it — this number decides whether a human "
+            "is asked to check the record. 0.95+ the email states the value in words you can point to; "
+            "0.7-0.9 you are reading it off a layout that could be misread; below 0.6 you inferred it "
+            "from context or picked between competing numbers. Do not default to a round high number."
         ),
         render_item=_render_extract,
+        max_output_tokens_per_item=130,
     )
 )
 
@@ -235,7 +250,10 @@ TRIAGE = Batcher(
         instructions=(
             "Decide whether each email documents a completed purchase by the recipient "
             "(a receipt, order confirmation, invoice, or payment confirmation).\n"
-            'Return {"i": <index>, "receipt": true|false, "why": "<six words max>"}.\n'
+            'Return {"i": <index>, "receipt": true|false, "why": "<one code>"}.\n'
+            "`why` must be exactly one of these codes, never a sentence: "
+            "purchase_confirmed, order_placed, payment_received, shipping_only, marketing, "
+            "account_notice, unclear.\n"
             "Marketing, sales announcements, shipping-status updates, and account notices are not receipts."
         ),
         render_item=_render_triage,

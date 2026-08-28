@@ -1,65 +1,494 @@
 @import "tailwindcss";
 
-/* Design tokens.
-   Restrained on purpose: one ink scale, one accent, hairline rules, no
-   gradients. The accent (#0F7B5F) is the only saturated colour and is
-   reserved for data marks and the primary action — it passes the chroma,
-   lightness and 3:1 contrast checks against this surface. */
+/* Ported from v1's styles.css rather than invented: same palette, same panel
+   treatment (gradient fill, inset top highlight, deep shadow), same radii,
+   same button and input geometry. v2 changes the information architecture,
+   not the visual language. */
 @theme {
-  --color-canvas: #f7f7f5;
-  --color-surface: #ffffff;
-  --color-line: #e7e5e1;
-  --color-line-strong: #d6d3cd;
+  --color-bg: #060a14;
+  --color-bg-soft: #0a101f;
+  --color-panel: #101828;
+  --color-elevated: #172138;
+  --color-line: rgba(148, 163, 184, 0.12);
+  --color-line-strong: rgba(148, 163, 184, 0.22);
 
-  --color-ink: #16161a;
-  --color-ink-2: #4a4a52;
-  --color-ink-3: #77777f;
+  --color-ink: #eaeff8;
+  --color-ink-2: #c4cdde;
+  --color-ink-3: #8d99b0;
+  --color-ink-4: #5f6a82;
 
-  --color-accent: #0f7b5f;
-  --color-accent-soft: #e6f1ec;
-  --color-accent-ink: #0a5843;
+  /* Two accents doing two different jobs. Brass is the *brand* — the mark, the
+     wordmark, anything that is identity rather than interface. Blue stays the
+     *interface* accent: the primary button, focus rings, links, chart bars.
+     Keeping them separate is why a heritage mark can sit above a working UI
+     without the two fighting. */
+  --color-brand: #c6a15b;
+  --color-brand-dim: #8c6b32;
 
-  --color-warn: #b45309;
-  --color-warn-soft: #fdf3e7;
-  --color-danger: #b3261e;
+  --color-accent: #3b82f6;
+  --color-accent-soft: #60a5fa;
+  --color-up: #34d399;
+  --color-amber: #fbbf24;
+  --color-down: #f87171;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-
-  --radius-card: 6px;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+  --font-display: var(--font-grotesk), var(--font-inter), sans-serif;
 }
 
-html,
-body {
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  -webkit-font-smoothing: antialiased;
+:root,
+[data-theme="dark"] {
+  --shadow: 0 20px 60px rgba(2, 6, 23, 0.55);
+
+  /* surfaces */
+  --surface-a: rgba(17, 25, 43, 0.96);
+  --surface-b: rgba(11, 17, 31, 0.92);
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-strong: rgba(255, 255, 255, 0.12);
+  --wash: rgba(255, 255, 255, 0.03);
+  --wash-strong: rgba(255, 255, 255, 0.06);
+  --highlight-top: rgba(255, 255, 255, 0.04);
+  --edge-glow: rgba(96, 165, 250, 0.35);
+  --edge-glow-2: rgba(255, 255, 255, 0.2);
+  --ambient-a: rgba(59, 130, 246, 0.14);
+  --ambient-b: rgba(99, 102, 241, 0.06);
+  --scroll-thumb: rgba(148, 163, 184, 0.25);
+  --btn-highlight: rgba(255, 255, 255, 0.25);
+  --btn-a: #3b82f6;
+  --btn-b: #2563eb;
+  --btn-a-hover: #60a5fa;
+  --btn-b-hover: #3b82f6;
+  --focus-ring: rgba(59, 130, 246, 0.14);
+  --focus-border: rgba(96, 165, 250, 0.55);
+  --select-bg: rgba(59, 130, 246, 0.3);
+  --chrome: #0a101f;
+  --chrome-veil: rgba(6, 10, 20, 0.82);
+  --chrome-soft: rgba(10, 16, 31, 0.6);
+  --scrim: rgba(2, 6, 23, 0.7);
+  --hover: rgba(148, 163, 184, 0.08);
+  --hover-strong: rgba(148, 163, 184, 0.14);
+  --dot: rgba(148, 163, 184, 0.35);
+  --dot-soft: rgba(148, 163, 184, 0.07);
+  --node-a: rgba(23, 33, 56, 0.96);
+  --node-b: rgba(13, 19, 34, 0.92);
+  --node-live-a: rgba(30, 49, 86, 0.96);
+  --node-live-b: rgba(17, 28, 52, 0.92);
+  --node-terminal: rgba(10, 16, 31, 0.75);
+  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 11px;
+}
+
+/* Light is not the dark theme lightened. The lit edge and the deep shadow both
+   depend on a near-black ground, so light drops them and earns its depth from
+   a warm paper ground, a real border and a short shadow instead. Same
+   geometry, same type, same accents — a different material. */
+[data-theme="light"] {
+  /* A ledger, not a landing page.
+
+     The dark theme earns depth from a lit edge and a deep shadow on near-black.
+     Neither survives here, and faking them with soft grey shadows and a cream
+     wash is what makes a light UI look generated. So this borrows from the
+     thing the app actually produces: a printed statement. Documents are flat
+     white, they sit on a grey desk, they are ruled with hairlines, and the ink
+     is nearly black. Depth comes from the paper being lighter than the desk —
+     not from a glow.
+
+     Red for negative is not decoration either; it is the older convention this
+     kind of page has always used. */
+
+  --color-bg: #e8e8e5;          /* the desk */
+  --color-bg-soft: #e2e2df;
+  --color-panel: #ffffff;       /* the paper */
+  --color-elevated: #f4f4f2;
+  --color-line: rgba(20, 22, 26, 0.16);
+  --color-line-strong: rgba(20, 22, 26, 0.3);
+
+  --color-ink: #15171b;         /* near-black, printed */
+  --color-ink-2: #383d45;
+  --color-ink-3: #626973;
+  --color-ink-4: #8a919b;
+
+  /* Brass is the mark only. It has no job in the interface here — on white it
+     reads as decoration, which is exactly the problem. */
+  --color-brand: #7a5c26;
+  --color-brand-dim: #9c7b3c;
+
+  --color-accent: #12489a;      /* ink blue, not screen blue */
+  --color-accent-soft: #1a5cc4;
+  --color-up: #08633f;
+  --color-amber: #7d5600;
+  --color-down: #a81f16;
+
+  /* No shadow. A hairline border does the work a blur was faking. */
+  --shadow: none;
+  --surface-a: #ffffff;
+  --surface-b: #ffffff;
+  --hairline: rgba(20, 22, 26, 0.1);
+  --hairline-strong: rgba(20, 22, 26, 0.18);
+  --wash: rgba(20, 22, 26, 0.022);
+  --wash-strong: rgba(20, 22, 26, 0.055);
+  --highlight-top: transparent;
+  --edge-glow: transparent;
+  --edge-glow-2: transparent;
+
+  /* The ambient radial wash is the single biggest tell. There is no glow behind
+     a sheet of paper. */
+  --ambient-a: transparent;
+  --ambient-b: transparent;
+
+  --scroll-thumb: rgba(20, 22, 26, 0.3);
+  --btn-highlight: transparent;
+  --btn-a: #12489a;
+  --btn-b: #12489a;
+  --btn-a-hover: #0d3a80;
+  --btn-b-hover: #0d3a80;
+  --focus-ring: rgba(18, 72, 154, 0.18);
+  --focus-border: #12489a;
+  --select-bg: rgba(18, 72, 154, 0.18);
+
+  --chrome: #dfdfdc;
+  --chrome-veil: #ffffff;
+  --chrome-soft: #eeeeec;
+  --scrim: rgba(20, 22, 26, 0.35);
+  --hover: rgba(20, 22, 26, 0.05);
+  --hover-strong: rgba(20, 22, 26, 0.09);
+  --dot: rgba(20, 22, 26, 0.45);
+  --dot-soft: rgba(20, 22, 26, 0.06);
+
+  --node-a: #ffffff;
+  --node-b: #ffffff;
+  --node-live-a: #e6edf9;
+  --node-live-b: #e6edf9;
+  --node-terminal: rgba(20, 22, 26, 0.05);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  position: relative;
+  min-height: 100vh;
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
+  font-feature-settings: "cv02", "cv03", "cv11";
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--color-ink);
+  background: var(--color-bg);
 }
 
-/* Money and counts must line up column to column. */
-.num {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
+/* The ambient wash behind everything — this is a large part of why v1 reads as
+   built rather than generated. It is fixed, so it never scrolls with content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 50% -120px, var(--ambient-a), transparent 70%),
+    radial-gradient(1200px 600px at 80% 110%, var(--ambient-b), transparent 70%);
 }
 
 ::selection {
-  background: var(--color-accent-soft);
+  background: var(--select-bg);
+  color: var(--color-ink);
 }
 
 *:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: 3px;
+  outline: none;
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-/* Scrollbars that don't shout. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-line-strong) transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+/* ── panels ──────────────────────────────────────────────────────────────── */
+
+.panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-line);
+  background: linear-gradient(180deg, var(--surface-a), var(--surface-b));
+  box-shadow:
+    inset 0 1px 0 var(--highlight-top),
+    var(--shadow);
+}
+
+/* The lit top edge. One line, and it is the difference between a box and a
+   surface. */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--edge-glow) 30%,
+    var(--edge-glow-2) 50%,
+    transparent 80%
+  );
+}
+
+.panel-sm {
+  border-radius: var(--radius-lg);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-4);
+}
+
+/* ── numbers ─────────────────────────────────────────────────────────────── */
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}
+
+.figure {
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--color-ink);
+}
+
+/* ── controls ────────────────────────────────────────────────────────────── */
+
+.btn,
+.btn-primary {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn {
+  background: rgba(148, 163, 184, 0.07);
+  border: 1px solid var(--color-line-strong);
+  color: var(--color-ink-2);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: var(--color-ink);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--btn-a), var(--btn-b));
+  border: 1px solid rgba(147, 197, 253, 0.4);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 var(--btn-highlight),
+    0 4px 18px rgba(37, 99, 235, 0.35);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, var(--btn-a-hover), var(--btn-b-hover));
+  box-shadow:
+    inset 0 1px 0 var(--btn-highlight),
+    0 8px 28px rgba(37, 99, 235, 0.5);
+}
+
+.btn:disabled,
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-ghost {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-ink-3);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-ink);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.field {
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: var(--radius-lg);
+  background: var(--wash-strong);
+  border: 1px solid var(--hairline-strong);
+  color: var(--color-ink);
+  font-size: 0.95rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field::placeholder {
+  color: var(--color-ink-4);
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+select.field option {
+  background: var(--color-panel);
+  color: var(--color-ink);
+}
+
+/* ── data grid ───────────────────────────────────────────────────────────── */
+
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.grid-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 18px 24px;
+  background: rgba(10, 14, 24, 0.96);
+  border-bottom: 1px solid var(--hairline-strong);
+  color: var(--color-ink-4);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.grid-table td {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--color-ink-2);
+  font-size: 0.94rem;
+}
+
+.grid-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.grid-table tbody tr.selectable:hover {
+  background: var(--wash);
+  cursor: pointer;
+}
+
+.align-right {
+  text-align: right;
+}
+
+/* ── bars ────────────────────────────────────────────────────────────────── */
+
+.bar {
+  background: linear-gradient(180deg, var(--btn-a), var(--btn-b));
+  box-shadow: inset 0 1px 0 var(--btn-highlight);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bar-track:hover .bar,
+.bar:hover {
+  background: linear-gradient(180deg, var(--btn-a-hover), var(--btn-b-hover));
+  box-shadow:
+    inset 0 1px 0 var(--btn-highlight),
+    0 4px 18px rgba(37, 99, 235, 0.35);
+}
+
+/* ── pills ───────────────────────────────────────────────────────────────── */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pill-neutral {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: var(--color-line);
+  color: var(--color-ink-3);
+}
+
+.pill-review {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: var(--color-amber);
+}
+
+.pill-good {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.3);
+  color: var(--color-up);
+}
+
+.pill-bad {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: var(--color-down);
+}
+
+.pill-accent {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: var(--color-accent-soft);
 }

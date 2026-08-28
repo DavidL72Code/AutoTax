@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — solid badge</title>
+  <defs>
+    <linearGradient id="s-badge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="s-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge geometry matches the primary button: same gradient, same inset
+       highlight, 15px radius. The logo belongs to the same surface language. -->
+  <rect width="64" height="64" rx="15" fill="url(#s-badge)"/>
+  <rect width="64" height="30" rx="15" fill="url(#s-sheen)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#fff" stroke-opacity="0.32"/>
+
+  <!-- Receipt: square shoulders, torn foot. -->
+  <path d="M18 13H46V47.2L42.5 44.8L39 47.2L35.5 44.8L32 47.2L28.5 44.8L25 47.2L21.5 44.8L18 47.2V13Z" fill="#fff"/>
+
+  <!-- Line item, then the total struck as a check: the product's whole promise
+       is that the number was verified, not just scraped. -->
+  <rect x="23.5" y="20.5" width="17" height="3.4" rx="1.7" fill="#1d4ed8"/>
+  <path d="M23.5 32.5L28.6 37.6L40.5 25.7" fill="none" stroke="#2563eb" stroke-width="4.2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,12 @@
+.env
+.env.*
+*.env
+token.json
+credentials.json
+**/token.json
+**/credentials.json
+*.db
+*.sqlite
+*.sqlite3
+*_api_key*
+*secret*

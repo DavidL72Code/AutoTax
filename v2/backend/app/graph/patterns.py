@@ -83,7 +83,9 @@ def _labelled_value(text: str, label: str, *, skip: Optional[re.Pattern] = None)
     """Find `label: $12.34` on a single line, tolerating a few separator styles."""
     patterns = (
         rf"^\s*(?:{label})\s*[:\-]\s*(?:USD?|US)?\s*{_MONEY}\b",
-        rf"^\s*(?:{label})\s+(?:USD?|US)?\s*{_MONEY}\b",
+        # A dot or middot leader between the label and the value is one of the
+        # most common receipt styles, and it defeats a plain `\s+`.
+        rf"^\s*(?:{label})[\s.·]+(?:USD?|US)?\s*{_MONEY}\b",
         rf"^\s*{_MONEY}\s*(?:{label})\b",
     )
     for raw_line in text.splitlines():
@@ -146,10 +148,48 @@ def extract_payment_method(text: str) -> Optional[str]:
     return f"{label} ••{tail}" if tail else label
 
 
+_FRAGMENT = re.compile(r"^[$€£¥]$|^[\d,]{1,7}$|^[.,]$|^[.,]\d{2}$")
+
+
+def glue_split_amounts(text: str) -> str:
+    """Rejoin an amount that HTML flattening tore into pieces.
+
+    A styled receipt can put the currency symbol, the whole part, the decimal
+    point and the cents in separate elements, which arrive as separate lines.
+    Left alone, the line-based passes downstream see a different number: the
+    snippet builder kept `$` and `97` out of `$ / 387 / . / 97` and turned
+    $387.97 into $97 in the text handed to the model.
+    """
+    lines = text.splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if _FRAGMENT.match(stripped):
+            run = [stripped]
+            j = i + 1
+            while j < len(lines) and len(run) < 4 and _FRAGMENT.match(lines[j].strip()):
+                run.append(lines[j].strip())
+                j += 1
+            # Only a run that actually reads as one amount is glued; two prices
+            # stacked in a table column must stay two lines.
+            joined = "".join(run)
+            if len(run) > 1 and re.fullmatch(r"[$€£¥]?[\d,]+[.,]\d{2}", joined):
+                out.append(joined)
+                i = j
+                continue
+            out.extend(run)
+            i = j if j > i else i + 1
+            continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
+
+
 def financial_snippet(text: str, max_chars: int = 500) -> str:
     """Keep only lines that carry financial signal, plus one line of context on
     each side. Cuts prompt size roughly 70% versus sending the whole body."""
-    lines = text.splitlines()
+    lines = glue_split_amounts(text).splitlines()
     keep: set[int] = set()
     for i, line in enumerate(lines):
         if _FINANCIAL_KW.search(line):
