@@ -263,6 +263,11 @@ export const api = {
     request<Statement>(`/api/statement${month ? `?month=${month}` : ""}`),
   taxSummary: (year?: number) =>
     request<TaxSummary>(`/api/tax-summary${year ? `?year=${year}` : ""}`),
+  advisorAsk: (message: string, history: { role: "user" | "assistant"; content: string }[]) =>
+    request<{ reply: string; receipts_considered: number }>("/api/advisor/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
   exportUrl: (shape: "ledger" | "journal" | "expenses", month?: string) =>
     `${API_BASE}/api/export/${shape}${month ? `?month=${month}` : ""}`,
 };

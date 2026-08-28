@@ -281,5 +281,12 @@ CATEGORIZE = Batcher(
 )
 
 
+async def ask(prompt: str, *, max_tokens: int = 512) -> str:
+    """One prompt, one answer. The batchers above exist because parsing 40
+    emails is 40 identical questions; a conversation turn is not, so it goes
+    straight through — still behind the same rate gate and retry policy."""
+    return await _invoke(prompt, max_tokens)
+
+
 def available() -> bool:
     return bool((settings.google_api_key or "").strip())

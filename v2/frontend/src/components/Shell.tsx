@@ -31,6 +31,7 @@ const SECTIONS: { key: string; items: Item[] }[] = [
       { href: "/transactions", key: "nav.transactions" },
       { href: "/statement", key: "nav.statement" },
       { href: "/insights", key: "nav.insights" },
+      { href: "/advisor", key: "nav.advisor" },
     ],
   },
   {

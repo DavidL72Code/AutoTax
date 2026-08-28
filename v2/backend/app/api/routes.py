@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
@@ -11,7 +12,7 @@ from fastapi import APIRouter, Body, Cookie, HTTPException, Query, Request, Resp
 from fastapi.responses import PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from .. import auth, llm, notifications, sync
+from .. import advisor, auth, llm, notifications, sync
 from ..config import settings
 from ..graph import persistence, runner
 from ..graph.state import Email
@@ -515,3 +516,61 @@ async def start_demo(
     emails: list[Email] = history_emails(months) if months else demo_emails()
     run = sync.start(user["user_id"], user_ids=user["user_ids"], emails=emails)
     return run.snapshot()
+
+
+# ── advisor ─────────────────────────────────────────────────────────────────
+#
+# One model call per turn, so unlike parsing it is not batched — and unlike
+# parsing it is user-triggered, which is why it is the one endpoint with a rate
+# limit. In-process and per user: enough to stop a stuck client burning the
+# quota, not a substitute for a real limiter behind a load balancer.
+
+_ADVISOR_CALLS: dict[str, list[float]] = defaultdict(list)
+_ADVISOR_MAX_PER_MINUTE = 12
+
+
+def _advisor_rate_limit(user_id: str) -> None:
+    now = time.monotonic()
+    recent = [t for t in _ADVISOR_CALLS[user_id] if now - t < 60.0]
+    if len(recent) >= _ADVISOR_MAX_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Too many questions at once — try again shortly.")
+    recent.append(now)
+    _ADVISOR_CALLS[user_id] = recent
+
+
+class AdvisorTurn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=advisor.MAX_TURN_CHARS)
+
+
+class AdvisorAsk(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    message: str = Field(min_length=1, max_length=advisor.MAX_MESSAGE)
+    history: list[AdvisorTurn] = Field(default_factory=list)
+
+
+@router.post("/advisor/chat")
+async def advisor_chat(
+    body: AdvisorAsk = Body(...),
+    receipts_session: Optional[str] = Cookie(default=None),
+):
+    """Answers from the aggregated ledger. Never sees an email body — v2 does
+    not store them — and never receives a record row by row."""
+    user = await _require_user(receipts_session)
+    _advisor_rate_limit(user["user_id"])
+
+    if not llm.available():
+        raise HTTPException(status_code=503, detail="No model is configured, so the advisor is unavailable.")
+
+    message = body.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Ask a question first.")
+
+    rows = await _ledger(user)
+    try:
+        reply = await advisor.answer(message, [turn.model_dump() for turn in body.history], rows)
+    except Exception as exc:  # noqa: BLE001 - provider errors are opaque
+        raise HTTPException(status_code=503, detail=f"The model could not be reached ({type(exc).__name__}).")
+
+    return {"reply": reply, "receipts_considered": len(rows)}
