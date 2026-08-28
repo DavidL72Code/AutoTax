@@ -155,6 +155,28 @@ function NotificationBell() {
   );
 }
 
+function DemoChip() {
+  const { signOut } = useApp();
+  const { t } = useT();
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        title={t("nav.demoNote")}
+        className="hidden rounded-[10px] border border-line-strong bg-[var(--dot-soft)] px-2.5 py-1.5 text-[0.8rem] text-ink-3 sm:block"
+      >
+        {t("nav.demoBadge")}
+      </span>
+      <button
+        onClick={() => void signOut()}
+        className="text-[0.8rem] text-ink-4 transition-colors hover:text-ink-2"
+      >
+        {t("nav.leaveDemo")}
+      </button>
+    </div>
+  );
+}
+
+
 function AccountMenu() {
   const { session, signOut } = useApp();
   const [open, setOpen] = useState(false);
@@ -235,15 +257,20 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
             the API is unreachable and `session` is still null — reads as a
             missing feature rather than an empty one. */}
         <NotificationBell />
-        {session?.signed_in ? (
-          <AccountMenu />
-        ) : (
+        {session?.signed_in && !session.is_demo ? <AccountMenu /> : null}
+        {session?.is_demo ? <DemoChip /> : null}
+        {/* Sign-in stays available during a demo. Trying the sample used to
+            replace this button with a throwaway account menu, so the only route
+            to a real account was to find "sign out" first — the demo blocked the
+            thing it exists to sell. Signing in replaces the demo session
+            server-side, so no sign-out is needed. */}
+        {!session?.signed_in || session.is_demo ? (
           /* Signing in *is* connecting Gmail — one Google grant, no second
              account to create. */
           <button onClick={connectGmail} className="btn-primary">
-            Sign in with Google
+            {t("nav.signIn")}
           </button>
-        )}
+        ) : null}
       </div>
     </header>
   );

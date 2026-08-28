@@ -182,6 +182,8 @@ export type TaxSummary = {
 
 export type Session = {
   signed_in: boolean;
+  /** A sample-inbox session: no account, and Google sign-in replaces it. */
+  is_demo: boolean;
   email: string | null;
   gmail_connected: boolean;
   model_configured: boolean;

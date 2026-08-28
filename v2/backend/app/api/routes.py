@@ -19,6 +19,7 @@ from ..graph.state import Email
 from ..ingest import gmail
 from ..insights import anomalies, exports, recurring, reporting
 from ..store import accounts, repository
+from ..store.repository import DEMO_PREFIX
 
 router = APIRouter(prefix="/api")
 
@@ -40,16 +41,26 @@ async def session_info(receipts_session: Optional[str] = Cookie(default=None)):
     user = await auth.resolve_session(receipts_session)
     return {
         "signed_in": bool(user),
+        # A sample-inbox session is not an account: no password, no OAuth, and
+        # signing in with Google simply replaces it. The UI needs to know so it
+        # can keep offering the real sign-in instead of hiding it behind a
+        # sign-out the visitor never asked for.
+        "is_demo": str((user or {}).get("user_id") or "").startswith(DEMO_PREFIX),
         "email": (user or {}).get("email"),
         "gmail_connected": bool((user or {}).get("gmail_connected")),
         "model_configured": llm.available(),
-        "storage": repository.describe(),
+        "storage": repository.describe(str((user or {}).get("user_id") or "")),
         "linked_legacy_accounts": max(len((user or {}).get("user_ids") or []) - 1, 0),
     }
 
 
 @router.post("/session/end")
 async def sign_out(response: Response, receipts_session: Optional[str] = Cookie(default=None)):
+    # A demo session's rows live in the process; drop them as it ends rather
+    # than waiting for the eviction cap to notice.
+    leaving = await auth.resolve_session(receipts_session)
+    if leaving and str(leaving.get("user_id") or "").startswith(DEMO_PREFIX):
+        repository.forget_demo(str(leaving["user_id"]))
     await auth.end_session(receipts_session)
     response.delete_cookie(auth.SESSION_COOKIE, path="/")
     return {"signed_in": False}
@@ -301,6 +312,7 @@ class ReviewAnswer(BaseModel):
     vendor: Optional[str] = Field(default=None, max_length=120)
     amount: Optional[float] = Field(default=None, ge=-1_000_000, le=1_000_000)
     tax: Optional[float] = Field(default=None, ge=-1_000_000, le=1_000_000)
+    subtotal: Optional[float] = Field(default=None, ge=-1_000_000, le=1_000_000)
     date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     category: Optional[str] = Field(default=None, max_length=40)
     payment_method: Optional[str] = Field(default=None, max_length=60)

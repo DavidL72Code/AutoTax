@@ -299,5 +299,15 @@
   "home.orConnect": "O conecta Gmail",
   "home.orConnectSub": "Solo lectura, revocable, y nunca se guarda el cuerpo de ningún correo.",
   "home.graphTitle": "Qué le pasa a cada correo",
-  "home.graphSub": "Ocho nodos y dos bucles. Las reglas responden lo que pueden probar; al modelo solo se le pregunta por los huecos; a una persona solo se le pregunta cuando ninguno pudo resolverlo."
+  "home.graphSub": "Ocho nodos y dos bucles. Las reglas responden lo que pueden probar; al modelo solo se le pregunta por los huecos; a una persona solo se le pregunta cuando ninguno pudo resolverlo.",
+  "review.vendor": "Comercio",
+  "review.amount": "Total",
+  "review.tax": "Impuesto",
+  "review.subtotal": "Base",
+  "review.category": "Categoría",
+  "review.arithmetic": "{subtotal} + {tax} = {sum}, pero el total dice {amount}",
+  "review.arithmeticOk": "{subtotal} + {tax} = {amount} ✓",
+  "nav.demoBadge": "Bandeja de ejemplo",
+  "nav.demoNote": "Datos de ejemplo, no una cuenta. Iniciar sesión la reemplaza.",
+  "nav.leaveDemo": "Salir del ejemplo"
 }

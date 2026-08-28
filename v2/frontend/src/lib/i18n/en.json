@@ -299,5 +299,15 @@
   "home.orConnect": "Or connect Gmail",
   "home.orConnectSub": "Read-only, revocable, and no email body is ever stored.",
   "home.graphTitle": "What happens to each email",
-  "home.graphSub": "Eight nodes and two loops. Rules answer what they can prove; the model is only asked about the gaps; a person is only asked when neither could settle it."
+  "home.graphSub": "Eight nodes and two loops. Rules answer what they can prove; the model is only asked about the gaps; a person is only asked when neither could settle it.",
+  "review.vendor": "Vendor",
+  "review.amount": "Total",
+  "review.tax": "Tax",
+  "review.subtotal": "Subtotal",
+  "review.category": "Category",
+  "review.arithmetic": "{subtotal} + {tax} = {sum}, but the total says {amount}",
+  "review.arithmeticOk": "{subtotal} + {tax} = {amount} ✓",
+  "nav.demoBadge": "Sample inbox",
+  "nav.demoNote": "Demo data, not an account. Signing in replaces it.",
+  "nav.leaveDemo": "Leave the demo"
 }

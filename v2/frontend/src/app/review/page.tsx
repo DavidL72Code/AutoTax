@@ -18,6 +18,7 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
   const [vendor, setVendor] = useState(row.vendor ?? "");
   const [amount, setAmount] = useState(row.amount?.toString() ?? "");
   const [tax, setTax] = useState(row.tax?.toString() ?? "");
+  const [subtotal, setSubtotal] = useState(row.subtotal?.toString() ?? "");
   const [category, setCategory] = useState(row.category ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,7 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
               vendor: vendor.trim() || null,
               amount: amount === "" ? null : Number(amount),
               tax: tax === "" ? null : Number(tax),
+              subtotal: subtotal === "" ? null : Number(subtotal),
               category: category.trim() || null,
             }
           : {}),
@@ -73,6 +75,23 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
           {blockedOnModel(row) ? (
             <p className="mt-4 rounded-[10px] border border-[var(--hairline-strong)] bg-[var(--wash)] px-4 py-3 text-[0.85rem] leading-relaxed text-ink-3">
               {t("review.blockedNote")}
+            </p>
+          ) : null}
+
+          {/* The complaint is about three numbers, so show the sum rather than
+              only naming it. Without this the reviewer cannot tell which of the
+              three is the misread one. */}
+          {row.issues.includes("total_does_not_reconcile") &&
+          row.subtotal != null &&
+          row.tax != null &&
+          row.amount != null ? (
+            <p className="num mt-4 text-[0.85rem] text-amber">
+              {t("review.arithmetic", {
+                subtotal: money(row.subtotal),
+                tax: money(row.tax),
+                sum: money(Number((row.subtotal + row.tax).toFixed(2))),
+                amount: money(row.amount),
+              })}
             </p>
           ) : null}
 
@@ -121,18 +140,26 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
 
         <div className="px-6 py-6">
           <div className="space-y-4">
-            <Field label="Vendor">
+            <Field label={t("review.vendor")}>
               <input className={inputClass} value={vendor} onChange={(e) => setVendor(e.target.value)} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Amount">
+              <Field label={t("review.amount")}>
                 <input className={`${inputClass} num`} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </Field>
-              <Field label="Tax">
+              <Field label={t("review.tax")}>
                 <input className={`${inputClass} num`} inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} />
               </Field>
             </div>
-            <Field label="Category">
+            {/* `validate` reconciles subtotal + tax against the total, so all
+                three have to be visible and all three correctable — otherwise a
+                misread subtotal can only be cleared by falsifying the others. */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t("review.subtotal")}>
+                <input className={`${inputClass} num`} inputMode="decimal" value={subtotal} onChange={(e) => setSubtotal(e.target.value)} />
+              </Field>
+            </div>
+            <Field label={t("review.category")}>
               <input className={inputClass} value={category} onChange={(e) => setCategory(e.target.value)} />
             </Field>
           </div>

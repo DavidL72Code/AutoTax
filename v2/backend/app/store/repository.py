@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Optional, Protocol
 
@@ -115,6 +116,84 @@ class JsonBackend:
             return True
 
 
+class EphemeralBackend:
+    """Demo sessions, held in the process and never written anywhere.
+
+    A sample-inbox visitor is not a customer with data to keep — they are
+    someone trying the thing for ten minutes. Persisting ~99 receipts per visit
+    to Firestore left 1,579 orphaned documents across 22 throwaway users with
+    nothing to clean them up, for data nobody would ever read again.
+
+    Same semantics as the real backends, including that a caller may only touch
+    their own rows: isolation here is the dict key, so it holds by construction.
+    """
+
+    def __init__(self, max_users: int = 50) -> None:
+        self._rows: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
+        self._max_users = max_users
+        self._lock = asyncio.Lock()
+
+    def _touch(self, user_id: str) -> list[dict[str, Any]]:
+        rows = self._rows.setdefault(user_id, [])
+        self._rows.move_to_end(user_id)
+        # Nothing expires a demo session, so without a cap a long-lived process
+        # accumulates every visitor who ever passed through.
+        while len(self._rows) > self._max_users:
+            self._rows.popitem(last=False)
+        return rows
+
+    async def save(self, user_id: str, record: dict[str, Any]) -> Optional[str]:
+        async with self._lock:
+            rows = self._touch(user_id)
+            email_id = record.get("email_id") or uuid.uuid4().hex
+            record_id = f"{user_id}__{email_id}"
+            payload = {**record, "id": record_id, "user_id": user_id, "email_id": email_id, "updated_at": _now()}
+            for index, row in enumerate(rows):
+                if row.get("email_id") == email_id:
+                    rows[index] = payload
+                    return record_id
+            rows.append(payload)
+            return record_id
+
+    async def list(self, user_id: UserIds) -> list[dict[str, Any]]:
+        wanted = _as_list(user_id)
+        rows = [_normalise(dict(row)) for key in wanted for row in self._rows.get(key, [])]
+        return sorted(rows, key=lambda r: str(r.get("date") or ""), reverse=True)
+
+    async def existing_email_ids(self, user_id: UserIds) -> set[str]:
+        return {r.get("email_id") for r in await self.list(user_id) if r.get("email_id")}
+
+    async def update(self, user_id: str, record_id: str, patch: dict[str, Any]) -> Optional[dict]:
+        async with self._lock:
+            for row in self._rows.get(user_id, []):
+                if row.get("id") == record_id:
+                    row.update({k: v for k, v in patch.items() if k != "id"}, updated_at=_now())
+                    return _normalise(dict(row))
+        return None
+
+    async def delete(self, user_id: str, record_id: str) -> bool:
+        async with self._lock:
+            rows = self._rows.get(user_id, [])
+            remaining = [r for r in rows if r.get("id") != record_id]
+            if len(remaining) == len(rows):
+                return False
+            self._rows[user_id] = remaining
+            return True
+
+    def forget(self, user_id: str) -> int:
+        return len(self._rows.pop(user_id, []))
+
+
+def _owned_by(snapshot: Any, user_id: str) -> bool:
+    """Reads are filtered by `user_id`, but writes address a document directly
+    and the id is supplied by the caller. Ids are `{user_id}__{email_id}`, so
+    without this a caller could name someone else's row and edit or delete it.
+    Existence is not permission."""
+    if not snapshot.exists:
+        return False
+    return str((snapshot.to_dict() or {}).get("user_id") or "") == str(user_id)
+
+
 class FirestoreBackend:
     """Shares v1's `transactions` collection.
 
@@ -168,7 +247,7 @@ class FirestoreBackend:
     async def update(self, user_id: str, record_id: str, patch: dict[str, Any]) -> Optional[dict]:
         ref = self._col(user_id).document(record_id)
         snapshot = await asyncio.to_thread(ref.get)
-        if not snapshot.exists:
+        if not _owned_by(snapshot, user_id):
             return None
         await asyncio.to_thread(
             ref.set, {k: v for k, v in patch.items() if k != "id"} | {"updated_at": _now()}, merge=True
@@ -179,7 +258,7 @@ class FirestoreBackend:
     async def delete(self, user_id: str, record_id: str) -> bool:
         ref = self._col(user_id).document(record_id)
         snapshot = await asyncio.to_thread(ref.get)
-        if not snapshot.exists:
+        if not _owned_by(snapshot, user_id):
             return False
         await asyncio.to_thread(ref.delete)
         return True
@@ -194,7 +273,9 @@ def _build() -> Backend:
     return JsonBackend()
 
 
-def describe() -> str:
+def describe(user_id: str = "") -> str:
+    if user_id and str(user_id).startswith(DEMO_PREFIX):
+        return "in-memory (demo)"
     return "firestore" if isinstance(backend(), FirestoreBackend) else "json"
 
 
@@ -214,6 +295,23 @@ def backend() -> Backend:
     return _backend
 
 
+_ephemeral = EphemeralBackend()
+
+
+def _for(user_id: UserIds) -> Backend:
+    """Demo sessions never reach durable storage. Routing here rather than
+    inside a backend keeps it true whichever backend is configured, and means a
+    visitor trying the sample inbox writes nothing at all."""
+    if any(str(uid).startswith(DEMO_PREFIX) for uid in _as_list(user_id)):
+        return _ephemeral
+    return backend()
+
+
+def forget_demo(user_id: str) -> int:
+    """Drop a demo session's rows the moment it is abandoned."""
+    return _ephemeral.forget(user_id)
+
+
 def use(custom: Backend) -> None:
     """Point the repository at a different backend (tests, demo mode)."""
     global _backend
@@ -221,20 +319,20 @@ def use(custom: Backend) -> None:
 
 
 async def save(user_id: str, record: dict[str, Any]) -> Optional[str]:
-    return await backend().save(user_id, record)
+    return await _for(user_id).save(user_id, record)
 
 
 async def list_records(user_id: UserIds) -> list[dict[str, Any]]:
-    return await backend().list(user_id)
+    return await _for(user_id).list(user_id)
 
 
 async def existing_email_ids(user_id: UserIds) -> set[str]:
-    return await backend().existing_email_ids(user_id)
+    return await _for(user_id).existing_email_ids(user_id)
 
 
 async def update(user_id: str, record_id: str, patch: dict[str, Any]) -> Optional[dict]:
-    return await backend().update(user_id, record_id, patch)
+    return await _for(user_id).update(user_id, record_id, patch)
 
 
 async def delete(user_id: str, record_id: str) -> bool:
-    return await backend().delete(user_id, record_id)
+    return await _for(user_id).delete(user_id, record_id)

@@ -35,8 +35,11 @@ def _thread_id() -> str:
 
 # Fields a reviewer is allowed to set. Anything else in the resume payload is
 # ignored — the resume value arrives over HTTP and is not trusted.
-EDITABLE = ("vendor", "amount", "tax", "date", "category", "payment_method")
-NUMERIC = ("amount", "tax")
+# `validate` reconciles subtotal + tax against the amount, so all three have to
+# be correctable. Leaving subtotal out meant a reviewer facing a misread
+# subtotal could only clear the flag by falsifying one of the other two.
+EDITABLE = ("vendor", "amount", "tax", "subtotal", "date", "category", "payment_method")
+NUMERIC = ("amount", "tax", "subtotal")
 
 
 def _coerce(field: str, value):
