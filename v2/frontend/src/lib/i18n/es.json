@@ -330,6 +330,6 @@
   "home.step1Body": "Las reglas extraen lo que pueden probar — el total, el impuesto, el comercio por el dominio del remitente. La mayoría de los recibos no necesitan nada más.",
   "home.step2": "El modelo rellena los huecos",
   "home.step2Body": "Solo los campos que las reglas no pudieron resolver, y solo se envían las líneas económicamente relevantes — nunca el correo entero.",
-  "home.step3": "Se comprueba la aritmética",
-  "home.step3Body": "La base más el impuesto debe dar el total. Cuando no cuadra, la ejecución se detiene y te pregunta en lugar de registrar una cifra que no puede sostener."
+  "home.step3": "Comprueba su propio trabajo",
+  "home.step3Body": "La base más el impuesto debe dar el total, y cada campo debe merecer confianza — un valor leído de un patrón limpio vale más que uno que el modelo dedujo. Si falla cualquiera de las dos pruebas, la ejecución se detiene y te pregunta, en lugar de registrar una cifra que no puede sostener."
 }
