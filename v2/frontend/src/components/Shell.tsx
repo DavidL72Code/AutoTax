@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/AppState";
-import { Lockup } from "@/components/Brand";
 import { TopBar } from "@/components/TopBar";
 import { useT } from "@/lib/i18n";
 
@@ -76,11 +75,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col justify-between">
       <div>
-        <Link href="/" onClick={onNavigate} className="flex h-[68px] items-center px-5">
-          <Lockup size={30} />
-        </Link>
-
-        <div className="px-4 py-5">
+        <div className="px-4 pb-5 pt-6">
           {session?.gmail_connected ? (
             <button onClick={startSync} disabled={syncing} className="btn-primary w-full disabled:opacity-45">
               {syncing ? "Syncing…" : "Sync inbox"}
@@ -141,35 +136,56 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+const RAIL_KEY = "receiptauto:rail";
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  /* The rail used to be pinned open above `lg` with the toggle hidden, so the
+     button did nothing on the screens most people use it on. It is a real
+     toggle now, on every width, and the choice is remembered. */
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    setOpen(false);
+    const stored = localStorage.getItem(RAIL_KEY);
+    setOpen(stored === null ? window.innerWidth >= 1024 : stored === "open");
+  }, []);
+
+  const toggle = () => {
+    setOpen((current) => {
+      localStorage.setItem(RAIL_KEY, current ? "closed" : "open");
+      return !current;
+    });
+  };
+
+  // On a narrow screen the rail covers the page, so following a link should
+  // close it. On a wide one it sits beside the page and should stay put.
+  useEffect(() => {
+    if (window.innerWidth < 1024) setOpen(false);
   }, [pathname]);
 
   return (
-    <div className="relative z-10 flex min-h-screen">
-      <aside className="hidden w-[248px] shrink-0 border-r border-line bg-[var(--chrome-soft)] backdrop-blur-sm lg:block">
-        <div className="sticky top-0 h-screen overflow-y-auto">
-          <Rail />
-        </div>
-      </aside>
+    <div className="relative z-10 min-h-screen">
+      <TopBar onOpenMenu={toggle} railOpen={open} />
 
-      {/* Small screens get the same rail as a drawer rather than a strip of
-          tabs across the top. */}
-      {open ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-[var(--scrim)]" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[268px] overflow-y-auto border-r border-line bg-[var(--chrome)] shadow-[0_20px_60px_rgba(2,6,23,0.55)]">
-            <Rail onNavigate={() => setOpen(false)} />
-          </aside>
-        </div>
-      ) : null}
+      <div className="flex">
+        {open ? (
+          <div
+            className="fixed inset-0 z-40 bg-[var(--scrim)] lg:hidden"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+        ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenMenu={() => setOpen(true)} />
+        <aside
+          className={`${
+            open ? "translate-x-0" : "-translate-x-full"
+          } fixed inset-y-0 left-0 z-40 w-[248px] shrink-0 overflow-y-auto border-r border-line bg-[var(--chrome-soft)] pt-[68px] backdrop-blur-sm transition-transform duration-200 lg:sticky lg:top-[68px] lg:z-0 lg:h-[calc(100vh-68px)] lg:pt-0 ${
+            open ? "lg:block" : "lg:hidden"
+          }`}
+        >
+          <Rail onNavigate={() => window.innerWidth < 1024 && setOpen(false)} />
+        </aside>
+
         <main className="mx-auto w-full max-w-[1280px] flex-1 px-6 py-8 lg:px-10">{children}</main>
       </div>
     </div>

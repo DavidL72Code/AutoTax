@@ -9,6 +9,7 @@ export function Panel({
   children,
   className = "",
   flush = false,
+  id,
 }: {
   title?: ReactNode;
   action?: ReactNode;
@@ -16,9 +17,11 @@ export function Panel({
   className?: string;
   /** Skip the inner padding when the child is a full-bleed table. */
   flush?: boolean;
+  /** For in-page anchors, e.g. a "how it works" link on the home page. */
+  id?: string;
 }) {
   return (
-    <section className={`panel ${className}`}>
+    <section id={id} className={`panel ${className}`}>
       {(title || action) && (
         <header className="panel-head">
           <h2 className="panel-title">{title}</h2>

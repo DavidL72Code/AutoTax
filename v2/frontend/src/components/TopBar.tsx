@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { useT } from "@/lib/i18n";
-import { Mark } from "@/components/Brand";
+import { Lockup } from "@/components/Brand";
 import { Pill } from "@/components/ui";
 import { money } from "@/lib/format";
 
@@ -231,16 +231,20 @@ function AccountMenu() {
   );
 }
 
-export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
+export function TopBar({ onOpenMenu, railOpen }: { onOpenMenu: () => void; railOpen: boolean }) {
   const { session, connectGmail } = useApp();
   const { t } = useT();
 
   return (
     <header className="sticky top-0 z-40 flex h-[68px] shrink-0 items-center gap-3 border-b border-line bg-[var(--chrome-veil)] px-5 backdrop-blur-md lg:px-8">
+      {/* A real toggle at every width. It used to be `lg:hidden` beside a rail
+          that was pinned open above `lg`, so on a desktop it was a control that
+          did nothing next to a panel that never moved. */}
       <button
         onClick={onOpenMenu}
         aria-label={t("nav.openMenu")}
-        className="btn-ghost h-10 w-10 justify-center px-0 lg:hidden"
+        aria-expanded={railOpen}
+        className="btn-ghost h-10 w-10 justify-center px-0"
       >
         <span className="flex flex-col gap-[3px]">
           <span className="block h-px w-4 bg-current" />
@@ -248,8 +252,11 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           <span className="block h-px w-4 bg-current" />
         </span>
       </button>
-      <Link href="/" className="lg:hidden" aria-label={t("nav.home")}>
-        <Mark size={26} />
+
+      {/* The wordmark lives here, not on top of the rail: it is the app's
+          identity, not a property of a panel you can close. */}
+      <Link href="/" aria-label={t("nav.home")} className="flex items-center">
+        <Lockup size={28} />
       </Link>
 
       <div className="ml-auto flex items-center gap-3">
