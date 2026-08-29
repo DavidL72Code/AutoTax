@@ -4,9 +4,9 @@ A rebuild of the receipt pipeline as a LangGraph state machine, with a new
 Next.js front end, Firestore storage, and outputs an accountant can use. v1 is
 still in the repo root and still runs; nothing here touches it.
 
-- **[docs/pipeline.md](docs/pipeline.md)** — the graph, which nodes call the
+- **[docs/pipeline.md](docs/pipeline.md)**, the graph, which nodes call the
   model, and what flows through the state
-- **[docs/evals.md](docs/evals.md)** — quality, latency, robustness, injection
+- **[docs/evals.md](docs/evals.md)**, quality, latency, robustness, injection
   resistance and security, with thresholds
 
 ## What changed and why
@@ -43,13 +43,13 @@ extract ──► resolve ──complete?──► enrich ──► validate ─
 | `escalate` | What could the rules not prove? | one batched model call |
 | `enrich` | What kind of spending is this? | free for known merchants |
 | `validate` | Does the arithmetic hold? | free |
-| `await_review` | What does a person say? | free — the thread pauses here |
+| `await_review` | What does a person say? | free, the thread pauses here |
 | `persist` | Save, and keep what was learned | free |
 
 Three things fall out of that shape:
 
 - **Every record carries its own trace.** The UI shows the steps that produced
-  each row and which source each field came from — memory, sender domain,
+  each row and which source each field came from, memory, sender domain,
   pattern match, model, or a person. A wrong number is debuggable.
 - **`validate` can send work back.** A total that does not reconcile against
   its own subtotal and tax goes back to `escalate` with just the suspect
@@ -63,10 +63,10 @@ Three things fall out of that shape:
 
 Two kinds, deliberately separate (`app/graph/persistence.py`):
 
-- **Checkpointer** — per thread (`{user_id}:{email_id}`), short-term. Every
+- **Checkpointer**, per thread (`{user_id}:{email_id}`), short-term. Every
   superstep, which is what makes `interrupt`/resume possible. In-process by
   default; set `CHECKPOINT_BACKEND=sqlite` to survive restarts.
-- **Store** — cross-thread, long-term. What corrections taught the system:
+- **Store**, cross-thread, long-term. What corrections taught the system:
   sender domain → vendor, vendor → category. `resolve` and `enrich` read it
   first on every later email, so the same correction is never asked for twice
   and the review queue drains instead of refilling.
@@ -81,7 +81,7 @@ single-email logic. Here, one code path, batching underneath.
 
 ## Benchmark
 
-Ten generated receipts with known ground truth — five clean layouts, five messy
+Ten generated receipts with known ground truth, five clean layouts, five messy
 ones with decoy dollar values and indirect labels.
 
 ```bash
@@ -117,12 +117,12 @@ committed to each year?"; on the business side it is evergreen-vendor tracking.
 **Anomalies worth acting on.** Duplicate billing (same merchant, same amount,
 days apart), subscription price rises with the annual delta in dollars, lapsed
 recurring charges, charges far outside a merchant's normal range, and missing
-tax where a merchant normally charges it — usually a parsing miss, which means
+tax where a merchant normally charges it, usually a parsing miss, which means
 understated recoverable tax.
 
 **Monthly statement.** Total against the prior month, per-category deltas, top
 movers, largest single charge, spend per day, and a month-end projection while
-the month is still running (never after it closes — a finished month is a fact,
+the month is still running (never after it closes, a finished month is a fact,
 not a forecast).
 
 **Tax and apportionment.** Sales tax paid by month and category, effective
@@ -136,7 +136,7 @@ back to the email:
 | Shape | For | Contents |
 |---|---|---|
 | `ledger` | a person | date, vendor, category, gross, tax, net, payment method, status, confidence |
-| `journal` | accounting software | double entry — expense debited, tax split to its own line, payment source credited |
+| `journal` | accounting software | double entry, expense debited, tax split to its own line, payment source credited |
 | `expenses` | whoever signs off | account code, business share, claimable amount |
 
 Untrusted text (a vendor name is whatever the email said) is neutralised before
@@ -175,7 +175,7 @@ Read from the repo-root `.env`, so an existing v1 setup works as-is.
 
 | Variable | Used for |
 |---|---|
-| `GOOGLE_API_KEY`, `GEMINI_MODEL` | the escalation calls (optional — rules run without it) |
+| `GOOGLE_API_KEY`, `GEMINI_MODEL` | the escalation calls (optional, rules run without it) |
 | `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | connecting Gmail |
 | `FERNET_KEY` | encrypting the stored refresh token |
 | `FIREBASE_PROJECT_ID` + service account | Firestore; otherwise a JSON file under `backend/data/` |
@@ -188,7 +188,7 @@ Set `NEXT_PUBLIC_API_BASE` in `frontend/.env.local` if the API is not on
 
 Firestore was never actually reachable in this repo before v2. The service
 account JSON in `.env` is pretty-printed, and dotenv stops at the first
-newline — so the value that reached the app was the single character `{`, and
+newline, so the value that reached the app was the single character `{`, and
 both versions silently fell back to local storage. `app/store/firestore_client.py`
 now reads the brace-balanced block straight out of `.env` (case-insensitively,
 because the Firebase console writes the key as `..._json`), so nobody has to
@@ -211,7 +211,7 @@ looking empty.
 
 Read-only (`gmail.readonly`). The refresh token is encrypted with your Fernet
 key before it is written, and disconnecting deletes it. Email bodies are never
-stored — only extracted fields, the parse trace, and the Gmail message id,
+stored, only extracted fields, the parse trace, and the Gmail message id,
 which is what stops the next sync re-parsing the same receipt.
 
 One thing needs doing in the Google Cloud console by hand: the OAuth client's
@@ -247,7 +247,7 @@ docs/               pipeline diagram and eval documentation
 
 ## Front end
 
-The visual language is **ported from v1's `styles.css`, not reinvented** — same
+The visual language is **ported from v1's `styles.css`, not reinvented**, same
 `#060a14` base, same panel treatment (gradient fill, `inset 0 1px 0` top
 highlight, `0 20px 60px` shadow, 20px radius, lit hairline across the top
 edge), same 44px buttons with the blue gradient and inset highlight, same 52px
@@ -255,8 +255,7 @@ inputs with the 4px focus ring, same 18/24px table padding and uppercase
 letter-spaced headers, same Inter / IBM Plex Mono / Space Grotesk trio. What
 changed is the information architecture, not the look.
 
-**Brand.** The mark is a square with a triangular notch struck into each side —
-one closed path, four-fold symmetric, flat, no gradient. It depicts nothing.
+**Brand.** The mark is a square with a triangular notch struck into each side, one closed path, four-fold symmetric, flat, no gradient. It depicts nothing.
 That is deliberate: the reference points are Porsche, YSL and Chase, none of
 which draw the thing the company sells, and none of which have any depth or
 gradient in them. Chase's octagon is one shape rotated four times; this is the
@@ -283,7 +282,7 @@ kept alongside as `mark-*.svg`.
 | **Review** | Receipts the graph paused on because they would not reconcile. Answering one resumes the thread from where it stopped. |
 | **Transactions** | The full ledger. Search, filter, export. A row opens to show which step decided each field. |
 | **Statement** | One month closed out: change against last month, tax paid, and the three exports. |
-| **Insights** | What only shows up across months — subscriptions, price rises, duplicate charges, concentration. |
+| **Insights** | What only shows up across months, subscriptions, price rises, duplicate charges, concentration. |
 
 "Overview" and "Activity" used to be separate pages describing the same run
 from two angles, and the one that actually did something was filed under
@@ -296,12 +295,12 @@ bell and the account. Neither duplicates the other, and there are no tabs. On
 small screens the same rail slides in as a drawer. Filtering lives in a toolbar
 above the grid it filters, so it never competes with navigation for a click.
 
-Signing in *is* connecting Gmail — one Google grant, no second account to
+Signing in *is* connecting Gmail, one Google grant, no second account to
 create, so the top-right control is a plain **Sign in with Google** button
 until you have one, and your account chip afterwards.
 
 **Notifications** live behind the bell, with a dropdown of the six most recent
-and a full page at `/notifications`. They are derived, not stored — recomputed
+and a full page at `/notifications`. They are derived, not stored, recomputed
 from the ledger on every request, so they cannot go stale or contradict the
 data. Duplicate charges,
 subscription price rises with the annual delta, lapsed recurring charges,
@@ -311,8 +310,8 @@ the same finding keeps its id across runs and stays read once you have read it;
 only the read-marks are persisted, and they are pruned when the underlying
 finding disappears.
 
-Charts use a single hue — identity is carried by axis labels, so there is no
-categorical palette to misread and no legend to decode — and each has a table
+Charts use a single hue, identity is carried by axis labels, so there is no
+categorical palette to misread and no legend to decode, and each has a table
 view for screen readers and for copying numbers out.
 
 The **Activity** page streams a live run: every email, every node, every
