@@ -331,5 +331,5 @@
   "home.step2": "The model fills the gaps",
   "home.step2Body": "Only the fields the rules could not settle, and only the financially relevant lines are sent — never the whole email.",
   "home.step3": "It checks its own work",
-  "home.step3Body": "Subtotal plus tax has to equal the total, and every field has to be worth trusting — a value read off a clean pattern counts for more than one a model inferred. Fail either test and the run stops and asks you, rather than banking a number it cannot stand behind."
+  "home.step3Body": "Subtotal plus tax has to equal the total. If it does not add up, or the model is not confident in what it found, it tries again — twice at most — and then asks you rather than banking a number it cannot stand behind."
 }
