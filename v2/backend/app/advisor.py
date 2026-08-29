@@ -61,7 +61,7 @@ def spend_summary(rows: list[dict[str, Any]], today: Optional[date] = None) -> s
     today = today or datetime.now(timezone.utc).date()
     usable = [r for r in rows if float(r.get("amount") or 0) > 0]
     if not usable:
-        return "The ledger is empty — no receipts have been parsed yet."
+        return "The ledger is empty. No receipts have been parsed yet."
 
     total = 0.0
     by_category: dict[str, float] = defaultdict(float)
@@ -139,6 +139,7 @@ def build_prompt(message: str, history: list[dict[str, Any]], summary: str) -> s
         "",
         "STYLE: concise, practical, warm. Bullet points for anything actionable.",
         "Under 250 words. Use - for bullets and *word* for emphasis; no headers, no **.",
+        "Never use an em dash. Use a comma, a colon or a full stop instead.",
         "",
         *turns,
         f"User: {message}",

@@ -20,7 +20,7 @@ export function useIssueText() {
 export function useCategoryText() {
   const { t } = useT();
   return (category: string | null | undefined) => {
-    if (!category) return "—";
+    if (!category) return "-";
     const text = t(`category.${category}`);
     return text === `category.${category}` ? category : text;
   };

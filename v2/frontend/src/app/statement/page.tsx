@@ -96,7 +96,7 @@ export default function StatementPage() {
         <Stat
           label={t("statement.largest")}
           value={money(statement.largest?.amount ?? 0)}
-          sub={statement.largest ? `${statement.largest.vendor} · ${shortDate(statement.largest.date)}` : "—"}
+          sub={statement.largest ? `${statement.largest.vendor} · ${shortDate(statement.largest.date)}` : "-"}
         />
       </div>
 

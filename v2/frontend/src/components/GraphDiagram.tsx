@@ -26,12 +26,12 @@ type Node = {
 const NODES: Node[] = [
   { id: "_source", x: 250, y: 6, label: "Gmail message", terminal: true, hint: "Sender, subject, date, flattened body" },
   { id: "triage", x: 250, y: 76, label: "triage", model: true, hint: "Is this a purchase at all? Rules first; the model only when they are unsure." },
-  { id: "extract", x: 250, y: 146, label: "extract", hint: "Total, tax, subtotal, order number, card — line-anchored patterns." },
+  { id: "extract", x: 250, y: 146, label: "extract", hint: "Total, tax, subtotal, order number, card. Line-anchored patterns." },
   { id: "resolve", x: 250, y: 216, label: "resolve", hint: "Which merchant was paid. Learned memory, then sender domain, then body." },
   { id: "escalate", x: 40, y: 216, label: "escalate", model: true, hint: "Asks the model, for the unproven fields only. Skipped when nothing is missing." },
   { id: "enrich", x: 250, y: 286, label: "enrich", model: true, hint: "Category and payment method. Free for a merchant already known." },
   { id: "validate", x: 250, y: 356, label: "validate", hint: "Subtotal plus tax against the total, tax share, positive amount, sane date." },
-  { id: "await_review", x: 460, y: 356, label: "await_review", hint: "interrupt() — the thread is checkpointed and waits for a person." },
+  { id: "await_review", x: 460, y: 356, label: "await_review", hint: "interrupt(). The thread is checkpointed and waits for a person." },
   { id: "persist", x: 250, y: 426, label: "persist", hint: "Writes the record, and stores whatever a correction taught it." },
   { id: "_ledger", x: 250, y: 496, label: "Ledger", terminal: true, hint: "Firestore, plus the learned rules" },
 ];

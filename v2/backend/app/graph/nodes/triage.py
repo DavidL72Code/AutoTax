@@ -84,7 +84,7 @@ def _decision(state: ReceiptState, is_receipt: bool, reason: str, started: float
         "is_receipt": is_receipt,
         "triage_reason": why,
         "status": "pending" if is_receipt else "skipped",
-        "steps": [step("triage", f"{'receipt' if is_receipt else 'not a receipt'} — {why} [{how}]", started,
+        "steps": [step("triage", f"{'receipt' if is_receipt else 'not a receipt'}, {why} [{how}]", started,
              key="trace.triage.receipt" if is_receipt else "trace.triage.not_receipt",
              params={"reason": reason, "how": how})],
     }

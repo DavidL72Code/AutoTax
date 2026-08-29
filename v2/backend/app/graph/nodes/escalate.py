@@ -52,7 +52,7 @@ async def escalate(state: ReceiptState) -> dict:
         return {
             "attempts": attempts,
             "issues": [*(state.get("issues") or []), MODEL_UNAVAILABLE],
-            "steps": [step("escalate", "skipped — no API key configured", started, key="trace.escalate.no_key")],
+            "steps": [step("escalate", "skipped, no API key configured", started, key="trace.escalate.no_key")],
         }
 
     try:

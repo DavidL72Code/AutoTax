@@ -62,7 +62,7 @@ export function Stat({
 /** Signed money. Direction is carried by the arrow as well as the colour, so
     it survives a colourblind reader and a black-and-white print. */
 export function Delta({ value, format }: { value: number; format: (n: number) => string }) {
-  if (!value) return <span className="num text-ink-4">—</span>;
+  if (!value) return <span className="num text-ink-4">-</span>;
   const up = value > 0;
   return (
     <span className={`num ${up ? "text-down" : "text-up"}`}>

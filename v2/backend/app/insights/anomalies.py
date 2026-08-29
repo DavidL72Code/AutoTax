@@ -74,7 +74,7 @@ def _duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "duplicate", "action",
                 f"Possible duplicate charge at {vendor}",
                 f"${amount:.2f} charged twice within "
-                f"{(later['_date'] - earlier['_date']).days} day(s) — check for a double billing "
+                f"{(later['_date'] - earlier['_date']).days} day(s). Check for a double billing "
                 f"or two confirmation emails for one order.",
                 amount,
                 [str(earlier.get("id")), str(later.get("id"))],
@@ -153,7 +153,7 @@ def _subscription_changes(subscriptions: list[dict[str, Any]]) -> list[dict[str,
             findings.append(_finding(
                 "price_increase", "action" if sub["price_change_pct"] >= 15 else "watch",
                 f"{sub['vendor']} went up {sub['price_change_pct']:.0f}%",
-                f"Now ${sub['latest_amount']:.2f} {sub['cadence']}, was ${baseline:.2f} — "
+                f"Now ${sub['latest_amount']:.2f} {sub['cadence']}, was ${baseline:.2f}. That is "
                 f"${annual_delta:.2f} more per year.",
                 sub["latest_amount"], [], sub["vendor"],
                 params={"vendor": sub["vendor"], "pct": round(sub["price_change_pct"]),
@@ -164,7 +164,7 @@ def _subscription_changes(subscriptions: list[dict[str, Any]]) -> list[dict[str,
             findings.append(_finding(
                 "lapsed", "watch",
                 f"No charge from {sub['vendor']} since {sub['last_charged']}",
-                f"A {sub['cadence']} charge is {sub['days_overdue']} days late — either it was "
+                f"A {sub['cadence']} charge is {sub['days_overdue']} days late. Either it was "
                 f"cancelled, or the receipt never arrived.",
                 sub["typical_amount"], [], sub["vendor"],
                 params={"vendor": sub["vendor"], "last_charged": sub["last_charged"],
@@ -180,7 +180,7 @@ def _unresolved(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [_finding(
         "needs_review", "action",
         f"{len(flagged)} receipt(s) still need a human",
-        "These are excluded from nothing — they are in your totals with the values the pipeline "
+        "These are excluded from nothing. They are in your totals with the values the pipeline "
         "could prove, which may be incomplete.",
         sum(float(r.get("amount") or 0) for r in flagged),
         [str(r.get("id")) for r in flagged],

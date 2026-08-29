@@ -42,7 +42,7 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
       });
       onDone(
         result.resumed
-          ? `Resumed the paused thread — re-validated and saved as ${result.record?.status}.`
+          ? t("review.resumed", { status: result.record?.status ?? "" })
           : `Checkpoint had expired, so the answer was applied directly (saved as ${result.record?.status}).`,
       );
     } catch (err) {
@@ -173,11 +173,7 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
             </Button>
           </div>
 
-          <p className="mt-4 text-[0.8rem] leading-relaxed text-ink-4">
-            Your values re-enter the graph at <span className="num">await_review</span> and pass back through{" "}
-            <span className="num">validate</span> before anything is written — the same arithmetic the model had
-            to satisfy. A vendor you set is remembered for this sender.
-          </p>
+          <p className="mt-4 text-[0.8rem] leading-relaxed text-ink-4">{t("review.resumeNote")}</p>
           {error ? <p className="mt-3 text-[0.85rem] text-down">{error}</p> : null}
         </div>
       </div>
@@ -259,9 +255,7 @@ export default function ReviewPage() {
         queue.items.map((row) => <ReviewItem key={row.id} row={row as Item} onDone={done} gmailConnected={Boolean(session?.gmail_connected)} />)
       ) : (
         <Panel flush>
-          <Empty title="Queue is empty">
-            Every receipt reconciled on its own — a vendor, a positive total, and tax that adds up.
-          </Empty>
+          <Empty title={t("review.queueEmpty")}>{t("review.queueEmptyBody")}</Empty>
         </Panel>
       )}
 
