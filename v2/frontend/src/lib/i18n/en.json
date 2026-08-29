@@ -310,5 +310,8 @@
   "nav.demoBadge": "Sample inbox",
   "nav.demoNote": "Demo data, not an account. Signing in replaces it.",
   "nav.leaveDemo": "Leave the demo",
-  "nav.home2": "Home"
+  "nav.home2": "Home",
+  "home.backHome": "Start from the home page",
+  "home.goToDashboard": "Go to your ledger",
+  "home.goToDashboardSub": "{count} receipts parsed so far."
 }

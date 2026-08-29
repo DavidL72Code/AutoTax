@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { Lockup } from "@/components/Brand";
@@ -17,12 +17,12 @@ type Item = { href: string; key: string; badge?: boolean };
 /* Five destinations, each doing one job. "Overview" and "Activity" used to be
    two pages describing the same run from different angles; they are now one
    dashboard. */
-const sections = (showHome: boolean): { key: string; items: Item[] }[] => [
+const SECTIONS: { key: string; items: Item[] }[] = [
   {
     key: "nav.workspace",
     items: [
-      ...(showHome ? [{ href: "/welcome", key: "nav.home2" }] : []),
-      { href: "/", key: "nav.dashboard" },
+      { href: "/", key: "nav.home2" },
+      { href: "/dashboard", key: "nav.dashboard" },
       { href: "/review", key: "nav.review", badge: true },
     ],
   },
@@ -68,12 +68,9 @@ function RunTicker() {
 function Rail({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { t } = useT();
-  const { session: nav } = useApp();
-  /* Reachable while there is still something to explain: before you have
-     connected anything, and during a demo — when "/" is the dashboard and the
-     landing would otherwise be lost. */
-  const showHome = !nav?.signed_in || Boolean(nav?.is_demo);
+
   const { session, stats, startSync, startDemo, run } = useApp();
+  const router = useRouter();
   const syncing = Boolean(run && ["starting", "fetching", "parsing"].includes(run.status));
 
   return (
@@ -89,7 +86,11 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
               {syncing ? "Syncing…" : "Sync inbox"}
             </button>
           ) : (
-            <button onClick={startDemo} disabled={syncing} className="btn w-full">
+            <button
+              onClick={() => void startDemo().then(() => router.push("/dashboard"))}
+              disabled={syncing}
+              className="btn w-full"
+            >
               {t("nav.runSample")}
             </button>
           )}
@@ -97,7 +98,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
         </div>
 
         <nav className="px-3">
-          {sections(showHome).map((section) => (
+          {SECTIONS.map((section) => (
             <div key={section.key} className="mb-5">
               <div className="eyebrow px-3 pb-2">{t(section.key)}</div>
               <div className="space-y-1">

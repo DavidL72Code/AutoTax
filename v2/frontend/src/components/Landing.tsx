@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/components/AppState";
 import { GraphDiagram } from "@/components/GraphDiagram";
 import { Button, Panel } from "@/components/ui";
@@ -11,8 +12,18 @@ import { useT } from "@/lib/i18n";
    ways in. The demo is the honest one to lead with: it runs the real pipeline,
    costs nothing, and asks for no access. */
 export function Landing() {
-  const { connectGmail, startDemo, session } = useApp();
+  const { connectGmail, startDemo, session, stats } = useApp();
   const { t } = useT();
+  // Home is now a real destination rather than a fallback, so someone who
+  // already has a ledger must be able to get to it from here.
+  const hasLedger = Boolean(session?.signed_in && stats?.receipt_count);
+  const router = useRouter();
+  // The run streams into the dashboard, so starting it from here should take
+  // you there — otherwise the sample appears to do nothing.
+  const runSample = async () => {
+    await startDemo();
+    router.push("/dashboard");
+  };
 
   return (
     <>
@@ -23,6 +34,24 @@ export function Landing() {
         <p className="mt-4 max-w-2xl text-[1rem] leading-relaxed text-ink-3">{t("home.lede")}</p>
       </section>
 
+      {hasLedger ? (
+        <Panel className="mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 py-1">
+            <div>
+              <h2 className="font-[family-name:var(--font-display)] text-[1.15rem] font-bold text-ink">
+                {t("home.goToDashboard")}
+              </h2>
+              <p className="mt-1 text-[0.9rem] text-ink-3">
+                {t("home.goToDashboardSub", { count: stats?.receipt_count ?? 0 })}
+              </p>
+            </div>
+            <Link href="/dashboard" className="btn-primary">
+              {t("nav.dashboard")}
+            </Link>
+          </div>
+        </Panel>
+      ) : null}
+
       <div className="mb-4 grid gap-4 lg:grid-cols-2">
         <Panel>
           <div className="py-1">
@@ -31,7 +60,7 @@ export function Landing() {
             </h2>
             <p className="mt-2 text-[0.9rem] leading-relaxed text-ink-3">{t("home.tryItSub")}</p>
             <div className="mt-4">
-              <Button variant="primary" onClick={startDemo}>
+              <Button variant="primary" onClick={() => void runSample()}>
                 {t("nav.runSample")}
               </Button>
             </div>

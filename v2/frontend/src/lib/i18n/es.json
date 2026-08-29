@@ -310,5 +310,8 @@
   "nav.demoBadge": "Bandeja de ejemplo",
   "nav.demoNote": "Datos de ejemplo, no una cuenta. Iniciar sesión la reemplaza.",
   "nav.leaveDemo": "Salir del ejemplo",
-  "nav.home2": "Inicio"
+  "nav.home2": "Inicio",
+  "home.backHome": "Empieza desde la página de inicio",
+  "home.goToDashboard": "Ir a tu libro",
+  "home.goToDashboardSub": "{count} recibos procesados hasta ahora."
 }
