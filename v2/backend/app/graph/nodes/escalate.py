@@ -1,4 +1,4 @@
-"""Node 4 — the only node allowed to spend a model call on extraction.
+"""Node 4, the only node allowed to spend a model call on extraction.
 
 It sees just the fields the rules could not prove and just the financially
 relevant lines of the body. Concurrent escalations are coalesced into a single

@@ -10,8 +10,8 @@ import { PageHeader } from "@/components/Shell";
 import { Button, Empty, Panel, Pill, Stat, StepScore } from "@/components/ui";
 import { money, shortDate } from "@/lib/format";
 
-/* The front door. The work happens here — a run streams through the graph in
-   the open — and the summary sits underneath it. Previously these were two
+/* The front door. The work happens here, a run streams through the graph in
+   the open, and the summary sits underneath it. Previously these were two
    pages, "Overview" and "Activity", and the one that actually did something
    was the one nobody could find. */
 

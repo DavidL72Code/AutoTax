@@ -2,13 +2,13 @@
 
 Two different kinds of memory, and they are not interchangeable:
 
-* **Checkpointer** — per-thread, short-term. Every superstep of the graph is
+* **Checkpointer**, per-thread, short-term. Every superstep of the graph is
   written to it, which is what makes `interrupt()` possible: the graph stops
   mid-run at `await_review`, the process can do other things, and a later
   `Command(resume=...)` picks the same thread up from exactly where it paused.
   One email is one thread.
 
-* **Store** — cross-thread, long-term. What the system has *learned*: that this
+* **Store**, cross-thread, long-term. What the system has *learned*: that this
   sender domain is that merchant, that this merchant is that category. Written
   when a human corrects a record, read by `resolve` and `enrich` on every
   later email, including emails in other threads and other runs.
@@ -67,7 +67,7 @@ def store() -> BaseStore:
 
 
 def use(*, saver: Any = None, memory: BaseStore | None = None) -> None:
-    """Swap either layer — tests and evals want a clean slate per run."""
+    """Swap either layer, tests and evals want a clean slate per run."""
     global _checkpointer, _store
     if saver is not None:
         _checkpointer = saver

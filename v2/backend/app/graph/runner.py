@@ -1,6 +1,6 @@
 """Driving the graph: one thread per email, and resuming paused ones.
 
-Concurrency here is what makes the batching in `llm.py` pay off — every email
+Concurrency here is what makes the batching in `llm.py` pay off, every email
 that reaches `escalate` at roughly the same moment folds into one request.
 
 Thread ids are `{user_id}:{email_id}`, which means re-running a message
@@ -84,7 +84,7 @@ async def run_one(
 async def resume_review(user_id: str, email_id: str, answer: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Hand a human's answer back to the thread that is waiting for it.
 
-    Returns None when no paused thread exists — the checkpoint may have been
+    Returns None when no paused thread exists, the checkpoint may have been
     lost to a restart if the in-process checkpointer is in use, in which case
     the caller falls back to editing the stored record directly.
     """
@@ -102,7 +102,7 @@ async def resume_review(user_id: str, email_id: str, answer: dict[str, Any]) -> 
 async def paused_threads(user_id: str, email_ids: Iterable[str]) -> list[dict[str, Any]]:
     """Which of these threads are actually sitting in the checkpointer.
 
-    Also returns just enough of the email to identify it — sender, subject — so
+    Also returns just enough of the email to identify it, sender, subject, so
     a reviewer can open the original in Gmail. The body is deliberately not
     included: it can carry anything the merchant put in it, and this app has no
     reason to hold or display that.

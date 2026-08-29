@@ -2,7 +2,7 @@
 
 Only two jobs: turn a stored refresh token into a client, and turn Gmail's
 message format into the flat dict the graph expects. Nothing here decides
-whether an email is a receipt — that is `triage`'s call.
+whether an email is a receipt. That is `triage`'s call.
 """
 from __future__ import annotations
 

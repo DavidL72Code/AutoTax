@@ -1,10 +1,9 @@
-"""Node 7 — stop and ask a person.
+"""Node 7, stop and ask a person.
 
 This is where the checkpointer earns its place. `interrupt()` raises out of the
 node, LangGraph writes the thread's state to the checkpointer, and the run
 ends. Hours later a `Command(resume=...)` re-enters this node on the same
-thread with the human's answer, and execution continues into `validate` —
-which re-checks the human's numbers exactly as it checked the model's — and on
+thread with the human's answer, and execution continues into `validate`, which re-checks the human's numbers exactly as it checked the model's, and on
 to `persist`.
 
 Two consequences worth being explicit about:
@@ -34,7 +33,7 @@ def _thread_id() -> str:
         return ""
 
 # Fields a reviewer is allowed to set. Anything else in the resume payload is
-# ignored — the resume value arrives over HTTP and is not trusted.
+# ignored, the resume value arrives over HTTP and is not trusted.
 # `validate` reconciles subtotal + tax against the amount, so all three have to
 # be correctable. Leaving subtotal out meant a reviewer facing a misread
 # subtotal could only clear the flag by falsifying one of the other two.
@@ -57,7 +56,7 @@ async def await_review(state: ReceiptState) -> dict:
 
     # Write the provisional row before pausing, so the receipt is visible in
     # the queue while the thread sits in the checkpointer. Re-running this node
-    # on resume rewrites the same document — the id is derived from the Gmail
+    # on resume rewrites the same document. The id is derived from the Gmail
     # message id, so it is an overwrite, never a duplicate.
     await repository.save(
         state.get("user_id") or "local",

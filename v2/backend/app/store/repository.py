@@ -119,7 +119,7 @@ class JsonBackend:
 class EphemeralBackend:
     """Demo sessions, held in the process and never written anywhere.
 
-    A sample-inbox visitor is not a customer with data to keep — they are
+    A sample-inbox visitor is not a customer with data to keep. They are
     someone trying the thing for ten minutes. Persisting ~99 receipts per visit
     to Firestore left 1,579 orphaned documents across 22 throwaway users with
     nothing to clean them up, for data nobody would ever read again.

@@ -9,7 +9,7 @@ import { Lockup } from "@/components/Brand";
 import { Pill } from "@/components/ui";
 import { money } from "@/lib/format";
 
-/* A utility bar, not a navigation bar — it carries the two things that follow
+/* A utility bar, not a navigation bar, it carries the two things that follow
    you around the app rather than a copy of the sidebar. */
 
 function useDismissable<T extends HTMLElement>(onClose: () => void) {
@@ -260,19 +260,19 @@ export function TopBar({ onOpenMenu, railOpen }: { onOpenMenu: () => void; railO
       </Link>
 
       <div className="ml-auto flex items-center gap-3">
-        {/* Always rendered. A control that vanishes when signed out — or when
-            the API is unreachable and `session` is still null — reads as a
+        {/* Always rendered. A control that vanishes when signed out, or when
+            the API is unreachable and `session` is still null, reads as a
             missing feature rather than an empty one. */}
         <NotificationBell />
         {session?.signed_in && !session.is_demo ? <AccountMenu /> : null}
         {session?.is_demo ? <DemoChip /> : null}
         {/* Sign-in stays available during a demo. Trying the sample used to
             replace this button with a throwaway account menu, so the only route
-            to a real account was to find "sign out" first — the demo blocked the
+            to a real account was to find "sign out" first, the demo blocked the
             thing it exists to sell. Signing in replaces the demo session
             server-side, so no sign-out is needed. */}
         {!session?.signed_in || session.is_demo ? (
-          /* Signing in *is* connecting Gmail — one Google grant, no second
+          /* Signing in *is* connecting Gmail, one Google grant, no second
              account to create. */
           <button onClick={connectGmail} className="btn-primary">
             {t("nav.signIn")}

@@ -1,4 +1,4 @@
-/* The logo is a real asset — `public/brand/mark.svg` — not shapes drawn inline
+/* The logo is a real asset, `public/brand/mark.svg`, not shapes drawn inline
    in JSX. One file to swap, and the favicon carries the same construction.
 
    Rendered with a plain <img> rather than next/image on purpose: next/image
@@ -20,7 +20,7 @@ export function Mark({ size = 32, className = "" }: { size?: number; className?:
 }
 
 /* Set in caps with open tracking, which is what Porsche, YSL and Chase have in
-   common typographically — the mark is geometric, so the type should be
+   common typographically: the mark is geometric, so the type should be
    architectural rather than friendly. Live text, not baked into the SVG: an
    <img>-loaded SVG cannot reach the page's fonts. */
 export function Wordmark({ className = "" }: { className?: string }) {

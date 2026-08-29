@@ -304,7 +304,7 @@ async def stats(receipts_session: Optional[str] = Cookie(default=None), months: 
 
 class ReviewAnswer(BaseModel):
     """What a reviewer sends back. This becomes the `Command(resume=...)`
-    value, so it is validated tightly — it re-enters the graph."""
+    value, so it is validated tightly, it re-enters the graph."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -324,7 +324,7 @@ async def review_queue(receipts_session: Optional[str] = Cookie(default=None)):
 
     `live` says whether the thread is still sitting in the checkpointer. With
     the in-process checkpointer a restart loses it, and the answer is applied
-    as a direct edit instead — same outcome for the ledger, minus the
+    as a direct edit instead, same outcome for the ledger, minus the
     re-validation pass.
     """
     user = await _require_user(receipts_session)
@@ -522,8 +522,7 @@ async def start_demo(
 
     from ..demo_data import demo_emails, history_emails
 
-    # With history the sample inbox can demonstrate what the ledger *learns* —
-    # recurring charges, a price rise, a duplicate billing. months=0 falls back
+    # With history the sample inbox can demonstrate what the ledger *learns*, # recurring charges, a price rise, a duplicate billing. months=0 falls back
     # to the quick ten-receipt set.
     emails: list[Email] = history_emails(months) if months else demo_emails()
     run = sync.start(user["user_id"], user_ids=user["user_ids"], emails=emails)
@@ -532,7 +531,7 @@ async def start_demo(
 
 # ── advisor ─────────────────────────────────────────────────────────────────
 #
-# One model call per turn, so unlike parsing it is not batched — and unlike
+# One model call per turn, so unlike parsing it is not batched, and unlike
 # parsing it is user-triggered, which is why it is the one endpoint with a rate
 # limit. In-process and per user: enough to stop a stuck client burning the
 # quota, not a substitute for a real limiter behind a load balancer.
@@ -545,7 +544,7 @@ def _advisor_rate_limit(user_id: str) -> None:
     now = time.monotonic()
     recent = [t for t in _ADVISOR_CALLS[user_id] if now - t < 60.0]
     if len(recent) >= _ADVISOR_MAX_PER_MINUTE:
-        raise HTTPException(status_code=429, detail="Too many questions at once — try again shortly.")
+        raise HTTPException(status_code=429, detail="Too many questions at once, try again shortly.")
     recent.append(now)
     _ADVISOR_CALLS[user_id] = recent
 
@@ -567,8 +566,8 @@ async def advisor_chat(
     body: AdvisorAsk = Body(...),
     receipts_session: Optional[str] = Cookie(default=None),
 ):
-    """Answers from the aggregated ledger. Never sees an email body — v2 does
-    not store them — and never receives a record row by row."""
+    """Answers from the aggregated ledger. Never sees an email body, v2 does
+    not store them, and never receives a record row by row."""
     user = await _require_user(receipts_session)
     _advisor_rate_limit(user["user_id"])
 

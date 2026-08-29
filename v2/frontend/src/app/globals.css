@@ -17,7 +17,7 @@
   --color-ink-3: #8d99b0;
   --color-ink-4: #5f6a82;
 
-  /* Two accents doing two different jobs. Brass is the *brand* — the mark, the
+  /* Two accents doing two different jobs. Brass is the *brand*, the mark, the
      wordmark, anything that is identity rather than interface. Blue stays the
      *interface* accent: the primary button, focus rings, links, chart bars.
      Keeping them separate is why a heritage mark can sit above a working UI
@@ -83,7 +83,7 @@
 /* Light is not the dark theme lightened. The lit edge and the deep shadow both
    depend on a near-black ground, so light drops them and earns its depth from
    a warm paper ground, a real border and a short shadow instead. Same
-   geometry, same type, same accents — a different material. */
+   geometry, same type, same accents, a different material. */
 [data-theme="light"] {
   /* A ledger, not a landing page.
 
@@ -92,8 +92,7 @@
      wash is what makes a light UI look generated. So this borrows from the
      thing the app actually produces: a printed statement. Documents are flat
      white, they sit on a grey desk, they are ruled with hairlines, and the ink
-     is nearly black. Depth comes from the paper being lighter than the desk —
-     not from a glow.
+     is nearly black. Depth comes from the paper being lighter than the desk, not from a glow.
 
      Red for negative is not decoration either; it is the older convention this
      kind of page has always used. */
@@ -110,7 +109,7 @@
   --color-ink-3: #626973;
   --color-ink-4: #8a919b;
 
-  /* Brass is the mark only. It has no job in the interface here — on white it
+  /* Brass is the mark only. It has no job in the interface here, on white it
      reads as decoration, which is exactly the problem. */
   --color-brand: #7a5c26;
   --color-brand-dim: #9c7b3c;
@@ -180,7 +179,7 @@ body {
   background: var(--color-bg);
 }
 
-/* The ambient wash behind everything — this is a large part of why v1 reads as
+/* The ambient wash behind everything. This is a large part of why v1 reads as
    built rather than generated. It is fixed, so it never scrolls with content. */
 body::before {
   content: "";

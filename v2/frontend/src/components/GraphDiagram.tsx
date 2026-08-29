@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Transaction } from "@/lib/api";
 
-/* The graph, drawn as the graph — with live traffic on it.
+/* The graph, drawn as the graph, with live traffic on it.
    Every node shows how many receipts have passed through it this run and how
    long it spent there on average, so a slow or unused step is visible rather
    than something you have to read a log to notice. */
@@ -42,7 +42,7 @@ const EDGES: Edge[] = [
   { d: `M330,52 V${76 - 6}` },
   { d: `M330,122 V${146 - 6}` },
   { d: `M330,192 V${216 - 6}` },
-  // triage rejects a non-receipt outright — nothing is stored.
+  // triage rejects a non-receipt outright, nothing is stored.
   { d: "M250,99 H196", tone: "loop", label: "not a receipt", lx: 190, ly: 96 },
   // resolve → escalate when fields are still missing
   { d: "M250,239 H206", label: "gaps", lx: 228, ly: 232 },
@@ -87,7 +87,7 @@ export function GraphDiagram({
 
   /* Where the run actually is.
 
-     This used to be `records[0].steps.at(-1)` — the last step of the most
+     This used to be `records[0].steps.at(-1)`, the last step of the most
      recently *finished* email, which is `persist` by definition, so the
      highlight sat on the final node for the whole run.
 

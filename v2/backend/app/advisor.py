@@ -4,8 +4,8 @@ Ported from v1's `/api/advisor/chat`, with the same scope limits and the same
 refusal to be mistaken for a licensed professional. Two things are different
 here, both deliberate:
 
-* It is built from the *aggregated* ledger — totals by month, by category, by
-  merchant — never from records row by row and never from email text. v2 does
+* It is built from the *aggregated* ledger, totals by month, by category, by
+  merchant, never from records row by row and never from email text. v2 does
   not store email bodies at all, so there is nothing else it could see, but the
   summary is assembled explicitly so that stays true if that ever changes.
 * The disclaimer is not left to the model. The prompt asks for it, but the UI
@@ -57,7 +57,7 @@ def _parse(value: Any) -> Optional[date]:
 
 def spend_summary(rows: list[dict[str, Any]], today: Optional[date] = None) -> str:
     """Aggregates only. No vendor-level line items, no dates of individual
-    purchases, no ids — the shapes of the spending, not the receipts."""
+    purchases, no ids, the shapes of the spending, not the receipts."""
     today = today or datetime.now(timezone.utc).date()
     usable = [r for r in rows if float(r.get("amount") or 0) > 0]
     if not usable:

@@ -1,6 +1,6 @@
 /* Formatting is not translation. `Intl` knows that Spanish writes 1.234,56 and
    puts the month after the day; it has no opinion about the word "Vendor".
-   Everything here is the first job, and needs no model — but it does need to
+   Everything here is the first job, and needs no model, but it does need to
    know the reader's locale, which is why it is settable rather than pinned.
 
    The ledger's amounts are dollars regardless of who is reading, so the
@@ -48,7 +48,7 @@ export function monthLabel(value: string): string {
 }
 
 /* Plural choice is a language rule, not a translation. English has two forms,
-   Spanish two, Polish four, Japanese one — `Intl.PluralRules` knows which form
+   Spanish two, Polish four, Japanese one, `Intl.PluralRules` knows which form
    a number takes so the locale file can carry one key per form instead of the
    "(s)" fudge. */
 export function plural(count: number, forms: Record<string, string>): string {

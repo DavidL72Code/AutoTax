@@ -136,7 +136,7 @@ async def _execute(
         def on_node(node: str, email_id: str) -> None:
             """Emitted as each node finishes, so the UI can show where work is
             happening. Sixteen emails run at once, so this is a stream of many
-            interleaved nodes, not one moving cursor — the client treats it as
+            interleaved nodes, not one moving cursor, the client treats it as
             "recently active", which is the honest reading."""
             if run.cancelled:
                 return

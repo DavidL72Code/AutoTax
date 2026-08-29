@@ -78,7 +78,7 @@ class Receipt:
         return self.when.strftime("%Y-%m-%d")
 
     def money(self, value: float) -> str:
-        """Format in this receipt's own convention — including the European
+        """Format in this receipt's own convention, including the European
         period/comma inversion and zero-decimal currencies."""
         if self.minor_units == 0:
             return f"{self.symbol}{value:,.0f}"
@@ -112,7 +112,7 @@ class Layout:
     sender: Optional[Callable[[Receipt], str]] = None
     expect_receipt: bool = True
     # When the document states no total at all, the truthful expectation for
-    # `amount` is the derived one — there is nothing to read off the page.
+    # `amount` is the derived one. There is nothing to read off the page.
     expected_amount: Optional[Callable[[Receipt], Optional[float]]] = None
     expected_tax: Optional[Callable[[Receipt], Optional[float]]] = None
     expected_vendor: Optional[Callable[[Receipt], Optional[str]]] = None

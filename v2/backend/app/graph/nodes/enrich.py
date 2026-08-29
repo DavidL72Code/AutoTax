@@ -1,4 +1,4 @@
-"""Node 5 — category and payment method.
+"""Node 5, category and payment method.
 
 Known merchants get their category from the registry for free. Only unknown
 merchants reach the model, and those requests batch together too.

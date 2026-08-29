@@ -25,7 +25,7 @@ CATEGORY_ACCOUNTS: dict[str, Account] = {
     "Services": Account("6800", "Professional Services", 1.0),
     "Shopping": Account("6300", "Supplies & Equipment", 1.0),
     "Subscriptions": Account("6400", "Software & Subscriptions", 1.0),
-    "Transport": Account("6200", "Travel — Local", 1.0),
+    "Transport": Account("6200", "Travel. Local", 1.0),
     "Travel": Account("6210", "Travel", 1.0),
     "Utilities": Account("6500", "Utilities", 1.0),
 }

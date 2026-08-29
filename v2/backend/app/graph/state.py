@@ -31,7 +31,7 @@ class Step(TypedDict):
     detail: str
     ms: int
     # Score at the moment this node finished, so the trace shows what the
-    # routing decision was made on — not just the number persist ended up with.
+    # routing decision was made on, not just the number persist ended up with.
     confidence: NotRequired[float]
     # The same detail as a translation key and its values, so the UI can render
     # the sentence in the reader's language instead of ours.
@@ -96,7 +96,7 @@ NON_DATA_ISSUES = frozenset({"model_unavailable"})
 
 # Blocking defects the model would have been asked to fix. A record carrying one
 # of these *and* `model_unavailable` is in the queue because the recovery path
-# was down, not because a person is needed — retrying should clear it.
+# was down, not because a person is needed, retrying should clear it.
 # `total_does_not_reconcile` is deliberately excluded: a working model is asked
 # twice and still cannot settle a receipt that contradicts itself.
 MODEL_FIXABLE = frozenset({"vendor_missing", "amount_missing", "amount_not_positive"})

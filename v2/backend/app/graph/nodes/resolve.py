@@ -1,4 +1,4 @@
-"""Node 3 — who was paid?
+"""Node 3, who was paid?
 
 Order of trust: learned memory > sender domain > known-vendor mention in the
 body > phrase match. Payment processors are a special case: paypal.com really
@@ -27,7 +27,7 @@ async def resolve(state: ReceiptState) -> dict:
 
     # Anything a person corrected before outranks every heuristic. This is the
     # cross-thread store, so a correction made on one email settles every later
-    # email from the same sender — including in other runs.
+    # email from the same sender, including in other runs.
     learned = await persistence.recall_vendor(state.get("user_id") or "local", email.get("sender", ""))
     if learned:
         vendor, source = learned, "memory"

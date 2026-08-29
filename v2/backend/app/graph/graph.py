@@ -24,8 +24,8 @@ Two cycles, not one:
 * **The human loop.** When the rules and the model have both run out, the graph
   *stops* at `await_review` via `interrupt()`. The thread's state goes to the
   checkpointer and the run ends. A later `Command(resume=…)` re-enters the same
-  thread, and the human's values go back through `validate` — the same
-  arithmetic the model had to satisfy — before anything is written.
+  thread, and the human's values go back through `validate`, the same
+  arithmetic the model had to satisfy, before anything is written.
 
 The second cycle is the reason this is a state machine with a checkpointer
 rather than a function that returns a dict.
@@ -70,7 +70,7 @@ def _after_validate(state: ReceiptState) -> str:
         return "escalate"
 
     # 2. Out of automatic options, and it still does not hold up. Ask a person
-    #    — once. A record that has already been reviewed goes through.
+    #, once. A record that has already been reviewed goes through.
     if issues & BLOCKING and not state.get("reviewed"):
         return "await_review"
 
@@ -136,5 +136,5 @@ def receipt_graph(*, interactive: bool = True):
 
 
 def reset() -> None:
-    """Drop compiled graphs — used after swapping the checkpointer in tests."""
+    """Drop compiled graphs, used after swapping the checkpointer in tests."""
     _compiled.clear()

@@ -192,7 +192,7 @@ async def section_quality(count: int, only: str = "") -> dict[str, Any]:
 
     return {
         "passed": all(t["passed"] for t in tiers.values()) and not uncovered,
-        "threshold": "per tier: rules_only 100%, escalate 75%, review 60%, skipped 100% — and every layout covered",
+        "threshold": "per tier: rules_only 100%, escalate 75%, review 60%, skipped 100%, and every layout covered",
         "metrics": {
             "receipts": len(emails),
             "layouts_covered": f"{len(layouts)}/{len(corpus.layout_names())}",

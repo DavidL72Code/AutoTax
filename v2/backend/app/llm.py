@@ -145,7 +145,7 @@ class Batcher:
 
     A single worker task owns the queue. It only stands down while holding the
     lock and only when the queue is empty, so there is no window in which a
-    request is enqueued with nothing scheduled to drain it — an earlier version
+    request is enqueued with nothing scheduled to drain it, an earlier version
     scheduled the follow-up flush conditionally and could strand the remainder
     of an over-sized batch forever.
     """
@@ -221,10 +221,10 @@ EXTRACT = Batcher(
             "amount is the final total charged, never a subtotal, an item price, or a rewards balance. "
             "tax is 0 when the receipt shows no tax line. Use null when the email genuinely does not say.\n"
             "HTML receipts arrive flattened, so a label and its value may sit on "
-            "different lines, and one amount may be split across several — a currency "
+            "different lines, and one amount may be split across several, a currency "
             "symbol, then the whole part, then a decimal point, then the cents. "
             "Reassemble those into one number.\n"
-            "Score confidence per field you filled, and mean it — this number decides whether a human "
+            "Score confidence per field you filled, and mean it, this number decides whether a human "
             "is asked to check the record. 0.95+ the email states the value in words you can point to; "
             "0.7-0.9 you are reading it off a layout that could be misread; below 0.6 you inferred it "
             "from context or picked between competing numbers. Do not default to a round high number."
@@ -284,7 +284,7 @@ CATEGORIZE = Batcher(
 async def ask(prompt: str, *, max_tokens: int = 512) -> str:
     """One prompt, one answer. The batchers above exist because parsing 40
     emails is 40 identical questions; a conversation turn is not, so it goes
-    straight through — still behind the same rate gate and retry policy."""
+    straight through, still behind the same rate gate and retry policy."""
     return await _invoke(prompt, max_tokens)
 
 

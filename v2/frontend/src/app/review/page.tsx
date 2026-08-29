@@ -152,7 +152,7 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
               </Field>
             </div>
             {/* `validate` reconciles subtotal + tax against the total, so all
-                three have to be visible and all three correctable — otherwise a
+                three have to be visible and all three correctable, otherwise a
                 misread subtotal can only be cleared by falsifying the others. */}
             <div className="grid grid-cols-2 gap-3">
               <Field label={t("review.subtotal")}>

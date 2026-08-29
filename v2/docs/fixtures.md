@@ -13,12 +13,12 @@ replacement immediately caught.
 
 | source | layouts | receipts |
 |---|---|---|
-| `_build_organized_body` — `random.choice` of four templates | 4 | 48 |
-| `_build_messy_body` — one f-string | 1 | 51 |
+| `_build_organized_body`, `random.choice` of four templates | 4 | 48 |
+| `_build_messy_body`, one f-string | 1 | 51 |
 
 All 99 share one subject template (`"Your receipt from {vendor}"`) across 11
-senders. Every receipt that takes the `escalate` path — 51 of 99, and every
-escalation observed in any run — comes from that single messy f-string.
+senders. Every receipt that takes the `escalate` path, 51 of 99, and every
+escalation observed in any run, comes from that single messy f-string.
 
 Three consequences:
 
@@ -100,7 +100,7 @@ layout the draw missed, so a layout can never silently drop out of the corpus.
 it through BeautifulSoup and collapses whitespace before the graph ever sees it.
 So a fixture containing raw `<table>` markup would test something the graph
 never receives. The HTML layouts must be written as the **post-flattening
-output**: tags gone, whitespace collapsed, and — the part that matters — table
+output**: tags gone, whitespace collapsed, and, the part that matters, table
 cells become separate lines, so a label and its value are no longer adjacent.
 
 ## The layouts
@@ -110,25 +110,25 @@ Sixteen, against the five they replace. Generated from the registry in
 
 | layout | expected path | what it proves | expected issues |
 |---|---|---|---|
-| `eur_comma_decimal` | escalate | 1.234,56 EUR — period and comma inverted | — |
-| `flattened_html_inline` | escalate | one amount split across symbol / dollars / cents lines | — |
-| `installments` | escalate | order value vs the amount actually charged today | — |
-| `jpy_no_decimals` | escalate | zero-decimal currency | — |
-| `no_explicit_total` | escalate | no total stated anywhere; must be summed from line items | — |
-| `processor_relay` | escalate | vendor is in the body; the sender domain is a processor | — |
-| `reconciliation_block` | escalate | decoys: auth hold, pending charge, prior balance | — |
+| `eur_comma_decimal` | escalate | 1.234,56 EUR, period and comma inverted |, |
+| `flattened_html_inline` | escalate | one amount split across symbol / dollars / cents lines |, |
+| `installments` | escalate | order value vs the amount actually charged today |, |
+| `jpy_no_decimals` | escalate | zero-decimal currency |, |
+| `no_explicit_total` | escalate | no total stated anywhere; must be summed from line items |, |
+| `processor_relay` | escalate | vendor is in the body; the sender domain is a processor |, |
+| `reconciliation_block` | escalate | decoys: auth hold, pending charge, prior balance |, |
 | `mismatched_total` | review | subtotal + tax != total; the only path to the retry loop | `total_does_not_reconcile` |
 | `shipping_and_discount` | review | legitimate total with shipping and a discount; validate cannot model either | `total_does_not_reconcile` |
 | `zero_total` | review | a zero total is valid data but must not be banked silently | `amount_not_positive` |
-| `flattened_html_cells` | rules_only | every label separated from its value by a newline | — |
-| `forwarded_thread` | rules_only | quoted stale receipt below the live one | — |
-| `plain_labeled` | rules_only | baseline: labelled total on one line | — |
-| `receipt_header_block` | rules_only | blank-line separated blocks, 'Amount Charged' phrasing | — |
-| `table_dot_leader` | rules_only | dot leaders and column alignment around the value | — |
-| `image_only` | skipped | nothing to extract; must not invent a number | — |
+| `flattened_html_cells` | rules_only | every label separated from its value by a newline |, |
+| `forwarded_thread` | rules_only | quoted stale receipt below the live one |, |
+| `plain_labeled` | rules_only | baseline: labelled total on one line |, |
+| `receipt_header_block` | rules_only | blank-line separated blocks, 'Amount Charged' phrasing |, |
+| `table_dot_leader` | rules_only | dot leaders and column alignment around the value |, |
+| `image_only` | skipped | nothing to extract; must not invent a number |, |
 
-Four of them — `mismatched_total`, `shipping_and_discount`, `zero_total`,
-`image_only` — exercise branches that had no coverage at all.
+Four of them, `mismatched_total`, `shipping_and_discount`, `zero_total`,
+`image_only`, exercise branches that had no coverage at all.
 
 ## Harness changes
 
@@ -148,7 +148,7 @@ Four of them — `mismatched_total`, `shipping_and_discount`, `zero_total`,
 changes at all. `tests/evals/cases.py` and `tests/fixtures.py` changed only to
 carry the new per-case metadata through, and to tolerate a `None` amount where a
 document states none. `history_cases` keeps planting the recurring charges, the price rise and
-the duplicate billing that the Insights page is built to find — it just draws
+the duplicate billing that the Insights page is built to find, it just draws
 bodies from the registry instead of the two builders.
 
 ## Consequences to expect
@@ -157,7 +157,7 @@ bodies from the registry instead of the two builders.
   design, so escalation rate rises.
 - **The dashboard will look different.** `needs_review` stops being 0. The
   review queue and the `await_review` interrupt finally get exercised in the
-  demo — which is the point, but it changes what the sample inbox demonstrates.
+  demo, which is the point, but it changes what the sample inbox demonstrates.
 - **Reported accuracy will probably drop.** That is a more honest number, not a
   regression.
 
@@ -181,7 +181,7 @@ Subtotal ................... $47.25
 
 because the dots sit between the label and the number where the pattern wanted
 whitespace. Dot leaders are one of the most common receipt styles, so every
-such receipt was quietly escalating to the model — correct output, paid for with
+such receipt was quietly escalating to the model, correct output, paid for with
 an API call that should not have happened. The fix is one alternative in the
 pattern list: `[\s.·]+` in place of `\s+`. That layout now scores 100% with
 zero model calls.
@@ -191,7 +191,7 @@ zero model calls.
 `graph.BLOCKING` listed four issues including `total_does_not_reconcile`;
 `persist` had its own literal set of three, without it. In interactive mode the
 `await_review` branch caught the difference, so nothing was visibly wrong. In
-non-interactive mode — which is *every eval run* — a receipt whose own
+non-interactive mode, which is *every eval run*, a receipt whose own
 arithmetic contradicted itself was saved as `parsed`. The eval could never have
 seen this, because the corpus had no receipt whose arithmetic was coherent
 enough for the check to mean anything.
@@ -200,8 +200,7 @@ enough for the check to mean anything.
 
 ### `financial_snippet` could halve an amount before the model saw it
 
-`flattened_html_inline` renders one amount as four lines — `$`, `387`, `.`, `97`
-— which is what a styled `<span>` layout becomes after HTML flattening. The
+`flattened_html_inline` renders one amount as four lines, `$`, `387`, `.`, `97`, which is what a styled `<span>` layout becomes after HTML flattening. The
 model returned `97.00`. It was right to: `financial_snippet` keeps lines
 matching a financial keyword plus one line of context, and the bare `387` and
 `.` lines matched nothing, so the text handed to the model read `Total / $ / 97`.
@@ -209,7 +208,7 @@ A $387.97 charge would have been banked as $97.
 
 This is the worst of the five, because it is silent and it corrupts a value
 rather than dropping one. `patterns.glue_split_amounts` now rejoins a run of
-fragment lines when — and only when — the joined result reads as a single
+fragment lines when, and only when, the joined result reads as a single
 amount, so a stacked price column in a table stays two prices. `financial_snippet`
 runs it first.
 
@@ -217,7 +216,7 @@ runs it first.
 
 `security.py` asserted `len(all_prompts) < len(body) * 6` against a 77-character
 body. The intent is "an excerpt of the email travels, not the whole email", but
-the quantity measured includes our own static instructions — so lengthening the
+the quantity measured includes our own static instructions, so lengthening the
 instructions failed a *security* check without any more of the email being sent.
 It now measures what share of the body's own lines reach the model (≤40%), and
 asserts the full body is never present, against a body long enough for the
@@ -227,15 +226,15 @@ property to be testable.
 
 Written on assumption, corrected by measurement:
 
-- `flattened_html_cells` — assumed to need the model. `extract_amount`'s
+- `flattened_html_cells`, assumed to need the model. `extract_amount`'s
   cross-line fallback reads it correctly, so it is `RULES_ONLY`. The fallback
   had no coverage before; now it has some.
-- `forwarded_thread` — assumed to need the model to pick the live receipt over
+- `forwarded_thread`, assumed to need the model to pick the live receipt over
   the quoted stale one. `_labelled_value` scans top-down and the live total is
   above, so the rules get it. `RULES_ONLY`.
 
 And one that turned out to take a fourth path entirely: `image_only` is rejected
-by `triage`, which is right — an email with no purchase record in it is not a
+by `triage`, which is right, an email with no purchase record in it is not a
 receipt. That needed a `Path.SKIPPED` the design did not have.
 
 ## Known limitations, now measured rather than assumed

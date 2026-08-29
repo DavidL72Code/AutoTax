@@ -11,8 +11,8 @@ import { useT } from "@/lib/i18n";
    headline with the second line accented, a sub, the calls to action, a trust
    row, then the product itself, then how it works.
 
-   One deliberate difference. v1 showed a mocked dashboard — invented merchants
-   and invented totals — as the preview. This shows the real graph instead. It
+   One deliberate difference. v1 showed a mocked dashboard, invented merchants
+   and invented totals, as the preview. This shows the real graph instead. It
    is the honest version of the same idea, and it is also the actual claim the
    app makes: that every figure carries the steps that produced it. */
 export function Landing() {
@@ -23,7 +23,7 @@ export function Landing() {
   const hasLedger = Boolean(session?.signed_in && stats?.receipt_count);
 
   // The run streams into the dashboard, so starting it from here should take
-  // you there — otherwise the sample appears to do nothing.
+  // you there, otherwise the sample appears to do nothing.
   const runSample = async () => {
     await startDemo();
     router.push("/dashboard");

@@ -36,8 +36,7 @@ def _finding(
     params: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """`ids` names the exact rows a finding is about. A subscription finding is
-    derived from a rollup rather than from rows, so it carries `vendor` instead
-    — either way the UI can take you to the receipts behind the claim."""
+    derived from a rollup rather than from rows, so it carries `vendor` instead, either way the UI can take you to the receipts behind the claim."""
     return {
         "kind": kind,
         "severity": severity,
@@ -53,7 +52,7 @@ def _finding(
 
 
 def _duplicates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Same merchant, same amount, days apart — a double charge or a double sync."""
+    """Same merchant, same amount, days apart, a double charge or a double sync."""
     by_key: dict[tuple[str, float], list[dict]] = defaultdict(list)
     for row in rows:
         vendor, amount, when = row.get("vendor"), row.get("amount"), _parse(row.get("date"))

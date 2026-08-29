@@ -81,7 +81,7 @@ def journal_csv(records: list[dict[str, Any]]) -> str:
 
         lines.append([row.get("date"), memo, account.code, account.name, net, "", row.get("currency", "USD"), source])
         if tax:
-            lines.append([row.get("date"), f"{memo} — tax", "1300", "Tax Receivable", tax, "", row.get("currency", "USD"), source])
+            lines.append([row.get("date"), f"{memo}, tax", "1300", "Tax Receivable", tax, "", row.get("currency", "USD"), source])
         lines.append([row.get("date"), memo, pay_code, pay_name, "", gross, row.get("currency", "USD"), source])
 
     return _write(

@@ -1,4 +1,4 @@
-"""Node 1 — is this email a purchase at all?
+"""Node 1, is this email a purchase at all?
 
 Cheap signals decide the clear cases. Only genuinely ambiguous emails cost a
 model call, and those are coalesced into a shared batch by `llm.TRIAGE`.

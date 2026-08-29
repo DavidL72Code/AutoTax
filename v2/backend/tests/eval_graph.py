@@ -7,7 +7,7 @@
     ./.venv/bin/python tests/eval_graph.py --json     # machine-readable
 
 "API calls" is the number of HTTP requests actually sent to Gemini, which is
-what the batching in app/llm.py is there to hold down — it is normally far
+what the batching in app/llm.py is there to hold down. It is normally far
 lower than the number of emails that needed a model.
 """
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Notifications.
 
 Derived, not stored. Everything worth telling someone about is already a fact
-about the ledger — a duplicate charge, a subscription that went up, a thread
+about the ledger, a duplicate charge, a subscription that went up, a thread
 waiting on a human, a bill landing in three days. Recomputing them means they
 can never go stale or contradict the data, and the only thing that needs
 persisting is which ones have been read.

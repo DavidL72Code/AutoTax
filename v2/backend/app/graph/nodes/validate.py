@@ -1,4 +1,4 @@
-"""Node 6 — the check that makes a retry worth doing.
+"""Node 6, the check that makes a retry worth doing.
 
 Anything caught here is a concrete, explainable defect: a total that does not
 match its own line items, a tax larger than the purchase, a missing merchant.

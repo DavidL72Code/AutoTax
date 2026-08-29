@@ -8,7 +8,7 @@ import { TopBar } from "@/components/TopBar";
 import { useT } from "@/lib/i18n";
 
 /* The rail owns navigation and the sync action. The bar above owns the two
-   things that follow you around regardless of page — the bell and the account.
+   things that follow you around regardless of page, the bell and the account.
    Neither duplicates the other. */
 
 type Item = { href: string; key: string; badge?: boolean };

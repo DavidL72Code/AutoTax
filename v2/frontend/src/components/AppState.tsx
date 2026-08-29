@@ -12,7 +12,7 @@ import {
 import { API_BASE, api, NotificationFeed, RunState, Session, Stats, Transaction } from "@/lib/api";
 
 /* A `node` event carries only the node name, so the run fields are optional on
-   it — merging it into `run` must not blank the counters. */
+   it, merging it into `run` must not blank the counters. */
 type RunEvent = Partial<RunState> & {
   type: "state" | "record" | "done" | "node";
   record?: Transaction;
@@ -115,8 +115,7 @@ export function AppState({ children }: { children: React.ReactNode }) {
             });
           }
         }
-        // Sixteen emails run at once, so "the current step" is not one node —
-        // it is a position per email. Tracking it that way lets the diagram say
+        // Sixteen emails run at once, so "the current step" is not one node, // it is a position per email. Tracking it that way lets the diagram say
         // how many are at each step instead of lighting all of them.
         if (payload.type === "node" && payload.node && payload.email_id) {
           setActiveNodes((current) => ({ ...current, [payload.email_id as string]: payload.node as string }));

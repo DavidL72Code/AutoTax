@@ -48,7 +48,7 @@ _CURRENCY_BY_LAYOUT = {
 
 def _items(rng: random.Random, target: float, *, minor_units: int) -> tuple[LineItem, ...]:
     """Line items that add up to roughly `target`. The receipt's subtotal is
-    whatever they actually sum to — the target only sets the scale."""
+    whatever they actually sum to, the target only sets the scale."""
     count = rng.randint(1, 4)
     shares = [rng.uniform(0.5, 1.5) for _ in range(count)]
     scale = target / sum(shares)
@@ -190,7 +190,7 @@ def demo_emails(count: int = 10, seed: Optional[int] = None) -> list[dict]:
 
 def history_cases(months: int = 6, seed: Optional[int] = 11) -> list[dict]:
     """Six months of receipts containing recurring charges, a price rise and one
-    duplicate billing — the patterns the Insights page is built to find. Layouts
+    duplicate billing, the patterns the Insights page is built to find. Layouts
     are drawn per receipt, so the same subscription arrives in different shapes,
     which is closer to a real mailbox than one template per vendor."""
     rng = random.Random(seed)

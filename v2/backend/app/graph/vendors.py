@@ -1,4 +1,4 @@
-"""Vendor identity and category lookup — the deterministic half of resolution.
+"""Vendor identity and category lookup, the deterministic half of resolution.
 
 The sender domain is the most reliable signal available, so it wins over
 anything regex or a model produces. Only when the domain is a generic mail
@@ -92,7 +92,7 @@ CATEGORIES = (
     "Travel", "Utilities", "Health", "Entertainment", "Services", "Other",
 )
 
-# Mail relays and generic mailbox names — never a merchant identity.
+# Mail relays and generic mailbox names, never a merchant identity.
 GENERIC_TOKENS = {
     "account", "alerts", "billing", "billing-updates", "email", "gmail", "google",
     "hello", "hotmail", "info", "invoice", "invoices", "mail", "mailer", "mailers",

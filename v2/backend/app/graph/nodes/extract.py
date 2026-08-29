@@ -1,4 +1,4 @@
-"""Node 2 — pull every field a regex can prove, so the model only sees gaps."""
+"""Node 2, pull every field a regex can prove, so the model only sees gaps."""
 from __future__ import annotations
 
 import time

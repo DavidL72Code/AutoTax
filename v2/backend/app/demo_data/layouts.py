@@ -8,7 +8,7 @@ from a pile of documents into a test: `expected_path` asserts routing,
 On HTML: `ingest/gmail.py::_body` prefers `text/plain`, and when only HTML
 exists it runs the markup through BeautifulSoup and collapses whitespace before
 the graph sees anything. So the HTML layouts here are written as the *flattened*
-result — tags gone, table cells landing on separate lines. Shipping raw markup
+result, tags gone, table cells landing on separate lines. Shipping raw markup
 would test a path that does not exist.
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ def plain_labeled(r: Receipt) -> str:
 
 def table_dot_leader(r: Receipt) -> str:
     return (
-        f"ORDER RECEIPT — {r.vendor}\n"
+        f"ORDER RECEIPT, {r.vendor}\n"
         f"Order {r.order_ref}   {r.stamp}\n"
         f"{'-' * 46}\n"
         f"{_items_block(r, leader=True)}\n"
@@ -74,7 +74,7 @@ def receipt_header_block(r: Receipt) -> str:
 
 def reconciliation_block(r: Receipt) -> str:
     """The decoy-heavy body from the original generator, kept because it is a
-    good adversarial case — every competing number is a plausible answer."""
+    good adversarial case, every competing number is a plausible answer."""
     auth_hold = round(r.stated_total * 1.08, 2)
     pending = round(r.stated_total * 0.4, 2)
     prior = round(r.stated_total * 1.6, 2)
@@ -149,7 +149,7 @@ def forwarded_thread(r: Receipt) -> str:
     cheaper; the live one at the top is the answer."""
     stale = round(r.stated_total * 0.37, 2)
     return (
-        f"Fwd: receipt — please file\n"
+        f"Fwd: receipt, please file\n"
         f"Forwarded message from accounts@{r.domain}\n\n"
         f"Merchant: {r.vendor}\n"
         f"Date: {r.stamp}\n"
@@ -169,7 +169,7 @@ def installments(r: Receipt) -> str:
     the transaction; the order total is the decoy."""
     today = round(r.stated_total / 2, 2)
     return (
-        f"{r.vendor} — payment 1 of 2\n"
+        f"{r.vendor}, payment 1 of 2\n"
         f"Date: {r.stamp}\n"
         f"{_items_block(r)}\n"
         f"Order value: {r.money(r.stated_total)}\n"
@@ -180,7 +180,7 @@ def installments(r: Receipt) -> str:
 
 def processor_relay(r: Receipt) -> str:
     """Sent by a payment processor. The vendor is in the body, and the sender
-    domain is a trap — `resolve` has to refuse it."""
+    domain is a trap, `resolve` has to refuse it."""
     return (
         f"You sent a payment\n"
         f"Date: {r.stamp}\n"
@@ -196,7 +196,7 @@ def processor_relay(r: Receipt) -> str:
 
 def eur_comma_decimal(r: Receipt) -> str:
     return (
-        f"Zahlungsbestätigung — {r.vendor}\n"
+        f"Zahlungsbestätigung, {r.vendor}\n"
         f"Belegdatum: {r.stamp}\n"
         f"{_items_block(r)}\n"
         f"Zwischensumme: {r.money(r.subtotal)}\n"
@@ -207,7 +207,7 @@ def eur_comma_decimal(r: Receipt) -> str:
 
 def jpy_no_decimals(r: Receipt) -> str:
     return (
-        f"{r.vendor} — Receipt / 領収書\n"
+        f"{r.vendor}. Receipt / 領収書\n"
         f"Date: {r.stamp}\n"
         f"{_items_block(r)}\n"
         f"Subtotal: {r.money(r.subtotal)}\n"
@@ -327,7 +327,7 @@ REGISTRY: tuple[Layout, ...] = (
     ),
     Layout(
         name="eur_comma_decimal", render=eur_comma_decimal, expected_path=Path.ESCALATE, weight=1.0,
-        tests="1.234,56 EUR — period and comma inverted", tolerate_currency_loss=True,
+        tests="1.234,56 EUR, period and comma inverted", tolerate_currency_loss=True,
     ),
     Layout(
         name="jpy_no_decimals", render=jpy_no_decimals, expected_path=Path.ESCALATE, weight=1.0,

@@ -28,7 +28,7 @@ class AuthError(RuntimeError):
 def _fernet() -> Fernet:
     key = (settings.fernet_key or "").strip()
     if not key:
-        raise AuthError("FERNET_KEY is not set — cannot store Google credentials safely")
+        raise AuthError("FERNET_KEY is not set, cannot store Google credentials safely")
     return Fernet(key.encode())
 
 

@@ -9,7 +9,7 @@ import { useT } from "@/lib/i18n";
 
 type Turn = { role: "user" | "assistant"; content: string };
 
-/* The model is asked to open with a disclaimer, and it does — but a guardrail
+/* The model is asked to open with a disclaimer, and it does, but a guardrail
    that depends on the model remembering is not a guardrail. This one is part of
    the page, above the conversation, always. */
 function Disclaimer() {
@@ -22,7 +22,7 @@ function Disclaimer() {
 }
 
 /* The model is told to use *word* for emphasis and - for bullets, so that this
-   can render without a markdown dependency — and so nothing it returns is ever
+   can render without a markdown dependency, and so nothing it returns is ever
    interpreted as HTML. */
 function Reply({ text }: { text: string }) {
   return (

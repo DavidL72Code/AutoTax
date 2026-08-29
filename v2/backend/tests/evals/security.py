@@ -39,7 +39,7 @@ RECEIPT = {
 # A body with a long non-financial tail. The excerpt property is only testable
 # on an email that has something to leave out.
 _PADDING = "\n".join(
-    f"Recommended for you: product {i} — read our blog, manage preferences, view in browser"
+    f"Recommended for you: product {i}, read our blog, manage preferences, view in browser"
     for i in range(40)
 )
 LONG_RECEIPT = {
@@ -83,7 +83,7 @@ async def _prompt_hygiene() -> list[dict[str, Any]]:
 
     if recorder.prompts:
         # How much of the email itself reached the model, ignoring the static
-        # instructions — those are ours, and lengthening them is not a leak.
+        # instructions, those are ours, and lengthening them is not a leak.
         body_lines = [line for line in LONG_RECEIPT["body"].splitlines() if len(line.strip()) > 12]
         carried = [line for line in body_lines if line.strip() in joined]
         share = round(100 * len(carried) / max(len(body_lines), 1))
@@ -96,7 +96,7 @@ async def _prompt_hygiene() -> list[dict[str, Any]]:
         )
 
     # The review queue reaches a browser. Whatever it carries about a paused
-    # thread must identify the email, never reproduce it — a body can hold
+    # thread must identify the email, never reproduce it, a body can hold
     # anything the merchant put there, and the app has no reason to hold it.
     paused = await runner.paused_threads("sec", [LONG_RECEIPT["id"]])
     exposed = json.dumps(paused)

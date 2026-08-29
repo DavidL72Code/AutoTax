@@ -1,4 +1,4 @@
-"""Statements and rollups — the outputs someone actually files or acts on."""
+"""Statements and rollups, the outputs someone actually files or acts on."""
 from __future__ import annotations
 
 from calendar import monthrange
@@ -107,7 +107,7 @@ def monthly_statement(rows: list[dict[str, Any]], month: str, today: Optional[da
 def tax_summary(rows: list[dict[str, Any]], year: Optional[int] = None) -> dict[str, Any]:
     """Sales tax paid and a default business apportionment.
 
-    The apportionment is a mapping you edit, not a determination — see
+    The apportionment is a mapping you edit, not a determination, see
     `accounts.py`.
     """
     scoped = []
@@ -162,7 +162,7 @@ def tax_summary(rows: list[dict[str, Any]], year: Optional[int] = None) -> dict[
 
 
 def vendor_concentration(rows: list[dict[str, Any]], top: int = 5) -> dict[str, Any]:
-    """How much of the spend sits with a handful of vendors — the number
+    """How much of the spend sits with a handful of vendors, the number
     procurement asks for, and the one that tells a household where the money
     really goes."""
     by_vendor: dict[str, float] = defaultdict(float)

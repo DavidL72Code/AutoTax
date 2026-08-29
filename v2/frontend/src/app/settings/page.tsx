@@ -117,7 +117,7 @@ export default function SettingsPage() {
         </div>
       </Panel>
 
-      {/* Not settings — nothing here is a choice. It is what the server is
+      {/* Not settings, nothing here is a choice. It is what the server is
           currently wired to, kept because it is the first thing worth reading
           when something is not working. */}
       <details className="panel px-6 py-4">

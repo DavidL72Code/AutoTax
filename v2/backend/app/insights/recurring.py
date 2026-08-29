@@ -3,7 +3,7 @@
 A subscription is not a category, it is a *pattern*: the same merchant, at a
 steady interval, for a steady amount. Detecting it from the ledger rather than
 asking the user to tag things is what turns a pile of receipts into something
-that can answer "what am I actually committed to each year?" — and, on the
+that can answer "what am I actually committed to each year?", and, on the
 business side, "which vendors are we paying on an evergreen contract?"
 """
 from __future__ import annotations

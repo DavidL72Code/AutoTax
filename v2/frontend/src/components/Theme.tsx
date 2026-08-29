@@ -37,7 +37,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = resolve(choice);
     if (choice !== "system") return;
     // Following the OS means following it *while* the app is open, not only at
-    // load — someone on an automatic day/night schedule should not have to
+    // load. Someone on an automatic day/night schedule should not have to
     // reload at dusk.
     const query = window.matchMedia("(prefers-color-scheme: light)");
     const sync = () => {

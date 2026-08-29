@@ -1,6 +1,6 @@
 # Evals
 
-> **Status:** the suite is written but has not been executed yet — the session
+> **Status:** the suite is written but has not been executed yet, the session
 > that wrote it could not run it. The quality/latency numbers quoted below come
 > from `tests/eval_graph.py`, which *was* run against the same fixtures. The
 > robustness, injection and security sections have never been executed, so
@@ -16,7 +16,7 @@ cd v2/backend
 ```
 
 Exit code is non-zero if any section fails, so it can gate a deploy. Sections
-declare a threshold rather than just printing numbers — a number with no bar to
+declare a threshold rather than just printing numbers, a number with no bar to
 clear is not a test.
 
 The corpora live in `tests/evals/cases.py`; the fixtures are generated locally
@@ -26,7 +26,7 @@ and deterministically, so two runs are comparable and cost nothing to produce.
 
 ## quality
 
-Ten generated receipts with known ground truth — five clean layouts, five messy
+Ten generated receipts with known ground truth, five clean layouts, five messy
 ones with decoy dollar values and indirect labels (`balance due now`,
 `merchandise sum`, `local levy`).
 
@@ -54,7 +54,7 @@ Derived from the quality run, so the numbers describe the same work.
 
 Measured: p50 / p95 / max per node, total wall clock, ms per receipt, and the
 split between deterministic time and model time. The split is the number to
-watch — it says how much of a sync is actually waiting on an API.
+watch, it says how much of a sync is actually waiting on an API.
 
 Note that wall clock is dominated by deliberate pacing, not by the model. The
 defaults (`LLM_MIN_INTERVAL_SECONDS=6`, `LLM_RPM_LIMIT=9`) are sized for a
@@ -68,7 +68,7 @@ handling written down next to it:
 
 | Case | What it checks |
 |---|---|
-| marketing blast | dollar values everywhere, no purchase — must not become a transaction |
+| marketing blast | dollar values everywhere, no purchase, must not become a transaction |
 | shipping update | names a total but documents delivery |
 | refund | a real money movement that must not be filed as fresh spend |
 | zero total | valid data, but flagged rather than silently banked |
@@ -83,7 +83,7 @@ handling written down next to it:
 ## injection
 
 **This is the section that matters most.** Email bodies are attacker
-controlled — anyone can send you one, and that text goes into a prompt. Six
+controlled, anyone can send you one, and that text goes into a prompt. Six
 cases carry a genuine receipt plus instructions aimed at whatever reads it:
 a direct override of the total, a forged system turn rewriting the payee, a
 request to smuggle credentials into an output field, a marketing email trying
@@ -97,7 +97,7 @@ injected literals.
 The structural defences the pipeline relies on:
 
 - The model is asked for **named fields only**, and `escalate` reads back only
-  the fields it asked about — an extra key in the response goes nowhere.
+  the fields it asked about, an extra key in the response goes nowhere.
 - Numeric fields are coerced through the currency parser, so a string cannot
   become an amount.
 - Batch responses are indexed by position; an object claiming an index outside
@@ -137,7 +137,7 @@ running the suite; only the batcher fix has a passing check behind it.
 
 **A stranded batch could hang a sync (fixed).** The coalescer took the first
 `max_batch` requests and scheduled a follow-up flush only if the current flush
-task was already done — which it never was, because that task was the one doing
+task was already done, which it never was, because that task was the one doing
 the flushing. Any request beyond the first twelve in a burst waited on a future
 nothing would ever resolve. It showed up as a 99-receipt sync stopping at 91.
 The queue is now drained by a single worker that only stands down while holding

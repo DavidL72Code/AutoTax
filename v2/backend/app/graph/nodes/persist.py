@@ -1,4 +1,4 @@
-"""Node 8 — write the record, and keep what was learned.
+"""Node 8, write the record, and keep what was learned.
 
 A correction is worth more than the row it fixes. When a field arrived from a
 human, it is written to the cross-thread store so the next email from that
@@ -62,7 +62,7 @@ async def persist(state: ReceiptState) -> dict:
     blocking = BLOCKING & set(state.get("issues") or [])
     reviewed = bool(state.get("reviewed"))
 
-    # A reviewed record is settled by definition — a person looked at the email.
+    # A reviewed record is settled by definition, a person looked at the email.
     status = "parsed" if reviewed or (not blocking and score >= REVIEW_THRESHOLD) else "needs_review"
 
     learned = await _learn(state)

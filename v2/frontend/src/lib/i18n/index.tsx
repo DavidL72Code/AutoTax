@@ -10,8 +10,7 @@ import { setFormatLocale } from "@/lib/format";
    to English for that key alone, never to a blank. */
 export type Dict = Record<string, string>;
 
-/* Registered locales. A new language is a new JSON file plus one line here —
-   see scripts/translate.mjs, which generates a file from en.json. */
+/* Registered locales. A new language is a new JSON file plus one line here, see scripts/translate.mjs, which generates a file from en.json. */
 export const LOCALES: Record<string, { name: string; load: () => Promise<{ default: Dict }> }> = {
   en: { name: "English", load: async () => ({ default: en as Dict }) },
   es: { name: "Español", load: () => import("./es.json") as Promise<{ default: Dict }> },
