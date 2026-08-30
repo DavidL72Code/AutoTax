@@ -235,9 +235,8 @@ def mismatched_total(r: Receipt) -> str:
 
 def shipping_and_discount(r: Receipt) -> str:
     """A legitimate receipt whose total includes shipping and a discount, with
-    the subtotal stated. `validate` reconciles subtotal + tax against the total
-    and knows nothing about either adjustment, so it reports a drift that is not
-    an error. The layout exists to keep that gap visible."""
+    the subtotal stated. It used to fail the arithmetic check, which modelled
+    neither adjustment; now it is the case that proves both are read."""
     return (
         f"Order Receipt\n"
         f"Store: {r.vendor}\n"
@@ -335,19 +334,18 @@ REGISTRY: tuple[Layout, ...] = (
     ),
     Layout(
         name="mismatched_total", render=mismatched_total, expected_path=Path.REVIEW, weight=1.0,
+        demo_weight=0.15,
         tests="subtotal + tax != total; the only path to the retry loop",
         expected_issues=("total_does_not_reconcile",),
         expected_amount=lambda r: r.stated_total,
     ),
     Layout(
-        name="shipping_and_discount", render=shipping_and_discount, expected_path=Path.REVIEW, weight=1.0,
-        tests="legitimate total with shipping and a discount; validate cannot model either",
-        expected_issues=("total_does_not_reconcile",),
-        notes=("expected issue documents a validator gap, not a bad receipt",),
+        name="shipping_and_discount", render=shipping_and_discount, expected_path=Path.RULES_ONLY, weight=1.0,
+        tests="a total that includes postage and a promotion still reconciles",
     ),
     Layout(
         name="zero_total", render=zero_total, expected_path=Path.REVIEW,
-        also_acceptable=(Path.SKIPPED,), weight=0.5,
+        also_acceptable=(Path.SKIPPED,), weight=0.5, demo_weight=0.15,
         tests="a zero total is valid data but must not be banked silently",
         expected_issues=("amount_not_positive",),
         expected_amount=lambda r: 0.0, expected_tax=lambda r: 0.0,

@@ -19,6 +19,18 @@ _TAX_LABEL = (
 )
 _SUBTOTAL_LABEL = r"subtotal|sub\s+total|subtotal\s+amount|item\s+total|merchandise\s+total"
 
+# Adjustments between the subtotal and the total. Without these, `validate`
+# reconciles subtotal + tax against a total that also includes postage or a
+# promotion, and flags a perfectly good receipt.
+_SHIPPING_LABEL = (
+    r"shipping(?:\s*(?:&|and)\s*handling)?(?:\s+est\.?)?|delivery(?:\s+fee)?|postage|freight"
+)
+_DISCOUNT_LABEL = (
+    r"discount|promotion|promo(?:\s*/\s*promo)?(?:\s+deduction)?|coupon(?:\s*/\s*promo)?"
+    r"(?:\s+deduction)?|savings|rebate"
+)
+_TIP_LABEL = r"tip|gratuity|service\s+charge"
+
 _MONEY = r"\$?\s*([\d,]+\.\d{2})"
 _PRE_TAX = re.compile(r"\b(?:before\s+tax|pre[-\s]?tax)\b", re.IGNORECASE)
 _SUBTOTAL_CTX = re.compile(r"\b(?:subtotal|sub\s+total|before\s+tax|pre[-\s]?tax)\b", re.IGNORECASE)
@@ -121,6 +133,32 @@ def extract_tax(text: str) -> Optional[float]:
 
 def extract_subtotal(text: str) -> Optional[float]:
     return _labelled_value(text, _SUBTOTAL_LABEL)
+
+
+def extract_shipping(text: str) -> Optional[float]:
+    return _labelled_value(text, _SHIPPING_LABEL)
+
+
+def extract_discount(text: str) -> Optional[float]:
+    """Returned positive. A receipt writes a deduction as `-$6.33`, which the
+    shared money pattern will not match, so the sign is handled here and lives
+    in the reconciliation rather than in the value."""
+    for line in text.splitlines():
+        line = line.strip()
+        match = re.search(
+            rf"^\s*(?:{_DISCOUNT_LABEL})\s*[:\-]?\s*-?\s*(?:USD?|US)?\s*{_MONEY}\b",
+            line,
+            re.IGNORECASE,
+        )
+        if match:
+            value = money(match.group(1))
+            if value is not None:
+                return abs(value)
+    return None
+
+
+def extract_tip(text: str) -> Optional[float]:
+    return _labelled_value(text, _TIP_LABEL)
 
 
 def extract_order_number(text: str) -> Optional[str]:

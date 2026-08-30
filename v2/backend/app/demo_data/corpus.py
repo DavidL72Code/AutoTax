@@ -161,10 +161,12 @@ def _ensure_every_layout(cases: list[dict], rng: random.Random, make, *, demo: b
 
 
 def _pick_for_demo(rng: random.Random) -> Layout:
-    layout = pick(rng)
-    while layout.eval_only:
-        layout = pick(rng)
-    return layout
+    """Weighted for a plausible inbox rather than for eval coverage. Every
+    layout still appears at least once, appended afterwards if the draw missed
+    it, so nothing loses its place in the demo entirely."""
+    pool = [l for l in REGISTRY if not l.eval_only]
+    weights = [l.demo_weight if l.demo_weight is not None else l.weight for l in pool]
+    return rng.choices(pool, weights=weights, k=1)[0]
 
 
 def demo_cases(count: int = 10, seed: Optional[int] = 7) -> list[dict]:

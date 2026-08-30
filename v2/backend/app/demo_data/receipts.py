@@ -103,6 +103,12 @@ class Layout:
     # right thing for the eval to measure and the wrong thing to put in a
     # dashboard total, so the two corpora differ here on purpose.
     eval_only: bool = False
+    # The eval wants the awkward layouts often, so a regression cannot hide in a
+    # thin sample. The demo inbox wants them at the rate a real one would have
+    # them: four deliberately self-contradicting receipts in ninety-seven says
+    # the product flags 4% of your spending, which is a claim about the fixture
+    # rather than the pipeline. Falls back to `weight` when unset.
+    demo_weight: Optional[float] = None
     weight: float = 1.0
     expected_issues: tuple[str, ...] = ()
     # Some layouts state a number the pipeline cannot be expected to get right

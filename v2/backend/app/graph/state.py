@@ -19,6 +19,11 @@ class Draft(TypedDict, total=False):
     amount: Optional[float]
     tax: Optional[float]
     subtotal: Optional[float]
+    # Adjustments between the subtotal and the total, so the arithmetic check
+    # can account for them instead of calling a good receipt broken.
+    shipping: Optional[float]
+    discount: Optional[float]
+    tip: Optional[float]
     currency: str
     order_number: Optional[str]
     date: Optional[str]

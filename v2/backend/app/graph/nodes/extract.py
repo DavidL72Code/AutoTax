@@ -32,6 +32,9 @@ async def extract(state: ReceiptState) -> dict:
         ("amount", patterns.extract_amount(text)),
         ("tax", patterns.extract_tax(text)),
         ("subtotal", patterns.extract_subtotal(text)),
+        ("shipping", patterns.extract_shipping(text)),
+        ("discount", patterns.extract_discount(text)),
+        ("tip", patterns.extract_tip(text)),
         ("order_number", patterns.extract_order_number(text)),
         ("payment_method", patterns.extract_payment_method(text)),
     ):

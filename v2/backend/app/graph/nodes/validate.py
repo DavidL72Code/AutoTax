@@ -55,7 +55,14 @@ async def validate(state: ReceiptState) -> dict:
             issues.append("tax_exceeds_plausible_share")
 
     if amount and subtotal is not None and tax is not None:
-        drift = abs((subtotal + tax) - amount)
+        # Postage and promotions sit between the subtotal and the total. Ignoring
+        # them meant a receipt carrying either was reported as not adding up,
+        # which is the most common shape a real receipt takes.
+        expected = subtotal + tax
+        expected += float(draft.get("shipping") or 0)
+        expected += float(draft.get("tip") or 0)
+        expected -= float(draft.get("discount") or 0)
+        drift = abs(expected - amount)
         if drift > max(0.05, amount * 0.02):
             issues.append("total_does_not_reconcile")
 
