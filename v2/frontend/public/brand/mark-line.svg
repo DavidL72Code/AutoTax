@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — monoline</title>
+  <defs>
+    <linearGradient id="l-stroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93c5fd"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- No badge. The mark is the receipt outline itself, drawn in one weight,
+       so it sits on a dark surface without carrying a box around with it. -->
+  <g fill="none" stroke="url(#l-stroke)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 11V51L20.33 46.6L25.67 51L31 46.6L36.33 51L41.67 46.6L47 51V11Z"/>
+    <path d="M23 23H39"/>
+    <path d="M23 32.5H32"/>
+  </g>
+</svg>

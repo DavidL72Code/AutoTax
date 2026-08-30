@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — RA monogram</title>
+  <!-- YSL logic: two letters sharing one stroke so they read as a single form
+       rather than two letters side by side. Built from a circle and straight
+       lines at one weight — constructed, not lettered. The A has no crossbar
+       because the R's bowl already crosses it. -->
+  <g fill="none" stroke="#c6a15b" stroke-width="5" stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- R: stem, bowl, and a leg that continues into the A's left diagonal -->
+    <path d="M17 51V13H30"/>
+    <path d="M30 13A9.5 9.5 0 0 1 30 32H17"/>
+    <!-- The shared diagonal: R's leg and A's left side are one stroke -->
+    <path d="M27 32L40 51"/>
+    <!-- A: apex and right side, meeting the shared stroke -->
+    <path d="M33.5 43.5L44 20L54 51"/>
+  </g>
+</svg>

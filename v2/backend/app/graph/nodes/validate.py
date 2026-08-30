@@ -1,4 +1,4 @@
-"""Node 6 — the check that makes a retry worth doing.
+"""Node 6, the check that makes a retry worth doing.
 
 Anything caught here is a concrete, explainable defect: a total that does not
 match its own line items, a tax larger than the purchase, a missing merchant.
@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 from dateutil import parser as date_parser
 
-from ..state import ReceiptState
+from ..state import NON_DATA_ISSUES, ReceiptState, score
 from ._util import step
 
 MAX_PLAUSIBLE_AMOUNT = 100_000.0
@@ -68,6 +68,13 @@ async def validate(state: ReceiptState) -> dict:
         except (ValueError, OverflowError, TypeError):
             issues.append("date_unparseable")
 
+    # `validate` recomputes the data issues from the draft every pass, which
+    # would otherwise erase what `escalate` recorded about the run itself. Those
+    # are not derivable from the draft, so they are carried forward explicitly.
+    for carried in (state.get("issues") or []):
+        if carried in NON_DATA_ISSUES and carried not in issues:
+            issues.append(carried)
+
     retry_fields: list[str] = []
     for issue in issues:
         for field in RETRYABLE.get(issue, ()):
@@ -78,5 +85,9 @@ async def validate(state: ReceiptState) -> dict:
     return {
         "issues": issues,
         "missing": retry_fields,
-        "steps": [step("validate", detail, started)],
+        "steps": [step("validate", detail, started,
+                       score(draft, state.get("sources") or {}, issues,
+                             state.get("model_confidence") or {}),
+                       key="trace.validate.clean" if not issues else "trace.validate.issues",
+                       params={"issues": issues})],
     }

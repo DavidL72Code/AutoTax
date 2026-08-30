@@ -9,9 +9,16 @@ import {
   useRef,
   useState,
 } from "react";
-import { API_BASE, api, RunState, Session, Stats, Transaction } from "@/lib/api";
+import { API_BASE, api, NotificationFeed, RunState, Session, Stats, Transaction } from "@/lib/api";
 
-type RunEvent = RunState & { type: "state" | "record" | "done"; record?: Transaction };
+/* A `node` event carries only the node name, so the run fields are optional on
+   it, merging it into `run` must not blank the counters. */
+type RunEvent = Partial<RunState> & {
+  type: "state" | "record" | "done" | "node";
+  record?: Transaction;
+  node?: string;
+  email_id?: string;
+};
 
 type Ctx = {
   session: Session | null;
@@ -19,9 +26,16 @@ type Ctx = {
   transactions: Transaction[];
   run: RunState | null;
   liveRecords: Transaction[];
+  /** Email id -> the node it last cleared. One entry per email still in
+      flight, so the diagram can show how many are sitting at each step. */
+  activeNodes: Record<string, string>;
+  notifications: NotificationFeed | null;
+  unreadNotifications: number;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+  markNotificationsRead: (body: { ids?: string[]; all?: boolean }) => Promise<void>;
   startSync: () => Promise<void>;
   startDemo: () => Promise<void>;
   stopSync: () => Promise<void>;
@@ -39,6 +53,8 @@ export function AppState({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [run, setRun] = useState<RunState | null>(null);
   const [liveRecords, setLiveRecords] = useState<Transaction[]>([]);
+  const [activeNodes, setActiveNodes] = useState<Record<string, string>>({});
+  const [notifications, setNotifications] = useState<NotificationFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<EventSource | null>(null);
@@ -50,12 +66,16 @@ export function AppState({ children }: { children: React.ReactNode }) {
       if (!next.signed_in) {
         setStats(null);
         setTransactions([]);
+        setNotifications(null);
         return;
       }
       const [nextStats, nextTransactions] = await Promise.all([api.stats(), api.transactions()]);
       setStats(nextStats);
       setTransactions(nextTransactions.transactions);
       setError(null);
+      // The bell should never be the reason a page fails to load, so this is
+      // deliberately outside the awaited set.
+      api.notifications().then(setNotifications).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach the API");
     } finally {
@@ -80,13 +100,30 @@ export function AppState({ children }: { children: React.ReactNode }) {
 
       stream.onmessage = (event) => {
         const payload = JSON.parse(event.data) as RunEvent;
-        setRun((current) => ({ ...(current ?? state), ...payload }));
+        if (payload.type !== "node") {
+          setRun((current) => ({ ...(current ?? state), ...payload }) as RunState);
+        }
         if (payload.type === "record" && payload.record) {
           setLiveRecords((current) => [payload.record as Transaction, ...current]);
+          // That email is finished, so it is no longer at any step.
+          const finished = (payload.record as Transaction).email_id;
+          if (finished) {
+            setActiveNodes((current) => {
+              const next = { ...current };
+              delete next[finished];
+              return next;
+            });
+          }
+        }
+        // Sixteen emails run at once, so "the current step" is not one node, // it is a position per email. Tracking it that way lets the diagram say
+        // how many are at each step instead of lighting all of them.
+        if (payload.type === "node" && payload.node && payload.email_id) {
+          setActiveNodes((current) => ({ ...current, [payload.email_id as string]: payload.node as string }));
         }
         if (payload.type === "done") {
           stream.close();
           streamRef.current = null;
+          setActiveNodes({});
           void refresh();
         }
       };
@@ -146,6 +183,18 @@ export function AppState({ children }: { children: React.ReactNode }) {
     api.stats().then(setStats).catch(() => undefined);
   }, []);
 
+  const refreshNotifications = useCallback(async () => {
+    try {
+      setNotifications(await api.notifications());
+    } catch {
+      // A failed poll leaves the last feed in place rather than blanking it.
+    }
+  }, []);
+
+  const markNotificationsRead = useCallback(async (body: { ids?: string[]; all?: boolean }) => {
+    setNotifications(await api.markRead(body));
+  }, []);
+
   const value = useMemo<Ctx>(
     () => ({
       session,
@@ -153,9 +202,14 @@ export function AppState({ children }: { children: React.ReactNode }) {
       transactions,
       run,
       liveRecords,
+      activeNodes,
+      notifications,
+      unreadNotifications: notifications?.unread ?? 0,
       loading,
       error,
       refresh,
+      refreshNotifications,
+      markNotificationsRead,
       startSync,
       startDemo,
       stopSync,
@@ -164,7 +218,7 @@ export function AppState({ children }: { children: React.ReactNode }) {
       patch,
       remove,
     }),
-    [session, stats, transactions, run, liveRecords, loading, error, refresh, startSync, startDemo, stopSync, connectGmail, signOut, patch, remove],
+    [session, stats, transactions, run, liveRecords, activeNodes, notifications, loading, error, refresh, refreshNotifications, markNotificationsRead, startSync, startDemo, stopSync, connectGmail, signOut, patch, remove],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

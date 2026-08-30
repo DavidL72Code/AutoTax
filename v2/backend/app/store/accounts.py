@@ -3,8 +3,8 @@
 Two backends, same interface as the transaction repository: JSON on disk for
 zero-setup local runs, Firestore when credentials resolve. v2 keeps accounts
 and sessions in its own collections rather than reusing v1's `users` and
-`google_credentials` — a shared session table between two auth models is a
-foot-gun — but it does link to v1's user ids so an existing ledger stays
+`google_credentials`, a shared session table between two auth models is a
+foot-gun, but it does link to v1's user ids so an existing ledger stays
 visible.
 """
 from __future__ import annotations

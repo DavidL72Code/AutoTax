@@ -133,7 +133,16 @@ async def _execute(
             run.records.append(record)
             run.emit({"type": "record", "record": record, **run.snapshot()})
 
-        run.records = await run_many(emails, run.user_id, on_result=on_result)
+        def on_node(node: str, email_id: str) -> None:
+            """Emitted as each node finishes, so the UI can show where work is
+            happening. Sixteen emails run at once, so this is a stream of many
+            interleaved nodes, not one moving cursor, the client treats it as
+            "recently active", which is the honest reading."""
+            if run.cancelled:
+                return
+            run.emit({"type": "node", "node": node, "email_id": email_id})
+
+        run.records = await run_many(emails, run.user_id, on_result=on_result, on_node=on_node)
         run.status = "cancelled" if run.cancelled else "done"
     except Exception as exc:  # noqa: BLE001 - surface the failure to the client
         run.status = "failed"

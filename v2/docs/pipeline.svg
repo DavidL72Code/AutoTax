@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 900" width="1080" height="900" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title>Receipts v2 — LangGraph pipeline</title>
+  <desc>Seven nodes run per email. Five are deterministic. Three can call Gemini, and those calls are coalesced into shared batches.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#77777f"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f7b5f"/>
+    </marker>
+    <marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect width="1080" height="900" fill="#ffffff"/>
+
+  <!-- header -->
+  <text x="40" y="46" font-size="19" font-weight="600" fill="#16161a" letter-spacing="-0.3">Receipts v2 — the LangGraph pipeline</text>
+  <text x="40" y="68" font-size="13" fill="#4a4a52">One graph runs per email. Five nodes are pure rules; three may call the model, and never for a field the rules already proved.</text>
+
+  <!-- legend -->
+  <g font-size="12">
+    <rect x="40" y="88" width="12" height="12" rx="3" fill="#ffffff" stroke="#d6d3cd"/>
+    <text x="60" y="98" fill="#4a4a52">deterministic — no API call, no cost</text>
+    <rect x="330" y="88" width="12" height="12" rx="3" fill="#e6f1ec" stroke="#0f7b5f"/>
+    <text x="350" y="98" fill="#4a4a52">may call Gemini</text>
+    <line x1="500" y1="94" x2="530" y2="94" stroke="#0f7b5f" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="538" y="98" fill="#4a4a52">model request (batched)</text>
+    <line x1="710" y1="94" x2="740" y2="94" stroke="#b45309" stroke-width="1.5"/>
+    <text x="748" y="98" fill="#4a4a52">retry / review path</text>
+  </g>
+
+  <!-- lane labels -->
+  <text x="40" y="140" font-size="11" fill="#77777f" letter-spacing="0.4">GRAPH STATE MACHINE</text>
+  <text x="700" y="140" font-size="11" fill="#77777f" letter-spacing="0.4">MODEL LANE — app/llm.py</text>
+  <line x1="660" y1="150" x2="660" y2="820" stroke="#e7e5e1" stroke-width="1" stroke-dasharray="3 4"/>
+
+  <!-- source -->
+  <g>
+    <rect x="40" y="160" width="240" height="52" rx="6" fill="#f7f7f5" stroke="#d6d3cd"/>
+    <text x="56" y="182" font-size="13" font-weight="600" fill="#16161a">Gmail message</text>
+    <text x="56" y="200" font-size="11.5" fill="#77777f">sender · subject · date · flattened body</text>
+  </g>
+  <path d="M 160 212 L 160 244" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- 1 triage -->
+  <g>
+    <rect x="40" y="246" width="360" height="66" rx="6" fill="#e6f1ec" stroke="#0f7b5f"/>
+    <text x="56" y="270" font-size="13" font-weight="600" fill="#0a5843">1 · triage</text>
+    <text x="56" y="288" font-size="11.5" fill="#16161a">Is this a purchase at all?</text>
+    <text x="56" y="304" font-size="11.5" fill="#4a4a52">Rules settle the clear cases. Only an ambiguous email costs a call.</text>
+  </g>
+  <path d="M 400 279 L 470 279" stroke="#b45309" stroke-width="1.4" marker-end="url(#arrow-warn)"/>
+  <text x="478" y="275" font-size="11.5" fill="#b45309">not a receipt</text>
+  <text x="478" y="290" font-size="11.5" fill="#77777f">→ END, nothing stored</text>
+  <path d="M 160 312 L 160 344" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- 2 extract -->
+  <g>
+    <rect x="40" y="346" width="360" height="66" rx="6" fill="#ffffff" stroke="#d6d3cd"/>
+    <text x="56" y="370" font-size="13" font-weight="600" fill="#16161a">2 · extract</text>
+    <text x="56" y="388" font-size="11.5" fill="#16161a">What can a pattern prove?</text>
+    <text x="56" y="404" font-size="11.5" fill="#4a4a52">total · tax · subtotal · order number · card · date</text>
+  </g>
+  <path d="M 160 412 L 160 444" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- 3 resolve -->
+  <g>
+    <rect x="40" y="446" width="360" height="66" rx="6" fill="#ffffff" stroke="#d6d3cd"/>
+    <text x="56" y="470" font-size="13" font-weight="600" fill="#16161a">3 · resolve</text>
+    <text x="56" y="488" font-size="11.5" fill="#16161a">Who was paid?</text>
+    <text x="56" y="504" font-size="11.5" fill="#4a4a52">sender domain &gt; known vendor in body &gt; phrase match</text>
+  </g>
+  <path d="M 160 512 L 160 544" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="170" y="534" font-size="11" fill="#77777f">gaps remain?</text>
+
+  <!-- 4 escalate -->
+  <g>
+    <rect x="40" y="546" width="360" height="66" rx="6" fill="#e6f1ec" stroke="#0f7b5f"/>
+    <text x="56" y="570" font-size="13" font-weight="600" fill="#0a5843">4 · escalate</text>
+    <text x="56" y="588" font-size="11.5" fill="#16161a">Only the fields nothing else could prove.</text>
+    <text x="56" y="604" font-size="11.5" fill="#4a4a52">Sends the financial lines, not the email. Skipped when nothing is missing.</text>
+  </g>
+  <path d="M 160 612 L 160 644" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- 5 enrich -->
+  <g>
+    <rect x="40" y="646" width="360" height="60" rx="6" fill="#e6f1ec" stroke="#0f7b5f"/>
+    <text x="56" y="670" font-size="13" font-weight="600" fill="#0a5843">5 · enrich</text>
+    <text x="56" y="688" font-size="11.5" fill="#16161a">Category and payment method.</text>
+    <text x="56" y="700" font-size="11" fill="#4a4a52">Free for a known merchant; the model only sees unknown ones.</text>
+  </g>
+  <path d="M 160 706 L 160 738" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- 6 validate -->
+  <g>
+    <rect x="40" y="740" width="360" height="60" rx="6" fill="#ffffff" stroke="#d6d3cd"/>
+    <text x="56" y="764" font-size="13" font-weight="600" fill="#16161a">6 · validate</text>
+    <text x="56" y="782" font-size="11.5" fill="#16161a">Does the arithmetic hold?</text>
+    <text x="56" y="794" font-size="11" fill="#4a4a52">subtotal + tax = total · tax share · positive amount · sane date</text>
+  </g>
+
+  <!-- retry loop: validate back up to escalate -->
+  <path d="M 40 770 L 22 770 L 22 579 L 40 579" fill="none" stroke="#b45309" stroke-width="1.4" marker-end="url(#arrow-warn)"/>
+  <text x="30" y="676" font-size="11" fill="#b45309" transform="rotate(-90 30 676)">one retry, suspect fields only</text>
+
+  <!-- 7 persist -->
+  <path d="M 400 770 L 452 770" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <g>
+    <rect x="454" y="740" width="182" height="60" rx="6" fill="#ffffff" stroke="#d6d3cd"/>
+    <text x="470" y="764" font-size="13" font-weight="600" fill="#16161a">7 · persist</text>
+    <text x="470" y="782" font-size="11.5" fill="#4a4a52">saved, or flagged</text>
+    <text x="470" y="794" font-size="11" fill="#77777f">confidence &lt; 0.55 → review</text>
+  </g>
+
+  <!-- model lane -->
+  <g>
+    <rect x="700" y="246" width="340" height="66" rx="6" fill="#ffffff" stroke="#0f7b5f"/>
+    <text x="716" y="270" font-size="12.5" font-weight="600" fill="#0a5843">TRIAGE batch</text>
+    <text x="716" y="288" font-size="11.5" fill="#4a4a52">&#8220;is this a completed purchase?&#8221;</text>
+    <text x="716" y="304" font-size="11" fill="#77777f">only for emails the rules could not call</text>
+  </g>
+  <g>
+    <rect x="700" y="546" width="340" height="66" rx="6" fill="#ffffff" stroke="#0f7b5f"/>
+    <text x="716" y="570" font-size="12.5" font-weight="600" fill="#0a5843">EXTRACT batch</text>
+    <text x="716" y="588" font-size="11.5" fill="#4a4a52">&#8220;vendor / amount / tax&#8221; — missing fields only</text>
+    <text x="716" y="604" font-size="11" fill="#77777f">input is the financial excerpt, ~70% smaller than the body</text>
+  </g>
+  <g>
+    <rect x="700" y="646" width="340" height="60" rx="6" fill="#ffffff" stroke="#0f7b5f"/>
+    <text x="716" y="670" font-size="12.5" font-weight="600" fill="#0a5843">CATEGORIZE batch</text>
+    <text x="716" y="688" font-size="11.5" fill="#4a4a52">unknown merchant → one of eleven categories</text>
+  </g>
+
+  <path d="M 400 272 L 700 272" stroke="#0f7b5f" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrow-accent)" opacity="0.85"/>
+  <path d="M 400 572 L 700 572" stroke="#0f7b5f" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrow-accent)"/>
+  <path d="M 400 672 L 700 672" stroke="#0f7b5f" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrow-accent)"/>
+
+  <!-- coalescer -->
+  <path d="M 870 312 L 870 360" stroke="#0f7b5f" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <path d="M 870 546 L 870 470" stroke="#0f7b5f" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <path d="M 1040 676 L 1058 676 L 1058 440 L 1040 440" fill="none" stroke="#0f7b5f" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <g>
+    <rect x="700" y="362" width="340" height="106" rx="6" fill="#e6f1ec" stroke="#0f7b5f"/>
+    <text x="716" y="386" font-size="12.5" font-weight="600" fill="#0a5843">coalescer</text>
+    <text x="716" y="404" font-size="11.5" fill="#16161a">Every request of the same kind raised within ~120ms</text>
+    <text x="716" y="420" font-size="11.5" fill="#16161a">becomes ONE prompt (up to 12 emails per request).</text>
+    <text x="716" y="440" font-size="11.5" fill="#4a4a52">Nodes await a single answer and never know they were batched.</text>
+    <text x="716" y="457" font-size="11" fill="#77777f">plus a rolling RPM gate so a large sync cannot trip rate limits</text>
+  </g>
+  <path d="M 870 468 L 870 500" stroke="#0f7b5f" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+  <g>
+    <rect x="760" y="502" width="220" height="30" rx="15" fill="#0f7b5f"/>
+    <text x="870" y="522" font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">Gemini · one HTTP request</text>
+  </g>
+
+  <!-- outputs -->
+  <path d="M 545 800 L 545 830" stroke="#77777f" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <g>
+    <rect x="360" y="832" width="680" height="46" rx="6" fill="#f7f7f5" stroke="#d6d3cd"/>
+    <text x="376" y="852" font-size="12" font-weight="600" fill="#16161a">Firestore ledger</text>
+    <text x="376" y="869" font-size="11.5" fill="#4a4a52">fields · confidence · per-node trace · field sources — feeding statements, recurring-charge detection, anomaly checks and the accounting exports</text>
+  </g>
+
+  <text x="40" y="878" font-size="11" fill="#77777f">A 10-receipt benchmark: 7 emails needed the model, 2 HTTP requests were sent.</text>
+</svg>

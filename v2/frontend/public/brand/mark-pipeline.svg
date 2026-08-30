@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — pipeline</title>
+  <defs>
+    <linearGradient id="p-grad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="p-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- The product is a graph, so the mark is a graph: four nodes on an
+       ascending path, tracing the same zigzag a receipt tears along. The last
+       node is lit — that is the one that resolved. -->
+  <g filter="url(#p-glow)">
+    <path d="M13 45L25 30L38 40L51 15" fill="none" stroke="url(#p-grad)" stroke-width="4.2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g fill="#060a14" stroke="url(#p-grad)" stroke-width="3.4">
+    <circle cx="13" cy="45" r="5"/>
+    <circle cx="25" cy="30" r="4.4"/>
+    <circle cx="38" cy="40" r="4.4"/>
+  </g>
+
+  <g filter="url(#p-glow)">
+    <circle cx="51" cy="15" r="6.4" fill="#a78bfa"/>
+    <circle cx="51" cy="15" r="6.4" fill="none" stroke="#ede9fe" stroke-opacity="0.9" stroke-width="1.6"/>
+  </g>
+</svg>

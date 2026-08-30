@@ -1,7 +1,7 @@
 """Startup and on-demand readiness checks.
 
-Every dependency here fails softly at runtime — no Gemini key means rules-only
-parsing, no Firestore means the JSON store — so a silent misconfiguration is
+Every dependency here fails softly at runtime, no Gemini key means rules-only
+parsing, no Firestore means the JSON store, so a silent misconfiguration is
 easy to miss. This module makes the current state explicit, without printing
 any secret value.
 """
@@ -27,7 +27,7 @@ async def _firestore() -> dict[str, Any]:
         return _check(
             "Firestore",
             WARN,
-            "Not configured — receipts are stored in backend/data/transactions.json",
+            "Not configured, receipts are stored in backend/data/transactions.json",
             "Set FIREBASE_PROJECT_ID and FIREBASE_SERVICE_ACCOUNT_JSON (or _PATH) in .env",
         )
 
@@ -49,7 +49,7 @@ async def _gemini() -> dict[str, Any]:
         return _check(
             "Gemini",
             WARN,
-            "No API key — parsing runs on rules alone (vendors resolve, awkward totals do not)",
+            "No API key, parsing runs on rules alone (vendors resolve, awkward totals do not)",
             "Set GOOGLE_API_KEY in .env",
         )
     try:
@@ -70,7 +70,7 @@ async def _gemini() -> dict[str, Any]:
 def _oauth(serving_port: int | None) -> list[dict[str, Any]]:
     checks = []
     if not (settings.google_oauth_client_id and settings.google_oauth_client_secret):
-        checks.append(_check("Google OAuth", FAIL, "Client id or secret missing — Gmail cannot be connected",
+        checks.append(_check("Google OAuth", FAIL, "Client id or secret missing. Gmail cannot be connected",
                              "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env"))
         return checks
 
@@ -100,7 +100,7 @@ def _oauth(serving_port: int | None) -> list[dict[str, Any]]:
 def _fernet() -> dict[str, Any]:
     key = (settings.fernet_key or "").strip()
     if not key:
-        return _check("Token encryption", FAIL, "FERNET_KEY is not set — Gmail cannot be connected",
+        return _check("Token encryption", FAIL, "FERNET_KEY is not set. Gmail cannot be connected",
                       'Generate one: python3 -c "from cryptography.fernet import Fernet; '
                       'print(Fernet.generate_key().decode())"')
     try:

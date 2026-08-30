@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — triskele</title>
+  <!-- Three arms at 120° rather than four at 90°. Odd symmetry reads as motion
+       where even symmetry reads as stillness — and it is the one construction
+       here that could not be mistaken for Chase. -->
+  <g fill="#c6a15b">
+    <rect x="29.5" y="6" width="9.5" height="24" rx="1.5"/>
+    <rect x="29.5" y="6" width="9.5" height="24" rx="1.5" transform="rotate(120 32 32)"/>
+    <rect x="29.5" y="6" width="9.5" height="24" rx="1.5" transform="rotate(240 32 32)"/>
+  </g>
+</svg>

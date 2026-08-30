@@ -2,7 +2,7 @@
 
 Three credential paths, checked in order:
 
-1. `FIRESTORE_EMULATOR_HOST` — local emulator, anonymous credentials. This is
+1. `FIRESTORE_EMULATOR_HOST`, local emulator, anonymous credentials. This is
    what the integration test uses, so the Firestore code path is exercised on
    every run without anyone's service-account key.
 2. An explicit service account (`FIREBASE_SERVICE_ACCOUNT_JSON` inline, or
@@ -134,6 +134,6 @@ def client():
 
 
 def reset() -> None:
-    """Drop the cached client — used by tests that switch backends."""
+    """Drop the cached client, used by tests that switch backends."""
     global _client
     _client = None

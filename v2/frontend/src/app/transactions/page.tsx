@@ -1,90 +1,120 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useApp } from "@/components/AppState";
-import { PageHeader } from "@/components/Shell";
-import { TransactionTable } from "@/components/TransactionTable";
-import { Button, Card, Empty, inputClass } from "@/components/ui";
+import { PageHeader, Toolbar } from "@/components/Shell";
+import { TransactionTable, useCategoryText } from "@/components/TransactionTable";
+import { Button, Empty, Panel } from "@/components/ui";
+import { api } from "@/lib/api";
 import { money } from "@/lib/format";
-
-type Filter = "all" | "parsed" | "needs_review";
+import { useT } from "@/lib/i18n";
 
 export default function TransactionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <Transactions />
+    </Suspense>
+  );
+}
+
+function Transactions() {
   const { transactions, loading } = useApp();
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const { t } = useT();
+  const categoryText = useCategoryText();
+  const params = useSearchParams();
+  // Arriving from an insight: `ids` pins the exact rows it was talking about,
+  // `q` seeds the search box for a finding that names a vendor instead.
+  const pinned = useMemo(() => {
+    const raw = params.get("ids");
+    return raw ? new Set(raw.split(",").filter(Boolean)) : null;
+  }, [params]);
+  const [query, setQuery] = useState(params.get("q") ?? "");
+  // Dropdowns, not a tab strip: filtering is an attribute of the grid below,
+  // so it should not look like another place to navigate to.
+  const [status, setStatus] = useState("all");
+  const [category, setCategory] = useState("all");
+
+  const categories = useMemo(
+    () => Array.from(new Set(transactions.map((r) => r.category).filter(Boolean))).sort() as string[],
+    [transactions],
+  );
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return transactions.filter((row) => {
+      if (pinned) return pinned.has(String(row.id));
       if (row.status === "skipped") return false;
-      if (filter !== "all" && row.status !== filter) return false;
+      if (status !== "all" && row.status !== status) return false;
+      if (category !== "all" && row.category !== category) return false;
       if (!needle) return true;
       return [row.vendor, row.category, row.order_number, row.payment_method]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle));
     });
-  }, [transactions, query, filter]);
+  }, [transactions, query, status, category, pinned]);
 
   const total = rows.reduce((sum, row) => sum + (row.amount ?? 0), 0);
 
-  const exportCsv = () => {
-    const header = ["date", "vendor", "amount", "tax", "category", "status", "confidence"];
-    const body = rows.map((row) =>
-      [row.date, row.vendor, row.amount, row.tax, row.category, row.status, row.confidence]
-        .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
-        .join(","),
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "receipts.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <>
-      <PageHeader title="Transactions" description="Click any row to see how each field was decided." />
+      <PageHeader
+        title={t("transactions.title")}
+        description={t("transactions.description")}
+      />
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* Pinning hides the usual filters' effect, so say so and offer a way out
+          rather than leaving the grid looking mysteriously short. */}
+      {pinned ? (
+        <div className="mb-3 flex items-center gap-3 rounded-[10px] border border-[rgba(96,165,250,0.35)] bg-[rgba(96,165,250,0.08)] px-4 py-2.5 text-[0.85rem]">
+          <span className="text-ink-2">
+            {t(pinned.size === 1 ? "transactions.pinnedOne" : "transactions.pinned", { count: pinned.size })}
+          </span>
+          <Link href="/transactions" className="ml-auto text-accent hover:underline">
+            {t("common.showAll")}
+          </Link>
+        </div>
+      ) : null}
+
+      <Toolbar>
         <input
-          className={`${inputClass} w-56`}
-          placeholder="Search vendor, category, order…"
+          className="field w-[280px]"
+          placeholder={t("transactions.search")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <div className="flex rounded-[5px] border border-line-strong bg-surface p-0.5">
-          {(["all", "parsed", "needs_review"] as Filter[]).map((option) => (
-            <button
-              key={option}
-              onClick={() => setFilter(option)}
-              className={`rounded-[3px] px-2.5 py-1 text-[12px] transition-colors ${
-                filter === option ? "bg-canvas font-medium text-ink" : "text-ink-3 hover:text-ink"
-              }`}
-            >
-              {option === "needs_review" ? "Needs review" : option === "all" ? "All" : "Clean"}
-            </button>
+        <select className="field" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="all">{t("transactions.allStates")}</option>
+          <option value="parsed">{t("transactions.settled")}</option>
+          <option value="needs_review">{t("transactions.needsReview")}</option>
+          <option value="discarded">{t("transactions.discarded")}</option>
+        </select>
+        <select className="field" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="all">{t("transactions.allCategories")}</option>
+          {categories.map((option) => (
+            <option key={option} value={option}>
+              {categoryText(option)}
+            </option>
           ))}
-        </div>
-        <span className="num ml-auto text-[12px] text-ink-3">
-          {rows.length} rows · {money(total)}
+        </select>
+        <span className="num ml-auto text-[0.85rem] text-ink-4">
+          {t("common.rows", { count: rows.length, total: money(total) })}
         </span>
-        <Button size="sm" onClick={exportCsv} disabled={!rows.length}>
-          Export CSV
+        <Button onClick={() => (window.location.href = api.exportUrl("ledger"))} disabled={!rows.length}>
+          {t("common.exportCsv")}
         </Button>
-      </div>
+      </Toolbar>
 
-      <Card>
+      <Panel flush>
         {loading ? (
-          <Empty title="Loading…" />
+          <Empty title={t("common.loading")} />
         ) : rows.length ? (
           <TransactionTable rows={rows} />
         ) : (
-          <Empty title="No transactions match">Try clearing the search or running a sync.</Empty>
+          <Empty title="Nothing matches">Clear the filters, or run a sync.</Empty>
         )}
-      </Card>
+      </Panel>
     </>
   );
 }

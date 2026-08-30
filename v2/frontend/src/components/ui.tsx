@@ -1,97 +1,100 @@
 import { ReactNode } from "react";
 
-export function Card({
+/* Primitives carry the geometry and the polish, so no page has to hand-roll a
+   padding value. Every size here comes from v1's stylesheet. */
+
+export function Panel({
   title,
   action,
   children,
   className = "",
+  flush = false,
+  id,
 }: {
   title?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Skip the inner padding when the child is a full-bleed table. */
+  flush?: boolean;
+  /** For in-page anchors, e.g. a "how it works" link on the home page. */
+  id?: string;
 }) {
   return (
-    <section className={`rounded-[6px] border border-line bg-surface ${className}`}>
+    <section id={id} className={`panel ${className}`}>
       {(title || action) && (
-        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-          <h2 className="text-[13px] font-medium text-ink">{title}</h2>
+        <header className="panel-head">
+          <h2 className="panel-title">{title}</h2>
           {action}
         </header>
       )}
-      {children}
+      <div className={flush ? "" : "px-6 py-5"}>{children}</div>
     </section>
   );
 }
 
-export function StatTile({
+export function Stat({
   label,
   value,
-  hint,
+  sub,
+  tone = "neutral",
 }: {
   label: string;
   value: ReactNode;
-  hint?: ReactNode;
+  sub?: ReactNode;
+  tone?: "neutral" | "up" | "down" | "accent";
 }) {
+  const tones = {
+    neutral: "text-ink",
+    up: "text-up",
+    down: "text-down",
+    accent: "text-amber",
+  };
   return (
-    <div className="rounded-[6px] border border-line bg-surface px-4 py-3.5">
-      <div className="text-[12px] text-ink-3">{label}</div>
-      <div className="num mt-1 text-[26px] leading-none font-medium tracking-[-0.02em] text-ink">{value}</div>
-      {hint ? <div className="mt-1.5 text-[12px] text-ink-3">{hint}</div> : null}
+    <div className="panel panel-sm px-6 py-5">
+      <div className="eyebrow">{label}</div>
+      <div className={`figure mt-3 ${tones[tone]}`}>{value}</div>
+      {sub ? <div className="mt-2.5 text-[0.85rem] text-ink-3">{sub}</div> : null}
     </div>
   );
 }
 
-const badgeStyles: Record<string, string> = {
-  parsed: "border-line bg-canvas text-ink-2",
-  needs_review: "border-warn/25 bg-warn-soft text-warn",
-  skipped: "border-line bg-canvas text-ink-3",
-  failed: "border-danger/25 bg-surface text-danger",
-  accent: "border-accent/25 bg-accent-soft text-accent-ink",
-};
-
-export function Badge({ tone = "parsed", children }: { tone?: string; children: ReactNode }) {
+/** Signed money. Direction is carried by the arrow as well as the colour, so
+    it survives a colourblind reader and a black-and-white print. */
+export function Delta({ value, format }: { value: number; format: (n: number) => string }) {
+  if (!value) return <span className="num text-ink-4">-</span>;
+  const up = value > 0;
   return (
-    <span
-      className={`inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[11px] leading-4 ${
-        badgeStyles[tone] ?? badgeStyles.parsed
-      }`}
-    >
-      {children}
+    <span className={`num ${up ? "text-down" : "text-up"}`}>
+      {up ? "▲" : "▼"} {format(Math.abs(value))}
     </span>
   );
+}
+
+export function Pill({ tone = "neutral", children }: { tone?: string; children: ReactNode }) {
+  return <span className={`pill pill-${tone}`}>{children}</span>;
 }
 
 type ButtonProps = {
   children: ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "default" | "quiet";
-  size?: "sm" | "md";
+  variant?: "primary" | "default" | "ghost";
   disabled?: boolean;
   type?: "button" | "submit";
+  title?: string;
 };
 
 export function Button({
   children,
   onClick,
   variant = "default",
-  size = "md",
   disabled,
   type = "button",
+  title,
 }: ButtonProps) {
-  const variants = {
-    primary: "bg-accent text-white border-accent hover:bg-accent-ink",
-    default: "bg-surface text-ink border-line-strong hover:bg-canvas",
-    quiet: "bg-transparent text-ink-2 border-transparent hover:bg-canvas hover:text-ink",
-  };
-  const sizes = { sm: "h-7 px-2.5 text-[12px]", md: "h-8 px-3 text-[13px]" };
+  const classes = { primary: "btn-primary", default: "btn", ghost: "btn-ghost" };
   return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-[5px] border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${variants[variant]} ${sizes[size]}`}
-    >
+    <button type={type} title={title} onClick={onClick} disabled={disabled} className={classes[variant]}>
       {children}
     </button>
   );
@@ -99,9 +102,11 @@ export function Button({
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="px-4 py-12 text-center">
-      <p className="text-[13px] font-medium text-ink">{title}</p>
-      {children ? <div className="mx-auto mt-1.5 max-w-sm text-[13px] text-ink-3">{children}</div> : null}
+    <div className="px-6 py-16 text-center">
+      <p className="text-[0.95rem] font-medium text-ink-2">{title}</p>
+      {children ? (
+        <div className="mx-auto mt-2 max-w-md text-[0.88rem] leading-relaxed text-ink-3">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -109,11 +114,56 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[12px] text-ink-3">{label}</span>
+      <span className="eyebrow mb-2 block">{label}</span>
       {children}
     </label>
   );
 }
 
-export const inputClass =
-  "h-8 rounded-[5px] border border-line-strong bg-surface px-2 text-[13px] text-ink placeholder:text-ink-3";
+export const inputClass = "field w-full";
+
+export function Th({
+  children,
+  align = "left",
+  width,
+}: {
+  children?: ReactNode;
+  align?: "left" | "right";
+  width?: string;
+}) {
+  return (
+    <th style={width ? { width } : undefined} className={align === "right" ? "align-right" : undefined}>
+      {children}
+    </th>
+  );
+}
+
+/* The score a node finished on. Dim when it is high enough to pass, amber when
+   it is the reason the run took the escalate or review branch. */
+export function StepScore({ value }: { value?: number }) {
+  if (value === undefined) return <span className="w-[42px] shrink-0" />;
+  return (
+    <span
+      className={`num w-[42px] shrink-0 text-right ${value < 0.75 ? "text-amber" : "text-ink-4"}`}
+      title="confidence when this node finished"
+    >
+      {value.toFixed(2)}
+    </span>
+  );
+}
+
+/* `email_id` on a record is the Gmail message id, so it deep-links to the
+   original. Absent for demo receipts, whose ids are synthetic. */
+export function GmailLink({ emailId, connected }: { emailId?: string | null; connected: boolean }) {
+  if (!connected || !emailId) return null;
+  return (
+    <a
+      href={`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(emailId)}`}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="text-[0.82rem] text-accent hover:underline"
+    >
+      Open in Gmail →
+    </a>
+  );
+}

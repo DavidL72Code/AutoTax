@@ -38,8 +38,18 @@ class Settings(BaseSettings):
     llm_rpm_limit: int = 9
     llm_min_interval_seconds: float = 6.0
     llm_max_retries: int = 2
+    llm_request_timeout: float = 180.0
+
+    # "memory" keeps paused reviews in-process; "sqlite" keeps them across
+    # restarts and needs `pip install langgraph-checkpoint-sqlite`.
+    checkpoint_backend: str = "memory"
+    checkpoint_path: Optional[str] = None
 
     app_env: str = "development"
+
+    @property
+    def data_dir(self) -> Path:
+        return ROOT / "v2" / "backend" / "data"
 
     @property
     def cors_origins(self) -> list[str]:

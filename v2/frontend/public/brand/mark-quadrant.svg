@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — quadrant</title>
+  <!-- Chase logic: one shape, rotated four times about the centre, enclosing a
+       void. The geometry is exact rather than drawn — each arm is the same
+       trapezoid at 0°, 90°, 180°, 270°, so it cannot be off-balance.
+       Flat, one colour, no gradient, no depth. -->
+  <g fill="#c6a15b">
+    <polygon points="13,10 51,10 37,24 27,24"/>
+    <polygon points="13,10 51,10 37,24 27,24" transform="rotate(90 32 32)"/>
+    <polygon points="13,10 51,10 37,24 27,24" transform="rotate(180 32 32)"/>
+    <polygon points="13,10 51,10 37,24 27,24" transform="rotate(270 32 32)"/>
+  </g>
+</svg>

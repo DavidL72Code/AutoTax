@@ -7,7 +7,7 @@
     ./.venv/bin/python tests/eval_graph.py --json     # machine-readable
 
 "API calls" is the number of HTTP requests actually sent to Gemini, which is
-what the batching in app/llm.py is there to hold down — it is normally far
+what the batching in app/llm.py is there to hold down. It is normally far
 lower than the number of emails that needed a model.
 """
 from __future__ import annotations
@@ -81,7 +81,8 @@ async def main() -> int:
 
     llm.reset_calls()
     started = time.perf_counter()
-    records = await run_many(emails)
+    # Benchmarks must never pause at await_review: no human is there to answer.
+    records = await run_many(emails, interactive=False)
     elapsed = time.perf_counter() - started
 
     accuracy = score(records, truth)

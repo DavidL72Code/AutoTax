@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ReceiptAuto">
+  <title>ReceiptAuto — notch</title>
+  <!-- One solid form rather than four separate arms: a square with a triangular
+       notch struck into each side. Still four-fold symmetric, but positive
+       where the quadrant was negative — it holds together at 16px. -->
+  <path d="M10 10H23L32 19L41 10H54V23L45 32L54 41V54H41L32 45L23 54H10V41L19 32L10 23V10Z"
+        fill="#c6a15b"/>
+</svg>
