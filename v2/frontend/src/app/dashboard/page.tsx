@@ -17,9 +17,13 @@ import { money, shortDate } from "@/lib/format";
 
 /** The live run: counters, then every email as the graph finishes with it. */
 function Processing() {
-  const { run, liveRecords, stopSync, startDemo, session, activeNodes } = useApp();
+  const { run, liveRecords, stopSync, startDemo, startSync, session, activeNodes } = useApp();
   const { t } = useT();
   const trace = useTrace();
+  // A connected account syncs its own inbox. Offering it the sample was a route
+  // to writing generated receipts into a real ledger, which the API now refuses
+  // outright.
+  const rerun = session?.gmail_connected ? startSync : startDemo;
   const active = Boolean(run && ["starting", "fetching", "parsing"].includes(run.status));
 
   // Always rendered once you are signed in: the diagram is how you learn what
@@ -61,11 +65,11 @@ function Processing() {
           action={
             active ? (
               <button onClick={stopSync} className="text-[0.8rem] text-ink-4 hover:text-ink-2">
-                Stop
+                {t("common.stop")}
               </button>
             ) : (
-              <button onClick={startDemo} className="text-[0.8rem] text-ink-4 hover:text-ink-2">
-                {session?.gmail_connected ? t("common.runSample") : t("common.runAgain")}
+              <button onClick={rerun} className="text-[0.8rem] text-ink-4 hover:text-ink-2">
+                {session?.gmail_connected ? t("common.syncAgain") : t("common.runAgain")}
               </button>
             )
           }

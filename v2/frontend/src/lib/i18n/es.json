@@ -334,5 +334,6 @@
   "home.step3Body": "La base más el impuesto debe dar el total. Si no cuadra, o el modelo no está seguro de lo que encontró, lo intenta de nuevo, dos veces como máximo, y luego te pregunta en vez de registrar una cifra que no puede sostener.",
   "review.queueEmpty": "La cola está vacía",
   "review.queueEmptyBody": "Todos los recibos cuadraron solos: un comercio, un total positivo y un impuesto que suma.",
-  "review.resumed": "Se reanudó el hilo en pausa. Revalidado y guardado como {status}."
+  "review.resumed": "Se reanudó el hilo en pausa. Revalidado y guardado como {status}.",
+  "common.syncAgain": "Sincronizar de nuevo"
 }

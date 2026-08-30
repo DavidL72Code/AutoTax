@@ -506,19 +506,38 @@ async def start_demo(
     """Run the graph over sample receipts. No Gmail, no account, no API key
     required beyond whatever the server already has."""
     user = await auth.resolve_session(receipts_session)
-    if not user:
-        demo_id = f"demo_{secrets.token_hex(6)}"
-        token = await auth.link_google_account(f"{demo_id}@sample.local", "", user_id=demo_id)
-        response.set_cookie(
-            auth.SESSION_COOKIE,
-            token,
-            max_age=int(auth.SESSION_TTL.total_seconds()),
-            httponly=True,
-            samesite="lax",
-            secure=settings.app_env != "development",
-            path="/",
+
+    if user and not str(user.get("user_id") or "").startswith(DEMO_PREFIX):
+        # A real account must never have sample receipts written into its
+        # ledger, and minting a demo session over the top would sign them out of
+        # their own. Syncing their inbox is the equivalent action for them.
+        raise HTTPException(
+            status_code=409,
+            detail="The sample inbox is for visitors without an account. Sync your own inbox instead.",
         )
-        user = await auth.resolve_session(token)
+
+    # Running the sample always starts a fresh one, on a new demo identity.
+    #
+    # Reusing the old one appended to it: the ledger and the notification bell
+    # arrived already populated, so it read as the parser having run before it
+    # did. Worse, a graph thread is keyed by (user, email id) and `steps` is an
+    # appending reducer, so re-running the same message resumed its thread and
+    # stacked a second copy of triage, extract and resolve onto the trace.
+    if user:
+        repository.forget_demo(str(user["user_id"]))
+
+    demo_id = f"demo_{secrets.token_hex(6)}"
+    token = await auth.link_google_account(f"{demo_id}@sample.local", "", user_id=demo_id)
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        token,
+        max_age=int(auth.SESSION_TTL.total_seconds()),
+        httponly=True,
+        samesite="lax",
+        secure=settings.app_env != "development",
+        path="/",
+    )
+    user = await auth.resolve_session(token)
 
     from ..demo_data import demo_emails, history_emails
 
