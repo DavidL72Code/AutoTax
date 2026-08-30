@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import router
-from .config import settings
+from .config import BACKEND, settings
 from .diagnostics import report
 
 # The root .env carries a multi-line service-account JSON that python-dotenv
@@ -45,7 +45,11 @@ async def health(port: int | None = None):
 # Absent (a backend-only dev run, or before the front end is built) the API just
 # serves itself.
 
-FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "out"
+# Anchored to the backend directory rather than counted from this file, for the
+# same reason config.py is: in the image only v2/backend is copied, so the
+# parents this used to count do not exist. There the export is absent and the
+# guard below simply skips, which is correct when Vercel serves the pages.
+FRONTEND = BACKEND.parent / "frontend" / "out"
 
 
 def _page(path: str) -> Path | None:

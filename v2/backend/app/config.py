@@ -5,7 +5,21 @@ from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ROOT = Path(__file__).resolve().parents[3]
+# This package sits at v2/backend/app in the repo, and at /app/app in the
+# container image, where only v2/backend is copied. Counting parents assumed the
+# first and crashed on the second, so find the repo by looking for it and fall
+# back to the directory the code was copied into.
+BACKEND = Path(__file__).resolve().parents[1]
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / ".git").is_dir():
+            return parent
+    return BACKEND
+
+
+ROOT = _repo_root()
 _ROOT = ROOT
 
 
@@ -49,7 +63,9 @@ class Settings(BaseSettings):
 
     @property
     def data_dir(self) -> Path:
-        return ROOT / "v2" / "backend" / "data"
+        """Beside the code. Deriving it from the repo layout broke in the image,
+        where there is no repo above the package."""
+        return BACKEND / "data"
 
     @property
     def cors_origins(self) -> list[str]:
