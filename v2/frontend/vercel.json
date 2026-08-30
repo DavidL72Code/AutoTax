@@ -10,13 +10,13 @@
     "CORS to configure on the API. Nothing needs setting in the Vercel dashboard",
     "except the root directory.",
     "",
-    "Change the destination below to the API service's URL. It cannot be an",
-    "environment variable: vercel.json does not interpolate them."
+    "The destination is written here rather than set as an environment",
+    "variable because vercel.json does not interpolate them."
   ],
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://receipts-v2.onrender.com/api/:path*"
+      "destination": "https://autotax-xwly.onrender.com/api/:path*"
     }
   ]
 }

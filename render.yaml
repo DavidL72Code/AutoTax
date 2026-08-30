@@ -1,10 +1,17 @@
 services:
   # v2's API. Pure Python: Vercel serves the interface and forwards /api here,
-  # so nothing on this side builds or ships the front end. v1's service below is
-  # untouched and still runs.
+  # so nothing on this side builds or ships the front end. The browser only ever
+  # sees Vercel's origin, so this needs no CORS entry and the session cookie is
+  # never cross-site.
   #
-  # The browser only ever sees Vercel's origin, so this needs no CORS entry and
-  # the session cookie is never cross-site.
+  # This replaces v1 on the existing service rather than adding a second one:
+  # every secret v2 reads is already set there under the same name, including
+  # FERNET_KEY and the three GOOGLE_OAUTH_* values. Only the root directory and
+  # the start command differ (app.api:app becomes app.main:app), and the OAuth
+  # callback path is unchanged, so Google Cloud Console needs nothing.
+  #
+  # v2 uses Firestore alone, so DATABASE_URL and the FIREBASE_WEB_* keys below
+  # go unread. They are left in place for v1's sake.
   - type: web
     name: receipts-v2-api
     env: python
