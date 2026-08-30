@@ -1,16 +1,17 @@
 services:
-  # v2: one service. `next build` exports the interface to static files and the
-  # FastAPI app serves them alongside /api, so there is a single origin, no CORS
-  # and no second host. v1's service below is untouched and still runs.
+  # v2's API. Pure Python: Vercel serves the interface and forwards /api here,
+  # so nothing on this side builds or ships the front end. v1's service below is
+  # untouched and still runs.
+  #
+  # The browser only ever sees Vercel's origin, so this needs no CORS entry and
+  # the session cookie is never cross-site.
   - type: web
-    name: receipts-v2
+    name: receipts-v2-api
     env: python
     plan: free
-    rootDir: v2
-    buildCommand: >-
-      pip install -r backend/requirements.txt &&
-      cd frontend && npm ci && npm run build
-    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    rootDir: v2/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production
