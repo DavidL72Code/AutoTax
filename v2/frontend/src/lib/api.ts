@@ -1,4 +1,7 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8010";
+/* Empty by default, so every request is same-origin and `next.config.ts`
+   forwards it to the API. Set `NEXT_PUBLIC_API_BASE` only to bypass that and
+   call a remote API directly, which then needs CORS and a cross-site cookie. */
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 /** `detail` is the English sentence the backend built; `key`+`params` are the
     same fact for a localised UI to phrase itself. */
