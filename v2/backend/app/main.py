@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api.routes import router
 from .config import settings
@@ -30,3 +33,53 @@ app.include_router(router)
 async def health(port: int | None = None):
     """Readiness of every external dependency. Never returns a secret value."""
     return await report(port)
+
+
+# ── the front end ───────────────────────────────────────────────────────────
+#
+# `next build` with `output: "export"` turns the whole interface into static
+# HTML and JavaScript that calls `/api/...` relatively. Serving it from here
+# makes the app one origin and one deployment: no second host, no CORS, and the
+# session cookie works because there is nothing cross-site about it.
+#
+# Absent (a backend-only dev run, or before the front end is built) the API just
+# serves itself.
+
+FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "out"
+
+
+def _page(path: str) -> Path | None:
+    """Map a URL to an exported file. `next export` writes `dashboard.html`,
+    not `dashboard/index.html`, so a plain StaticFiles mount misses every route
+    but the root."""
+    clean = path.strip("/")
+    if not clean:
+        candidate = FRONTEND / "index.html"
+        return candidate if candidate.is_file() else None
+    for candidate in (FRONTEND / f"{clean}.html", FRONTEND / clean / "index.html"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+if FRONTEND.is_dir():
+    app.mount("/_next", StaticFiles(directory=FRONTEND / "_next"), name="next-assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def frontend(path: str):
+        # Anything under /api that reached here is a real 404, not a page.
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="No such endpoint")
+
+        page = _page(path)
+        if page:
+            return FileResponse(page)
+
+        asset = FRONTEND / path
+        if path and asset.is_file():
+            return FileResponse(asset)
+
+        not_found = FRONTEND / "404.html"
+        if not_found.is_file():
+            return FileResponse(not_found, status_code=404)
+        raise HTTPException(status_code=404, detail="Not found")

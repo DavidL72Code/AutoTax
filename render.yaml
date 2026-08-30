@@ -1,4 +1,45 @@
 services:
+  # v2: one service. `next build` exports the interface to static files and the
+  # FastAPI app serves them alongside /api, so there is a single origin, no CORS
+  # and no second host. v1's service below is untouched and still runs.
+  - type: web
+    name: receipts-v2
+    env: python
+    plan: free
+    rootDir: v2
+    buildCommand: >-
+      pip install -r backend/requirements.txt &&
+      cd frontend && npm ci && npm run build
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      # Encrypts the Gmail refresh token at rest. Without it the app cannot
+      # store a credential at all.
+      - key: FERNET_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      # Must match an authorised redirect URI in Google Cloud Console, and
+      # points at this service since it serves the front end too.
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      # Paused reviews live in the checkpointer. The free plan sleeps when idle,
+      # which drops in-process state, so sqlite keeps a queue across restarts.
+      # It writes email bodies to disk: leave it as memory if that matters more.
+      - key: CHECKPOINT_BACKEND
+        value: sqlite
+
   - type: web
     name: receipt-automation-api
     env: python

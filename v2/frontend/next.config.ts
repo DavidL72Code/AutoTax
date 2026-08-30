@@ -1,36 +1,32 @@
 import type { NextConfig } from "next";
 
-/* The browser talks to this app's own origin, and this app forwards to the
-   API. Nothing about the backend's address is compiled into the bundle.
+/* One service in production, two processes in development.
 
-   That matters for three reasons beyond tidiness:
+   `next build` exports the whole interface to static HTML and JavaScript that
+   calls `/api/...` relatively, and the FastAPI app serves those files itself.
+   That makes the deployment a single origin: no second host to configure, no
+   CORS, no cross-site cookie problem, and no proxy hop in front of the progress
+   stream. The backend's address is never sent to a browser because there is no
+   separate backend address.
 
-   * A same-origin request carries the session cookie. A frontend on one domain
-     calling an API on another does not, because the cookie is `samesite=lax`,
-     so a split deployment would look configured and silently fail to sign in.
-   * There is no cross-origin request, so there is no CORS to configure.
-   * `BACKEND_URL` has no `NEXT_PUBLIC_` prefix, so it stays server-side. The
-     old `NEXT_PUBLIC_API_BASE` was baked into the JavaScript sent to visitors,
-     which meant a missing value shipped `http://localhost:8010` to every
-     browser and failed only at runtime, after a green build.
-
-   `NEXT_PUBLIC_API_BASE` still overrides it, for pointing a local frontend
-   straight at a remote API. */
+   In development the two run apart, so `next dev` forwards /api to BACKEND_URL
+   instead. Rewrites do not exist in an export, hence the split. */
+const isDev = process.env.NODE_ENV === "development";
 const backend = process.env.BACKEND_URL ?? "http://localhost:8020";
 
-const nextConfig: NextConfig = {
-  /* The sync progress stream is server-sent events, and gzip buffers: the proxy
-     compressed the stream, nothing reached the browser until enough bytes
-     accumulated, and `EventSource` sat open and silent forever. curl hid it,
-     because curl does not ask for compression unless told to.
-
-     Compression is the CDN's job in front of this app anyway; these payloads
-     are small JSON and HTML that Vercel already serves compressed. */
-  compress: false,
-
-  async rewrites() {
-    return [{ source: "/api/:path*", destination: `${backend}/api/:path*` }];
-  },
-};
+const nextConfig: NextConfig = isDev
+  ? {
+      /* gzip buffers a server-sent event stream: the proxy would compress the
+         sync progress feed, `EventSource` would open and then stay silent, and
+         curl would hide it by not asking for compression. */
+      compress: false,
+      async rewrites() {
+        return [{ source: "/api/:path*", destination: `${backend}/api/:path*` }];
+      },
+    }
+  : {
+      output: "export",
+      images: { unoptimized: true },
+    };
 
 export default nextConfig;
