@@ -15,11 +15,19 @@ from typing import Any, Optional
 from .layouts import BY_NAME, REGISTRY, pick
 from .receipts import LineItem, Layout, Path, Receipt
 
-# vendor, domain, cadence days, charged amount, (month price rises from, new price)
+# vendor, domain, cadence days, charged amount, (charges at the new price, new price)
+#
+# Counted back from the most recent charge, not forward from the first, because
+# that is the question `recurring.detect` answers: it compares the latest charge
+# against the median of the ones before it, so it reports a subscription that
+# *just* went up. Planting the rise in the middle of the series, which is what
+# this used to do, put the new price in the median and made the change
+# invisible: six months of Netflix with a rise at month three reported
+# price_change_pct 0.0. One risen charge is a rise you can see.
 _RECURRING = [
-    ("Netflix", "netflix.com", 30, 15.49, (3, 17.99)),
+    ("Netflix", "netflix.com", 30, 15.49, (1, 17.99)),
     ("Spotify", "spotify.com", 30, 11.99, None),
-    ("Adobe", "adobe.com", 30, 59.99, (4, 69.99)),
+    ("Adobe", "adobe.com", 30, 59.99, (2, 69.99)),
     ("GitHub", "github.com", 30, 21.00, None),
 ]
 
@@ -200,7 +208,8 @@ def demo_emails(count: int = 10, seed: Optional[int] = None) -> list[dict]:
     return [to_graph_email(case) for case in demo_cases(count, seed, demo=True)]
 
 
-def history_cases(months: int = 6, seed: Optional[int] = 11) -> list[dict]:
+def history_cases(months: int = 6, seed: Optional[int] = 11,
+                  limit: Optional[int] = None) -> list[dict]:
     """Six months of receipts containing recurring charges, a price rise and one
     duplicate billing, the patterns the Insights page is built to find. Layouts
     are drawn per receipt, so the same subscription arrives in different shapes,
@@ -212,13 +221,18 @@ def history_cases(months: int = 6, seed: Optional[int] = 11) -> list[dict]:
     for index, (vendor, domain, cadence, amount, change) in enumerate(_RECURRING):
         for period in range(months):
             when = today - timedelta(days=cadence * (months - 1 - period), hours=index)
-            charged = change[1] if change and period >= change[0] else amount
+            charged = change[1] if change and period >= months - change[0] else amount
             # A subscription with a known price needs a layout that states a
             # total, or the planted price rise is not visible in the ledger.
             layout = _pick_for_demo(rng)
             while layout.expected_path is Path.REVIEW or layout.name == "no_explicit_total":
                 layout = _pick_for_demo(rng)
-            cases.append(_case(_receipt(rng, vendor, domain, when, charged, layout, exact_total=charged), layout))
+            case = _case(_receipt(rng, vendor, domain, when, charged, layout, exact_total=charged), layout)
+            case["signal"] = "price_rise" if change else "recurring"
+            # The vendor a layout *expects* is not always the vendor the receipt
+            # came from, so the series is tagged from the source.
+            case["series"] = vendor
+            cases.append(case)
 
     for index, (vendor, domain, spacing, ceiling) in enumerate(_ONE_OFF):
         day = 0
@@ -232,7 +246,9 @@ def history_cases(months: int = 6, seed: Optional[int] = 11) -> list[dict]:
     plain = BY_NAME["plain_labeled"]
     for offset in (4, 3):
         when = today - timedelta(days=offset)
-        cases.append(_case(_receipt(rng, "Uber", "uber.com", when, 41.20, plain, exact_total=41.20), plain))
+        duplicate = _case(_receipt(rng, "Uber", "uber.com", when, 41.20, plain, exact_total=41.20), plain)
+        duplicate["signal"] = "duplicate"
+        cases.append(duplicate)
 
     cases = _ensure_every_layout(
         cases, rng,
@@ -243,9 +259,61 @@ def history_cases(months: int = 6, seed: Optional[int] = 11) -> list[dict]:
         ),
         demo=True,
     )
+    if limit:
+        cases = _trim(cases, limit, rng)
     cases.sort(key=lambda case: case["date"])
     return cases
 
 
-def history_emails(months: int = 6, seed: Optional[int] = 11) -> list[dict]:
-    return [to_graph_email(case) for case in history_cases(months, seed)]
+def _trim(cases: list[dict], limit: int, rng: random.Random) -> list[dict]:
+    """Cut a full history down to a run that will not eat the day's quota.
+
+    What survives is chosen, not sampled. The Insights page is the reason this
+    corpus has a shape at all, so the planted signals are kept whole: half a
+    subscription series is not a price rise, and one of two identical charges
+    is not a duplicate. One subscription is enough to show a price rise, so the
+    other series are dropped rather than half-kept. Whatever budget is left goes
+    to receipts whose layout has not appeared yet, so a short run still shows
+    the parser handling more than one shape of email.
+    """
+    keep: list[dict] = [case for case in cases if case.get("signal") == "duplicate"]
+
+    risers = [case for case in cases if case.get("signal") == "price_rise"]
+    if risers:
+        chosen = risers[0]["series"]
+        series = [case for case in risers if case["series"] == chosen]
+        # Below the cost of a whole series, drop it rather than truncate it.
+        # A slice of a subscription is not a price rise, it is a handful of
+        # charges from one merchant, and it would fill a small run with them.
+        if len(keep) + len(series) <= limit:
+            keep += series
+
+    picked = {id(case) for case in keep}
+    seen = {case["layout"] for case in keep}
+
+    # A run this short is mostly what a visitor judges the parser on, so it
+    # should not look like it stops for a human every other receipt. One paused
+    # receipt shows the review path exists; more than that misrepresents it.
+    review_budget = 1
+
+    fresh = []
+    for case in cases:
+        if id(case) in picked or case["layout"] in seen:
+            continue
+        # `expected_path` alone undercounts: a layout that normally escalates
+        # can still land in review when the model is not confident, and those
+        # count against a visitor's queue just the same.
+        if Path.REVIEW.value in case["acceptable_paths"]:
+            if review_budget <= 0:
+                continue
+            review_budget -= 1
+        seen.add(case["layout"])
+        fresh.append(case)
+    rng.shuffle(fresh)
+
+    return (keep + fresh)[:limit]
+
+
+def history_emails(months: int = 6, seed: Optional[int] = 11,
+                   limit: Optional[int] = None) -> list[dict]:
+    return [to_graph_email(case) for case in history_cases(months, seed, limit)]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 
@@ -71,7 +72,13 @@ class Run:
         return self._cancelled
 
 
-_runs: dict[str, Run] = {}
+_runs: "OrderedDict[str, Run]" = OrderedDict()
+
+# A run holds every record it parsed, and nothing here ever expired one, so the
+# process kept every sync anyone had ever started. The id has to outlive the run
+# itself, because the client polls the snapshot after it finishes, but not
+# forever: past this many, the oldest goes.
+MAX_RUNS = 200
 
 
 def get_run(run_id: str) -> Optional[Run]:
@@ -81,6 +88,8 @@ def get_run(run_id: str) -> Optional[Run]:
 def start(user_id: str, user_ids: Optional[list[str]] = None, **options) -> Run:
     run = Run(uuid.uuid4().hex[:12], user_id, user_ids)
     _runs[run.id] = run
+    while len(_runs) > MAX_RUNS:
+        _runs.popitem(last=False)
     asyncio.create_task(_execute(run, **options))
     return run
 

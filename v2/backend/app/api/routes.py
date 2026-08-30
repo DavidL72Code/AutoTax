@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, Cookie, HTTPException, Query, Request, Resp
 from fastapi.responses import PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from .. import advisor, auth, llm, notifications, sample_inbox, sync
+from .. import advisor, auth, llm, notifications, ratelimit, sample_inbox, sync
 from ..config import settings
 from ..graph import persistence, runner
 from ..graph.state import Email
@@ -90,37 +90,80 @@ def _oauth_flow(state: Optional[str] = None):
     )
 
 
+# A state that is only held server side proves the flow started here, not that
+# it started in *this* browser. Without that second half, someone can begin a
+# flow, hand the victim the resulting callback URL, and land the victim's
+# browser on a session for the attacker's Google account. Copying the state into
+# a short-lived httpOnly cookie is what ties the two together.
+OAUTH_STATE_COOKIE = "receipts_oauth_state"
+OAUTH_STATE_TTL = 900
+MAX_OAUTH_STATES = 2000
+
+
 @router.get("/google/auth-url")
-async def google_auth_url():
+async def google_auth_url(request: Request, response: Response):
+    # Unauthenticated and it allocates, so it is worth a ceiling of its own.
+    ratelimit.allow("oauth", ratelimit.client_key(request), 10, 300,
+                    "Too many sign-in attempts, try again in a few minutes.")
+
     state = secrets.token_urlsafe(24)
     now = datetime.now(timezone.utc).timestamp()
-    _oauth_states[state] = now
     for old, issued in list(_oauth_states.items()):
-        if now - issued > 900:
+        if now - issued > OAUTH_STATE_TTL:
             _oauth_states.pop(old, None)
+    # The sweep above only runs when someone calls this, so it is not on its own
+    # a bound. Oldest first, because the newest are the ones still in flight.
+    while len(_oauth_states) >= MAX_OAUTH_STATES:
+        _oauth_states.pop(min(_oauth_states, key=_oauth_states.get), None)
+    _oauth_states[state] = now
 
     url, _ = _oauth_flow(state).authorization_url(
         access_type="offline", include_granted_scopes="true", prompt="consent"
+    )
+    response.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        max_age=OAUTH_STATE_TTL,
+        httponly=True,
+        samesite="lax",
+        secure=settings.app_env != "development",
+        path="/",
     )
     return {"url": url}
 
 
 @router.get("/google/callback")
-async def google_callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+async def google_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    receipts_oauth_state: Optional[str] = Cookie(default=None),
+):
     frontend = settings.frontend_url.rstrip("/")
-    if error or not code or not state or _oauth_states.pop(state, None) is None:
-        return RedirectResponse(f"{frontend}/?connect=failed")
+    started_here = bool(state) and _oauth_states.pop(state, None) is not None
+    # Constant time, because the comparison is against a secret the caller is
+    # trying to guess.
+    same_browser = bool(state and receipts_oauth_state) and secrets.compare_digest(
+        str(receipts_oauth_state), str(state)
+    )
+    if error or not code or not started_here or not same_browser:
+        failed = RedirectResponse(f"{frontend}/?connect=failed")
+        failed.delete_cookie(OAUTH_STATE_COOKIE, path="/")
+        return failed
 
     flow = _oauth_flow(state)
     await asyncio.to_thread(flow.fetch_token, code=code)
     credentials = flow.credentials
     if not credentials.refresh_token:
-        return RedirectResponse(f"{frontend}/?connect=no_refresh_token")
+        stale = RedirectResponse(f"{frontend}/?connect=no_refresh_token")
+        stale.delete_cookie(OAUTH_STATE_COOKIE, path="/")
+        return stale
 
     email = await gmail.profile_email(credentials.refresh_token) or "unknown@gmail.com"
     token = await auth.link_google_account(email, credentials.refresh_token)
 
     response = RedirectResponse(f"{frontend}/?connect=ok")
+    response.delete_cookie(OAUTH_STATE_COOKIE, path="/")
     response.set_cookie(
         auth.SESSION_COOKIE,
         token,
@@ -160,6 +203,11 @@ async def start_sync(
     receipts_session: Optional[str] = Cookie(default=None),
 ):
     user = await _require_user(receipts_session)
+    # A sync reads a mailbox and can escalate every message in it to the model.
+    # Six starts in five minutes is more than anyone needs and well under what a
+    # client stuck in a retry loop would manage.
+    ratelimit.allow("sync", str(user["user_id"]), 6, 300,
+                    "That inbox is already being read. Give the run a moment before starting another.")
     payload = payload or SyncRequest()
     run = sync.start(
         user["user_id"],
@@ -357,6 +405,10 @@ async def resolve_review(
     receipts_session: Optional[str] = Cookie(default=None),
 ):
     user = await _require_user(receipts_session)
+    # Resuming a paused thread runs the rest of the graph, which can mean a
+    # model call. Generous, because clearing a queue by hand is legitimate.
+    ratelimit.allow("review", str(user["user_id"]), 60, 60,
+                    "Too many review answers at once, try again shortly.")
     payload = {**answer.model_dump(exclude_none=True), "at": datetime.now(timezone.utc).isoformat()}
 
     resumed = await runner.resume_review(user["user_id"], email_id, payload)
@@ -498,14 +550,43 @@ async def export(
 
 # ── demo ────────────────────────────────────────────────────────────────────
 
+# How many sample receipts a demo run parses by default. Every receipt that
+# escalates costs a model call against a shared daily quota, so this is a
+# budget, not a preference.
+DEMO_EMAILS = 15
+
+# And the most it will parse however it is asked. Six months unabridged is 98
+# receipts; leaving the ceiling up there would have meant the default of fifteen
+# was only a suggestion, undone by one query parameter. The full corpus is still
+# generated by `history_cases`, which is where a long run belongs.
+DEMO_EMAILS_MAX = 25
+
+# Receipts per hour across every visitor, not runs per hour. Counting runs
+# assumes they are all the same size, which is exactly the assumption a caller
+# picking their own `limit` gets to break.
+DEMO_HOURLY_RECEIPTS = 600
+
+
 @router.post("/demo")
 async def start_demo(
+    request: Request,
     response: Response,
     months: int = Query(default=6, ge=0, le=12),
+    limit: int = Query(default=DEMO_EMAILS, ge=1, le=DEMO_EMAILS_MAX),
     receipts_session: Optional[str] = Cookie(default=None),
 ):
     """Run the graph over sample receipts. No Gmail, no account, no API key
     required beyond whatever the server already has."""
+    # The one endpoint that spends the model quota without an account behind it,
+    # and it mints a fresh identity every run, so a per user limit would count
+    # to one forever. The address is what is left, plus a global ceiling,
+    # because a per caller limit does nothing against many callers and the quota
+    # they are spending is one pool.
+    ratelimit.allow("demo", ratelimit.client_key(request), 3, 600,
+                    "The sample run has already gone a few times from here. Try again in a few minutes.")
+    ratelimit.budget("demo", DEMO_HOURLY_RECEIPTS, 3600,
+                     "The sample inbox is busy right now. Try again shortly.", cost=limit)
+
     user = await auth.resolve_session(receipts_session)
 
     if user and not str(user.get("user_id") or "").startswith(DEMO_PREFIX):
@@ -543,9 +624,23 @@ async def start_demo(
 
     from ..demo_data import demo_emails, history_emails
 
-    # With history the sample inbox can demonstrate what the ledger *learns*, # recurring charges, a price rise, a duplicate billing. months=0 falls back
-    # to the quick ten-receipt set.
-    emails: list[Email] = history_emails(months) if months else demo_emails()
+    # With history the sample inbox can demonstrate what the ledger *learns*:
+    # recurring charges, a price rise, a duplicate billing. months=0 falls back
+    # to the quick set drawn without any of that.
+    #
+    # Trimmed, because a sample run is not free. Six months unabridged is 98
+    # receipts, about thirty of which escalate to the model, and a handful of
+    # demo visits was enough to exhaust the day's quota and leave every later
+    # run stalling on 429s. Fifteen keeps the price rise and the duplicate
+    # intact and costs roughly a fifth of the calls.
+    #
+    # The short set is truncated rather than trimmed: it has no planted signal
+    # to preserve, only layout coverage, and it is already close to the limit.
+    # Both paths are cut to `limit` because that is what the budget above was
+    # charged for, and a run that parses more than it paid for is not a budget.
+    emails: list[Email] = (
+        history_emails(months, limit=limit) if months else demo_emails()[:limit]
+    )
 
     # Held so the demo can show its own workings. A real receipt links to Gmail;
     # a generated one has nowhere to link to, and a visitor who cannot open the
@@ -562,19 +657,6 @@ async def start_demo(
 # parsing it is user-triggered, which is why it is the one endpoint with a rate
 # limit. In-process and per user: enough to stop a stuck client burning the
 # quota, not a substitute for a real limiter behind a load balancer.
-
-_ADVISOR_CALLS: dict[str, list[float]] = defaultdict(list)
-_ADVISOR_MAX_PER_MINUTE = 12
-
-
-def _advisor_rate_limit(user_id: str) -> None:
-    now = time.monotonic()
-    recent = [t for t in _ADVISOR_CALLS[user_id] if now - t < 60.0]
-    if len(recent) >= _ADVISOR_MAX_PER_MINUTE:
-        raise HTTPException(status_code=429, detail="Too many questions at once, try again shortly.")
-    recent.append(now)
-    _ADVISOR_CALLS[user_id] = recent
-
 
 class AdvisorTurn(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -596,7 +678,10 @@ async def advisor_chat(
     """Answers from the aggregated ledger. Never sees an email body, v2 does
     not store them, and never receives a record row by row."""
     user = await _require_user(receipts_session)
-    _advisor_rate_limit(user["user_id"])
+    ratelimit.allow("advisor", str(user["user_id"]), 12, 60,
+                    "Too many questions at once, try again shortly.")
+    ratelimit.budget("advisor", 240, 60,
+                     "The advisor is busy right now, try again in a minute.")
 
     if not llm.available():
         raise HTTPException(status_code=503, detail="No model is configured, so the advisor is unavailable.")

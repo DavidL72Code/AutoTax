@@ -16,7 +16,18 @@ from .diagnostics import report
 # cannot parse; the values we need load fine, so drop the noise.
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
 
-app = FastAPI(title="Receipts", version="2.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
+# The interactive docs enumerate every route, its parameters and its shapes.
+# That is exactly what you want while building and a free map of the attack
+# surface once it is public, so they exist in development only.
+_docs = settings.app_env == "development"
+
+app = FastAPI(
+    title="Receipts",
+    version="2.0.0",
+    docs_url="/api/docs" if _docs else None,
+    redoc_url="/api/redoc" if _docs else None,
+    openapi_url="/api/openapi.json" if _docs else None,
+)
 
 app.add_middleware(
     CORSMiddleware,
