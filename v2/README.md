@@ -247,6 +247,36 @@ defaults to `8020`. Either add
 `GOOGLE_OAUTH_REDIRECT_URI` at it, or run the API on 8000.
 `tests/check_setup.py` will tell you which way it currently disagrees.
 
+## Deploying
+
+Two services, one origin as far as a browser is concerned.
+
+**The API** runs on Render from `v2/backend/Dockerfile`. Pure Python: it neither
+builds nor serves the interface, so there is no Node in the image. Set the
+Dockerfile path and the build context together, both relative to the service's
+root directory, or they compound: a root of `v2/backend` with a context of
+`./v2/backend` resolves to `v2/backend/v2/backend`.
+
+Every setting it reads is already present on the v1 service under the same name,
+`FERNET_KEY` and the three `GOOGLE_OAUTH_*` values included, and both versions
+serve the OAuth callback at `/api/google/callback`, so Google Cloud Console
+needs nothing. `DATABASE_URL` and the `FIREBASE_WEB_*` keys go unread: v2 uses
+Firestore alone.
+
+**The interface** runs on Vercel with the root directory set to `v2/frontend`
+and nothing else. `vercel.json` forwards `/api` to the Render host at Vercel's
+routing layer, which runs before the static files are served, so it works with
+`output: "export"` where Next's own rewrites do not exist. That address is
+written into the file because `vercel.json` interpolates no environment
+variables, and the file takes no comments: Vercel rejects unknown keys.
+
+Because the browser only ever sees Vercel's origin, the session cookie is not
+cross-site and `samesite=lax` keeps working, and the API needs no CORS entry.
+
+**Or one service.** Building the front end and letting FastAPI serve the export
+alongside `/api` also works, and is simpler still: one host, one deploy. The
+route handler is already there and skips itself when no export is present.
+
 ## Layout
 
 ```
