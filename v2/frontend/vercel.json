@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "_comment": [
+    "Vercel serves the exported pages and forwards /api to the API service.",
+    "The rewrite happens in Vercel's routing layer, before the static files are",
+    "served, so it works with output: 'export' where Next's own rewrites do not.",
+    "",
+    "The browser only ever sees this app's own origin. That means the session",
+    "cookie is not cross-site, so samesite=lax keeps working, and there is no",
+    "CORS to configure on the API. Nothing needs setting in the Vercel dashboard",
+    "except the root directory.",
+    "",
+    "Change the destination below to the API service's URL. It cannot be an",
+    "environment variable: vercel.json does not interpolate them."
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://receipts-v2.onrender.com/api/:path*"
+    }
+  ]
+}
