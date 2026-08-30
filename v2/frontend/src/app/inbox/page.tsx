@@ -17,6 +17,7 @@ export default function InboxPage() {
   const { session, transactions } = useApp();
   const [items, setItems] = useState<SampleEnvelope[] | null>(null);
   const [open, setOpen] = useState<SampleEmail | null>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -30,6 +31,33 @@ export default function InboxPage() {
     if (session?.is_demo) void load();
     else setItems([]);
   }, [session?.is_demo, load]);
+
+  const show = useCallback(async (emailId: string) => {
+    try {
+      setOpen(await api.sampleEmail(emailId));
+      setHighlighted(emailId);
+    } catch {
+      // The run it belonged to is gone; the list is still worth showing.
+    }
+  }, []);
+
+  /* Arriving from a figure means arriving *at* its email. Linking to the page
+     and leaving someone to find the row themselves is the same as not linking:
+     the whole point is to check one number without hunting for it. */
+  useEffect(() => {
+    if (!items?.length) return;
+    const jump = () => {
+      const wanted = decodeURIComponent(window.location.hash.replace("#", ""));
+      if (!wanted) return;
+      void show(wanted);
+      // The row stays marked behind the dialog, so closing it leaves you where
+      // you were rather than at the top of the list.
+      document.getElementById(`email-${wanted}`)?.scrollIntoView({ block: "center" });
+    };
+    jump();
+    window.addEventListener("hashchange", jump);
+    return () => window.removeEventListener("hashchange", jump);
+  }, [items, show]);
 
   // What the pipeline made of each email, looked up by the id it was parsed
   // under, so the two can be read side by side.
@@ -52,9 +80,15 @@ export default function InboxPage() {
             {items.map((item) => {
               const record = item.id ? parsed.get(item.id) : undefined;
               return (
-                <li key={item.id} className="border-b border-[var(--hairline)] last:border-0">
+                <li
+                  key={item.id}
+                  id={`email-${item.id}`}
+                  className={`border-b border-[var(--hairline)] last:border-0 ${
+                    highlighted === item.id ? "bg-[rgba(59,130,246,0.10)]" : ""
+                  }`}
+                >
                   <button
-                    onClick={() => void api.sampleEmail(item.id).then(setOpen).catch(() => undefined)}
+                    onClick={() => void show(item.id)}
                     className="block w-full px-6 py-4 text-left transition-colors hover:bg-[var(--wash)]"
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-3">
