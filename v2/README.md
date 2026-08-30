@@ -44,7 +44,7 @@ extract ──► resolve ──complete?──► enrich ──► validate ─
 | `enrich` | What kind of spending is this? | free for known merchants |
 | `validate` | Does the arithmetic hold? | free |
 | `await_review` | What does a person say? | free, the thread pauses here |
-| `persist` | Save, and keep what was learned | free |
+| `persist` | Is this worth saving unattended? | free |
 
 Three things fall out of that shape:
 
@@ -54,6 +54,10 @@ Three things fall out of that shape:
 - **`validate` can send work back.** A total that does not reconcile against
   its own subtotal and tax goes back to `escalate` with just the suspect
   fields, at most twice.
+- **Two things send a receipt to a person.** A blocking defect is one. The
+  other is confidence: it is field coverage weighted by where each value came
+  from, so a domain match counts for more than a model guess, and under 0.55
+  the record is held back even when its sums agree.
 - **The queue *is* the paused computation.** When the automatic options run
   out, `await_review` calls `interrupt()`: LangGraph checkpoints the thread and
   the run ends. Answering resumes that thread, and the human's numbers go
@@ -81,27 +85,48 @@ single-email logic. Here, one code path, batching underneath.
 
 ## Benchmark
 
-Ten generated receipts with known ground truth, five clean layouts, five messy
-ones with decoy dollar values and indirect labels.
+Sixteen layouts, generated with known ground truth. A receipt's subtotal is the
+sum of its own line items and its total is built from that subtotal, so the
+arithmetic holds by construction and a layout that breaks it has to say so.
+Each layout declares the path it should take and the issues it should raise, so
+the harness scores routing, not only values.
 
 ```bash
 cd backend
-./.venv/bin/python tests/eval_graph.py            # full graph
-./.venv/bin/python tests/eval_graph.py --no-llm   # rules only, free, instant
+./.venv/bin/python tests/evals/run.py                    # everything
+./.venv/bin/python tests/evals/run.py --only quality     # accuracy and routing
+./.venv/bin/python tests/evals/run.py --no-llm           # rules only, free, instant
+./.venv/bin/python tests/evals/run.py --layout table_dot_leader   # one layout
 ```
 
-| | Vendor | Amount | Tax | All three | API requests | Time |
-|---|---|---|---|---|---|---|
-| v1 `regex_only` | 0% | 10% | 100% | 0% | 0 | 0.01s |
-| v1 `individual_ai` | 100% | 100% | 100% | 100% | 10 | 168.3s |
-| v1 `batch_ai` | 100% | 100% | 100% | 100% | 1 | 13.5s |
-| **v2 rules only** | **100%** | 50% | 100% | 50% | **0** | **0.05s** |
-| **v2 graph** | **100%** | **100%** | **100%** | **100%** | **2** | **7.45s** |
+41 receipts, model available:
 
-The rules-only row is the interesting one: v2 identifies every vendor with no
-API call at all, because sender-domain resolution moved ahead of the model
-instead of behind it. The five receipts it can't finish are flagged, not
-guessed at.
+| tier | receipts | values correct | threshold |
+|---|---|---|---|
+| `rules_only` | 21 | 100% | 100% |
+| `escalate` | 11 | 100% | 75% |
+| `review` | 8 | 100% | 60% |
+| `skipped` | 1 | 100% | 100% |
+
+Routing 100%, coverage 16/16 layouts, 32 auto-saved, 8 flagged, 1.26s per
+receipt. Thresholds differ by tier because a layout the rules should settle has
+no excuse, and one written to defeat them does.
+
+**46 model asks became 9 HTTP requests.** Four layouts finish with none at all:
+`table_dot_leader`, `flattened_html_cells`, `receipt_header_block` and
+`forwarded_thread`, 15 of the 41 receipts, resolved entirely by patterns.
+
+Scoring per layout rather than as one average is the point. A regression
+localises to the layout that caused it instead of moving an aggregate by two
+points, and a layout that stops being sampled fails the run rather than
+disappearing quietly.
+
+Two limits the corpus measures rather than hides. `_MONEY` requires two decimal
+places, so `1.234,56 EUR` and a zero-decimal yen amount always escalate and are
+then recorded as USD, reported as `non_usd_recorded_as_usd` instead of failed.
+And `validate` reconciles subtotal plus tax against the total without modelling
+shipping, discounts or tips, so `shipping_and_discount` asserts that drift as
+its *expected* issue and the gap stays visible.
 
 ## What the data is for
 
@@ -228,32 +253,71 @@ defaults to `8020`. Either add
 backend/
   app/
     graph/          state, node implementations, wiring, patterns, vendor registry
+    demo_data/      the sample corpus: receipts.py (the data model),
+                    layouts.py (16 renderers plus what each one proves),
+                    corpus.py (assembly, recurring charges, planted duplicates)
     insights/       recurring charges, anomalies, statements, tax, exports
     ingest/gmail.py Gmail fetch and body flattening
     store/          Firestore client, transaction repository, account store
+    advisor.py      spending questions, answered from the aggregated ledger
     llm.py          Gemini access, request coalescing, rate gate
+    notifications.py findings turned into a feed
     sync.py         run tracking and the SSE progress stream
     diagnostics.py  readiness checks for every external dependency
     api/routes.py   HTTP surface
   tests/
-    eval_graph.py   the accuracy benchmark
+    eval_graph.py   the lighter accuracy benchmark
     check_setup.py  readiness report
     evals/          quality, latency, robustness, injection, security
 frontend/
-  src/app/          overview, transactions, statement, insights, review, activity, settings
-  src/components/   shell, charts, table, shared primitives
-docs/               pipeline diagram and eval documentation
+  src/app/          home, dashboard, transactions, statement, insights,
+                    advisor, review, notifications, settings
+  src/components/   shell, top bar, landing, graph diagram, charts, table,
+                    theme provider, shared primitives
+  src/lib/i18n/     every string the app can show, one file per locale
+  scripts/          translate.mjs, generates a locale file from en.json
+docs/               pipeline diagram, eval documentation, fixture rewrite notes
 ```
+
+## Interface
+
+**Localised.** Every string the site shows lives in `src/lib/i18n`, keyed the
+same way in each locale, so "what is untranslated?" is a diff rather than a hunt
+through the UI. That includes the parse traces: nodes emit a key and its values
+beside the English sentence, and `triage` returns a reason code rather than
+prose, so a trace reads in the reader's language and stays countable. `Intl`
+handles dates, currency and plural forms. `scripts/translate.mjs` drafts a new
+locale from `en.json` and rejects any translation that dropped a placeholder;
+the output is committed so a speaker can correct it in a diff.
+
+**Two themes.** Light is not the dark theme lightened. The dark one earns depth
+from a lit top edge and a deep shadow on near-black, and neither survives on
+paper, so light drops both and uses a warm ground with hairline rules instead.
+Same geometry, same type, same accents, different material.
+
+**The advisor** answers questions about spending from the aggregated ledger,
+totals by month, category and merchant. It never receives a record row by row
+and never an email body. The prompt states it is not a licensed financial
+advisor and lists what it declines; the page renders that disclaimer too,
+because a guardrail that depends on the model remembering is not a guardrail.
+
+**The sample inbox writes nothing.** Demo sessions route to an in-process
+backend, so a visitor trying the app never touches Firestore, and the data dies
+with the session. Signing in with Google replaces a demo session rather than
+requiring a sign-out first.
 
 ## Front end
 
-The visual language is **ported from v1's `styles.css`, not reinvented**, same
+The dark theme is **ported from v1's `styles.css`, not reinvented**, same
 `#060a14` base, same panel treatment (gradient fill, `inset 0 1px 0` top
 highlight, `0 20px 60px` shadow, 20px radius, lit hairline across the top
 edge), same 44px buttons with the blue gradient and inset highlight, same 52px
 inputs with the 4px focus ring, same 18/24px table padding and uppercase
 letter-spaced headers, same Inter / IBM Plex Mono / Space Grotesk trio. What
 changed is the information architecture, not the look.
+
+Those treatments are tokenised rather than hardcoded, which is what lets a
+light theme exist without imitating them. See **Interface** above.
 
 **Brand.** The mark is a square with a triangular notch struck into each side, one closed path, four-fold symmetric, flat, no gradient. It depicts nothing.
 That is deliberate: the reference points are Porsche, YSL and Chase, none of
