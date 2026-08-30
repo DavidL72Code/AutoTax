@@ -24,6 +24,13 @@ MAX_MESSAGE = 2000
 MAX_HISTORY_TURNS = 8
 MAX_TURN_CHARS = 800
 
+# A merchant name is the one piece of attacker-influenced text that reaches this
+# prompt: it was read out of an email nobody vetted. Nothing upstream bounds it,
+# so bound it here. The model ignores instructions smuggled in a merchant name,
+# which was tested, but an unbounded one still costs tokens and can crowd out
+# the real figures.
+MAX_VENDOR_CHARS = 60
+
 # What it will talk about, and what it will hand back. Kept as data rather than
 # buried in the prompt so the boundary is reviewable.
 IN_SCOPE = (
@@ -53,6 +60,13 @@ def _parse(value: Any) -> Optional[date]:
         return datetime.fromisoformat(str(value)[:10]).date()
     except (TypeError, ValueError):
         return None
+
+
+def _short(name: str) -> str:
+    """One line, bounded. A merchant name spanning several lines would read as
+    structure in a prompt that is parsed by layout."""
+    flat = " ".join(str(name).split())
+    return flat[:MAX_VENDOR_CHARS] if len(flat) <= MAX_VENDOR_CHARS else flat[:MAX_VENDOR_CHARS] + "..."
 
 
 def spend_summary(rows: list[dict[str, Any]], today: Optional[date] = None) -> str:
@@ -95,7 +109,7 @@ def spend_summary(rows: list[dict[str, Any]], today: Optional[date] = None) -> s
     lines.append("")
     lines.append("Largest merchants:")
     for name, value in sorted(by_vendor.items(), key=lambda kv: -kv[1])[:8]:
-        lines.append(f"  {name}: ${value:,.2f}")
+        lines.append(f"  {_short(name)}: ${value:,.2f}")
 
     if len(months) > 1:
         lines.append("")
@@ -147,5 +161,17 @@ def build_prompt(message: str, history: list[dict[str, Any]], summary: str) -> s
     ])
 
 
+def _strip_speaker(reply: str) -> str:
+    """The prompt ends with `Advisor:` to cue the turn, and the model sometimes
+    answers by repeating it. Harmless to the meaning, but it reads as a leaked
+    prompt to anyone who sees it."""
+    text = reply.strip()
+    for label in ("Advisor:", "RA Advisor:", "Assistant:"):
+        if text.startswith(label):
+            text = text[len(label) :].lstrip()
+    return text
+
+
 async def answer(message: str, history: list[dict[str, Any]], rows: list[dict[str, Any]]) -> str:
-    return await llm.ask(build_prompt(message, history, spend_summary(rows)), max_tokens=600)
+    reply = await llm.ask(build_prompt(message, history, spend_summary(rows)), max_tokens=600)
+    return _strip_speaker(reply)
