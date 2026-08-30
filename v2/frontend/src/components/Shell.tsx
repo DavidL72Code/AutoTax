@@ -16,7 +16,7 @@ type Item = { href: string; key: string; badge?: boolean };
 /* Five destinations, each doing one job. "Overview" and "Activity" used to be
    two pages describing the same run from different angles; they are now one
    dashboard. */
-const SECTIONS: { key: string; items: Item[] }[] = [
+const sections = (isDemo: boolean): { key: string; items: Item[] }[] => [
   {
     key: "nav.workspace",
     items: [
@@ -29,6 +29,7 @@ const SECTIONS: { key: string; items: Item[] }[] = [
     key: "nav.money",
     items: [
       { href: "/transactions", key: "nav.transactions" },
+      ...(isDemo ? [{ href: "/inbox", key: "nav.sampleInbox" }] : []),
       { href: "/statement", key: "nav.statement" },
       { href: "/insights", key: "nav.insights" },
       { href: "/advisor", key: "nav.advisor" },
@@ -93,7 +94,7 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
         </div>
 
         <nav className="px-3">
-          {SECTIONS.map((section) => (
+          {sections(Boolean(session?.is_demo)).map((section) => (
             <div key={section.key} className="mb-5">
               <div className="eyebrow px-3 pb-2">{t(section.key)}</div>
               <div className="space-y-1">

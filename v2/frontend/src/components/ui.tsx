@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ReactNode } from "react";
 
 /* Primitives carry the geometry and the polish, so no page has to hand-roll a
@@ -165,5 +166,17 @@ export function GmailLink({ emailId, connected }: { emailId?: string | null; con
     >
       Open in Gmail →
     </a>
+  );
+}
+
+/* The sample-inbox counterpart to GmailLink. A generated receipt has no Gmail
+   message to open, so it links to the email the server wrote instead, which is
+   what lets a demo visitor check a figure at all. */
+export function SampleEmailLink({ emailId, isDemo, label }: { emailId?: string | null; isDemo: boolean; label: string }) {
+  if (!isDemo || !emailId) return null;
+  return (
+    <Link href={`/inbox#${encodeURIComponent(emailId)}`} className="text-[0.82rem] text-accent hover:underline">
+      {label} →
+    </Link>
   );
 }

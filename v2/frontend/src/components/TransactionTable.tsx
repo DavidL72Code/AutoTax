@@ -3,7 +3,7 @@
 import { Fragment, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { useT, useTrace } from "@/lib/i18n";
-import { Button, Field, GmailLink, Pill, StepScore, Th, inputClass } from "@/components/ui";
+import { Button, Field, GmailLink, Pill, SampleEmailLink, StepScore, Th, inputClass } from "@/components/ui";
 import { Transaction } from "@/lib/api";
 import { money, shortDate } from "@/lib/format";
 
@@ -65,10 +65,15 @@ export function Trace({ row }: { row: Transaction }) {
             </li>
           ))}
         </ul>
-        {session?.gmail_connected && row.email_id ? (
+        {row.email_id && (session?.gmail_connected || session?.is_demo) ? (
           <div className="mt-6">
             <div className="eyebrow mb-2">{t("transactions.theOriginal")}</div>
-            <GmailLink emailId={row.email_id} connected />
+            <GmailLink emailId={row.email_id} connected={Boolean(session?.gmail_connected)} />
+            <SampleEmailLink
+              emailId={row.email_id}
+              isDemo={Boolean(session?.is_demo)}
+              label={t("inbox.viewSource")}
+            />
           </div>
         ) : null}
         {row.issues.length ? (

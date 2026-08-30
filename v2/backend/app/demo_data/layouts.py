@@ -326,7 +326,7 @@ REGISTRY: tuple[Layout, ...] = (
     ),
     Layout(
         name="eur_comma_decimal", render=eur_comma_decimal, expected_path=Path.ESCALATE, weight=1.0,
-        tests="1.234,56 EUR, period and comma inverted", tolerate_currency_loss=True,
+        tests="1.234,56 EUR, period and comma inverted", tolerate_currency_loss=True, eval_only=True,
     ),
     Layout(
         name="jpy_no_decimals", render=jpy_no_decimals, expected_path=Path.ESCALATE, weight=1.0,

@@ -335,5 +335,16 @@
   "review.queueEmpty": "La cola está vacía",
   "review.queueEmptyBody": "Todos los recibos cuadraron solos: un comercio, un total positivo y un impuesto que suma.",
   "review.resumed": "Se reanudó el hilo en pausa. Revalidado y guardado como {status}.",
-  "common.syncAgain": "Sincronizar de nuevo"
+  "common.syncAgain": "Sincronizar de nuevo",
+  "nav.sampleInbox": "Bandeja de ejemplo",
+  "inbox.title": "Bandeja de ejemplo",
+  "inbox.description": "Los correos generados que procesó esta ejecución de ejemplo. Cada cifra del libro salió de uno de ellos, así que puedes comprobar cualquiera contra su origen.",
+  "inbox.empty": "Aún no hay ejecución de ejemplo",
+  "inbox.emptyBody": "Ejecuta la bandeja de ejemplo y aquí aparecerán los correos que procesó.",
+  "inbox.viewSource": "Ver el correo",
+  "inbox.parsedAs": "Procesado como",
+  "inbox.notParsed": "No registrado como compra",
+  "inbox.count": "{count} correos",
+  "inbox.close": "Cerrar",
+  "inbox.generated": "Generado por el servidor para esta demo. No se leyó ninguna bandeja real."
 }

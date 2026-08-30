@@ -80,6 +80,16 @@ export const MODEL_UNAVAILABLE = "model_unavailable";
 export const blockedOnModel = (row: { blocked_on_model?: boolean; issues: string[] }) =>
   row.blocked_on_model ?? false;
 
+export type SampleEnvelope = {
+  id: string;
+  sender: string | null;
+  subject: string | null;
+  date: string | null;
+  preview: string;
+};
+
+export type SampleEmail = SampleEnvelope & { body: string };
+
 export type ReviewQueue = {
   checkpointer: string;
   items: (Transaction & { live: boolean; source?: ReviewSource | null })[];
@@ -268,6 +278,12 @@ export const api = {
     request<Statement>(`/api/statement${month ? `?month=${month}` : ""}`),
   taxSummary: (year?: number) =>
     request<TaxSummary>(`/api/tax-summary${year ? `?year=${year}` : ""}`),
+  /** The generated emails a sample run parsed, so a demo visitor can check a
+      figure against its source. Empty on a real account, whose mail is in
+      Gmail. */
+  sampleInbox: () => request<{ items: SampleEnvelope[] }>("/api/demo/inbox"),
+  sampleEmail: (emailId: string) =>
+    request<SampleEmail>(`/api/demo/inbox/${encodeURIComponent(emailId)}`),
   advisorAsk: (message: string, history: { role: "user" | "assistant"; content: string }[]) =>
     request<{ reply: string; receipts_considered: number }>("/api/advisor/chat", {
       method: "POST",

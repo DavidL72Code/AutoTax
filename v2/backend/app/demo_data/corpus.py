@@ -169,8 +169,12 @@ def _pick_for_demo(rng: random.Random) -> Layout:
     return rng.choices(pool, weights=weights, k=1)[0]
 
 
-def demo_cases(count: int = 10, seed: Optional[int] = 7) -> list[dict]:
-    """Receipts with their ground truth and expected routing attached."""
+def demo_cases(count: int = 10, seed: Optional[int] = 7, *, demo: bool = False) -> list[dict]:
+    """Receipts with their ground truth and expected routing attached.
+
+    `demo=True` draws the way the sample inbox should: eval-only layouts are
+    excluded and the awkward ones are weighted for a plausible inbox. The eval
+    calls it without that and gets the full registry."""
     rng = random.Random(seed)
     today = datetime.utcnow()
     pool = _ONE_OFF + [(v, d, c, a) for v, d, c, a, _ in _RECURRING]
@@ -180,14 +184,20 @@ def demo_cases(count: int = 10, seed: Optional[int] = 7) -> list[dict]:
         when = today - timedelta(days=rng.randint(0, 30))
         return _case(_receipt(rng, vendor, domain, when, rng.uniform(ceiling * 0.2, ceiling), layout), layout)
 
-    cases = [make(pick(rng), i) for i in range(count)]
-    cases = _ensure_every_layout(cases, rng, lambda layout: make(layout, rng.randrange(len(pool))))
+    choose = _pick_for_demo if demo else pick
+    cases = [make(choose(rng), i) for i in range(count)]
+    cases = _ensure_every_layout(
+        cases, rng, lambda layout: make(layout, rng.randrange(len(pool))), demo=demo
+    )
     cases.sort(key=lambda case: case["date"])
     return cases
 
 
 def demo_emails(count: int = 10, seed: Optional[int] = None) -> list[dict]:
-    return [to_graph_email(case) for case in demo_cases(count, seed)]
+    """The short sample inbox. Drawn as a demo, so a zero-decimal yen receipt
+    recorded as dollars stays in the eval where it is measured, rather than
+    telling a visitor they spent $57,862 at an airline."""
+    return [to_graph_email(case) for case in demo_cases(count, seed, demo=True)]
 
 
 def history_cases(months: int = 6, seed: Optional[int] = 11) -> list[dict]:

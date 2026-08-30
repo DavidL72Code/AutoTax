@@ -4,14 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/components/AppState";
 import { PageHeader } from "@/components/Shell";
 import { useIssueText } from "@/components/TransactionTable";
-import { Button, Empty, Field, GmailLink, Panel, Pill, StepScore, inputClass } from "@/components/ui";
+import { Button, Empty, Field, GmailLink, Panel, Pill, SampleEmailLink, StepScore, inputClass } from "@/components/ui";
 import { ReviewQueue, ReviewSource, Transaction, api, blockedOnModel } from "@/lib/api";
 import { useT, useTrace } from "@/lib/i18n";
 import { money, shortDate } from "@/lib/format";
 
 type Item = Transaction & { live: boolean; source?: ReviewSource | null };
 
-function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (message: string) => void; gmailConnected: boolean }) {
+function ReviewItem({ row, onDone, gmailConnected, isDemo }: { row: Item; onDone: (message: string) => void; gmailConnected: boolean; isDemo: boolean }) {
   const { t } = useT();
   const trace = useTrace();
   const issueText = useIssueText();
@@ -118,6 +118,7 @@ function ReviewItem({ row, onDone, gmailConnected }: { row: Item; onDone: (messa
               </div>
               <div className="mt-2">
                 <GmailLink emailId={row.email_id} connected={gmailConnected} />
+                <SampleEmailLink emailId={row.email_id} isDemo={isDemo} label={t("inbox.viewSource")} />
               </div>
             </div>
           ) : (
@@ -252,7 +253,7 @@ export default function ReviewPage() {
       ) : null}
 
       {queue.items.length ? (
-        queue.items.map((row) => <ReviewItem key={row.id} row={row as Item} onDone={done} gmailConnected={Boolean(session?.gmail_connected)} />)
+        queue.items.map((row) => <ReviewItem key={row.id} row={row as Item} onDone={done} gmailConnected={Boolean(session?.gmail_connected)} isDemo={Boolean(session?.is_demo)} />)
       ) : (
         <Panel flush>
           <Empty title={t("review.queueEmpty")}>{t("review.queueEmptyBody")}</Empty>

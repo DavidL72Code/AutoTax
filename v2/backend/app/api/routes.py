@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, Cookie, HTTPException, Query, Request, Resp
 from fastapi.responses import PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from .. import advisor, auth, llm, notifications, sync
+from .. import advisor, auth, llm, notifications, sample_inbox, sync
 from ..config import settings
 from ..graph import persistence, runner
 from ..graph.state import Email
@@ -61,6 +61,7 @@ async def sign_out(response: Response, receipts_session: Optional[str] = Cookie(
     leaving = await auth.resolve_session(receipts_session)
     if leaving and str(leaving.get("user_id") or "").startswith(DEMO_PREFIX):
         repository.forget_demo(str(leaving["user_id"]))
+        sample_inbox.forget(str(leaving["user_id"]))
     await auth.end_session(receipts_session)
     response.delete_cookie(auth.SESSION_COOKIE, path="/")
     return {"signed_in": False}
@@ -525,6 +526,7 @@ async def start_demo(
     # stacked a second copy of triage, extract and resolve onto the trace.
     if user:
         repository.forget_demo(str(user["user_id"]))
+        sample_inbox.forget(str(user["user_id"]))
 
     demo_id = f"demo_{secrets.token_hex(6)}"
     token = await auth.link_google_account(f"{demo_id}@sample.local", "", user_id=demo_id)
@@ -544,6 +546,12 @@ async def start_demo(
     # With history the sample inbox can demonstrate what the ledger *learns*, # recurring charges, a price rise, a duplicate billing. months=0 falls back
     # to the quick ten-receipt set.
     emails: list[Email] = history_emails(months) if months else demo_emails()
+
+    # Held so the demo can show its own workings. A real receipt links to Gmail;
+    # a generated one has nowhere to link to, and a visitor who cannot open the
+    # email cannot check a single figure they are shown.
+    sample_inbox.put(str(user["user_id"]), [dict(email) for email in emails])
+
     run = sync.start(user["user_id"], user_ids=user["user_ids"], emails=emails)
     return run.snapshot()
 
@@ -604,3 +612,32 @@ async def advisor_chat(
         raise HTTPException(status_code=503, detail=f"The model could not be reached ({type(exc).__name__}).")
 
     return {"reply": reply, "receipts_considered": len(rows)}
+
+
+# ── the sample inbox ────────────────────────────────────────────────────────
+
+
+def _demo_user(user: dict) -> str:
+    """Only a sample session has a sample inbox. A real account's mail lives in
+    Gmail and is never held here."""
+    user_id = str(user.get("user_id") or "")
+    if not user_id.startswith(DEMO_PREFIX):
+        raise HTTPException(status_code=404, detail="No sample inbox on this account")
+    return user_id
+
+
+@router.get("/demo/inbox")
+async def sample_inbox_list(receipts_session: Optional[str] = Cookie(default=None)):
+    """Envelopes for every generated email the current sample run parsed."""
+    user = await _require_user(receipts_session)
+    return {"items": sample_inbox.listing(_demo_user(user))}
+
+
+@router.get("/demo/inbox/{email_id}")
+async def sample_inbox_email(email_id: str, receipts_session: Optional[str] = Cookie(default=None)):
+    """One generated email, in full, so a figure can be checked against it."""
+    user = await _require_user(receipts_session)
+    email = sample_inbox.get(_demo_user(user), email_id)
+    if not email:
+        raise HTTPException(status_code=404, detail="No such sample email")
+    return email
