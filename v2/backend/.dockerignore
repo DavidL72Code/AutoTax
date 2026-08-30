@@ -1,0 +1,22 @@
+# The image installs its own dependencies; copying a local virtualenv in would
+# add 264MB and, worse, macOS-built binaries into a Linux image.
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+
+# Local run artefacts: the JSON store, sqlite checkpoints, anything written at
+# run time. None of it belongs in a build.
+data/
+*.sqlite
+*.db
+
+# Never in an image.
+.env
+.env.*
+*credentials*.json
+*token*.json
+
+.pytest_cache/
+.ruff_cache/

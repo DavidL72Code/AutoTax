@@ -12,13 +12,17 @@ services:
   #
   # v2 uses Firestore alone, so DATABASE_URL and the FIREBASE_WEB_* keys below
   # go unread. They are left in place for v1's sake.
+  #
+  # Docker rather than the python runtime, to match how this service is already
+  # deployed. On a Docker service the dashboard's build and start commands are
+  # ignored: the Dockerfile decides, so pointing v1's service at v2 means
+  # changing the Dockerfile path, not the start command.
   - type: web
     name: receipts-v2-api
-    env: python
+    runtime: docker
     plan: free
-    rootDir: v2/backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./v2/backend/Dockerfile
+    dockerContext: ./v2/backend
     envVars:
       - key: APP_ENV
         value: production
