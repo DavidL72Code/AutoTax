@@ -82,6 +82,16 @@ SHIPPING_ONLY = re.compile(
     r"delivered|shipment)\b",
     re.IGNORECASE,
 )
+# Matched against the subject only, never the body. Ordinary receipts mention
+# refunds constantly ("30-day refund policy", "non-refundable"), so body text is
+# no evidence at all; what the merchant put in the subject line is.
+REFUND_SIGNAL = re.compile(
+    r"\brefund(ed)?\b"
+    r"|\breturn (was |has been )?(accepted|processed|received|complete)"
+    r"|\bcredit(ed)? (back|to your)\b"
+    r"|\bmoney back\b",
+    re.IGNORECASE,
+)
 
 
 def money(raw: str) -> Optional[float]:

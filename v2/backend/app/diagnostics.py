@@ -44,7 +44,7 @@ async def _firestore() -> dict[str, Any]:
                       "Check the service account has Cloud Datastore User on this project")
 
 
-async def _gemini() -> dict[str, Any]:
+async def _gemini(probe: bool = True) -> dict[str, Any]:
     if not llm.available():
         return _check(
             "Gemini",
@@ -52,12 +52,23 @@ async def _gemini() -> dict[str, Any]:
             "No API key, parsing runs on rules alone (vendors resolve, awkward totals do not)",
             "Set GOOGLE_API_KEY in .env",
         )
+    if not probe:
+        # Reporting configuration costs nothing. Proving the model answers costs
+        # a call against a shared quota, and it blocks for as long as the model
+        # takes, which is exactly when a degraded provider is the thing being
+        # diagnosed. So the live call is asked for, not assumed.
+        return _check("Gemini", OK, f"{settings.gemini_model} configured, not probed",
+                      "Add ?probe=1 to make a live call")
     try:
         verdict = await asyncio.wait_for(
             llm.TRIAGE.submit(
                 {"sender": "receipts@starbucks.com", "subject": "Your receipt", "snippet": "Total: $4.15"}
             ),
-            timeout=45,
+            # Was 45s. A readiness check that hangs for most of a minute has
+            # stopped being a readiness check: the rate gate can add seconds
+            # before the request even leaves, and a provider returning 429s
+            # burns the whole budget before answering.
+            timeout=12,
         )
         if verdict is None:
             return _check("Gemini", WARN, f"{settings.gemini_model} answered but the response did not parse")
@@ -114,11 +125,11 @@ def _fernet() -> dict[str, Any]:
                       "Regenerate it; note that existing stored tokens will need reconnecting")
 
 
-async def report(serving_port: int | None = None) -> dict[str, Any]:
+async def report(serving_port: int | None = None, *, probe_model: bool = True) -> dict[str, Any]:
     checks = [
         _check("Storage", OK, f"Using the {repository.describe()} backend"),
         await _firestore(),
-        await _gemini(),
+        await _gemini(probe_model),
         _fernet(),
         *_oauth(serving_port),
     ]

@@ -73,7 +73,10 @@ def spend_summary(rows: list[dict[str, Any]], today: Optional[date] = None) -> s
     """Aggregates only. No vendor-level line items, no dates of individual
     purchases, no ids, the shapes of the spending, not the receipts."""
     today = today or datetime.now(timezone.utc).date()
-    usable = [r for r in rows if float(r.get("amount") or 0) > 0]
+    # Not `> 0`: a refund is negative, and dropping it would report the spend it
+    # cancelled as though it stood. Zero and missing amounts are still excluded,
+    # since they carry no information about spending either way.
+    usable = [r for r in rows if float(r.get("amount") or 0) != 0]
     if not usable:
         return "The ledger is empty. No receipts have been parsed yet."
 
@@ -104,7 +107,10 @@ def spend_summary(rows: list[dict[str, Any]], today: Optional[date] = None) -> s
         "By category:",
     ]
     for name, value in sorted(by_category.items(), key=lambda kv: -kv[1]):
-        lines.append(f"  {name}: ${value:,.2f} ({value / total * 100:.0f}%)")
+        # A share of the total is only meaningful when there is a total. Refunds
+        # can net it to zero, and a percentage of nothing is a crash.
+        share = f" ({value / total * 100:.0f}%)" if total else ""
+        lines.append(f"  {name}: ${value:,.2f}{share}")
 
     lines.append("")
     lines.append("Largest merchants:")

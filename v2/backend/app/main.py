@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import ratelimit
 from .api.routes import router
 from .config import BACKEND, settings
 from .diagnostics import report
@@ -41,9 +42,18 @@ app.include_router(router)
 
 
 @app.get("/api/health")
-async def health(port: int | None = None):
-    """Readiness of every external dependency. Never returns a secret value."""
-    return await report(port)
+async def health(request: Request, port: int | None = None, probe: bool = False):
+    """Readiness of every external dependency. Never returns a secret value.
+
+    `probe=1` makes a live model call. It is off by default because this route
+    is unauthenticated: a probe on every request meant anyone could spend the
+    model quota by polling a health check, and the call blocks for as long as a
+    degraded provider takes to answer, which is when you most want a reply.
+    """
+    if probe:
+        ratelimit.allow("health", ratelimit.client_key(request), 5, 300,
+                        "Too many live probes, try again in a few minutes.")
+    return await report(port, probe_model=probe)
 
 
 # ── the front end ───────────────────────────────────────────────────────────

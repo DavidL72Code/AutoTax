@@ -94,6 +94,10 @@ ROBUSTNESS: list[Case] = [
         ),
         "expect_receipt": True,
         "vendor": "Best Buy",
+        # The note below was the whole assertion for a long time, and prose
+        # asserts nothing: the refund was banked at +129.99 and the case still
+        # passed. The amount is what makes it a test.
+        "amount": -129.99,
         "note": "A refund is a real money movement; it must not be filed as fresh spend of the same size.",
     },
     {

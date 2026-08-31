@@ -74,6 +74,11 @@ class ReceiptState(TypedDict, total=False):
     steps: Annotated[list[Step], append_steps]
 
     is_receipt: bool
+    # A refund is a receipt: real money moved, and the ledger should show it.
+    # What it is not is spend. The draft keeps the positive figures the email
+    # states, so `validate` reconciles the same arithmetic as anything else, and
+    # the sign is applied once, in `as_record`.
+    is_refund: bool
     triage_reason: str
     missing: list[str]
     issues: list[str]
@@ -178,13 +183,31 @@ def new_state(email: Email, user_id: str = "local") -> ReceiptState:
     }
 
 
+def _signed(amount: Any, is_refund: bool) -> Any:
+    """A refund of $129.99 is minus $129.99 in the ledger.
+
+    Filed positive it read as a second purchase the same size as the one being
+    undone, which doubles the apparent spend instead of cancelling it. The sign
+    goes on here rather than in the draft so `validate` still reconciles against
+    the positive figures the email actually states.
+    """
+    if not is_refund or amount is None:
+        return amount
+    try:
+        return -abs(float(amount))
+    except (TypeError, ValueError):
+        return amount
+
+
 def as_record(state: ReceiptState) -> dict[str, Any]:
     draft = state.get("draft") or {}
     email = state.get("email") or {}
+    is_refund = bool(state.get("is_refund"))
     return {
         "email_id": email.get("id"),
         "vendor": draft.get("vendor"),
-        "amount": draft.get("amount"),
+        "amount": _signed(draft.get("amount"), is_refund),
+        "is_refund": is_refund,
         "tax": draft.get("tax"),
         "subtotal": draft.get("subtotal"),
         "currency": draft.get("currency", "USD"),

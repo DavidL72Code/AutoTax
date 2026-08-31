@@ -24,13 +24,32 @@ async def triage(state: ReceiptState) -> dict:
 
     purchase = bool(patterns.PURCHASE_SIGNAL.search(body) or patterns.PURCHASE_SIGNAL.search(subject))
     promo = bool(patterns.PROMO_SUBJECT.search(subject) or patterns.PROMO_BODY.search(body))
-    shipping = bool(patterns.SHIPPING_ONLY.search(subject)) and not purchase
+
+    # These two are read from the subject alone, and the subject is the point:
+    # it is what the merchant says the email is *about*, where the body is
+    # whatever else they chose to restate. A delivery notice quotes the order
+    # total; a refund confirmation quotes the original figures. Both look like
+    # purchases in the body and neither is one.
+    #
+    # `shipping` used to carry `and not purchase`, which any body mentioning
+    # "Order total" defeated, so "Your package is out for delivery" was banked
+    # as a second purchase of money already spent. It is unconditional now,
+    # including over purchase wording in the subject, because "Your order
+    # #12345 has shipped" is still a shipping notice. The trade is deliberate:
+    # skipping a real receipt leaves a visible gap, while inventing spend
+    # corrupts every total that reads it and shows nothing.
+    shipping = bool(patterns.SHIPPING_ONLY.search(subject))
+    refund = bool(patterns.REFUND_SIGNAL.search(subject))
     money = bool(_HAS_MONEY.search(body))
 
-    if purchase and not promo:
-        return _decision(state, True, "purchase_signal", started, "regex")
+    # Both ahead of the purchase branch, for the reason above: each one restates
+    # figures that would otherwise read as fresh spend.
+    if refund:
+        return _decision(state, True, "refund_confirmed", started, "regex", refund=True)
     if shipping:
         return _decision(state, False, "shipping_only", started, "regex")
+    if purchase and not promo:
+        return _decision(state, True, "purchase_signal", started, "regex")
     if promo and not purchase:
         return _decision(state, False, "marketing", started, "regex")
 
@@ -66,6 +85,7 @@ async def triage(state: ReceiptState) -> dict:
 REASONS = {
     "purchase_signal": "purchase signal in body",
     "shipping_only": "shipping status, not a purchase",
+    "refund_confirmed": "refund, recorded as money returned",
     "marketing": "marketing copy without purchase evidence",
     "amount_only": "amount present but no explicit purchase wording",
     "model_unavailable": "model unavailable, used amount heuristic",
@@ -78,10 +98,12 @@ REASONS = {
 }
 
 
-def _decision(state: ReceiptState, is_receipt: bool, reason: str, started: float, how: str) -> dict:
+def _decision(state: ReceiptState, is_receipt: bool, reason: str, started: float, how: str,
+              *, refund: bool = False) -> dict:
     why = REASONS.get(reason, reason)
     return {
         "is_receipt": is_receipt,
+        "is_refund": refund,
         "triage_reason": why,
         "status": "pending" if is_receipt else "skipped",
         "steps": [step("triage", f"{'receipt' if is_receipt else 'not a receipt'}, {why} [{how}]", started,
