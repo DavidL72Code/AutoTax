@@ -301,6 +301,119 @@ async def _api_boundaries() -> list[dict[str, Any]]:
     return checks
 
 
+async def _abuse_limits() -> list[dict[str, Any]]:
+    """What stops one visitor spending everyone else's quota, and what stops a
+    sign-in flow started elsewhere from landing in this browser.
+
+    The model quota is shared and finite. Before these limits existed, the
+    sample run was reachable with no account and no ceiling, and a handful of
+    demo visits was enough to exhaust a day of it.
+    """
+    import httpx
+    from httpx import ASGITransport
+
+    from app import ratelimit
+    from app.api.routes import DEMO_EMAILS_MAX, DEMO_HOURLY_RECEIPTS
+    from app.main import app
+
+    checks: list[dict[str, Any]] = []
+    transport = ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # The sample run is the only endpoint that spends the quota with no
+        # account behind it, so it is the only one where the address is the
+        # identity worth counting.
+        ratelimit.forget("demo")
+        codes = [(await client.post("/api/demo?months=0")).status_code for _ in range(5)]
+        checks.append(
+            _check(
+                "the sample run is rate limited per address",
+                429 in codes,
+                f"five attempts returned {codes}",
+            )
+        )
+
+        # A ceiling that one query parameter can raise is not a ceiling.
+        ratelimit.forget("demo")
+        oversized = await client.post("/api/demo?limit=200")
+        checks.append(
+            _check(
+                "the sample run size is bounded",
+                oversized.status_code == 422,
+                f"limit=200 returns {oversized.status_code} against a cap of "
+                f"{DEMO_EMAILS_MAX} (422 expected)",
+            )
+        )
+
+        # Counting runs would let one caller ask for a run ten times the usual
+        # length and spend ten times the quota against the same single unit.
+        ratelimit.forget("demo")
+        big = small = 0
+        try:
+            while True:
+                ratelimit.budget("demo", DEMO_HOURLY_RECEIPTS, 3600, "full", cost=DEMO_EMAILS_MAX)
+                big += 1
+        except Exception:
+            pass
+        ratelimit.forget("demo")
+        try:
+            while True:
+                ratelimit.budget("demo", DEMO_HOURLY_RECEIPTS, 3600, "full", cost=1)
+                small += 1
+        except Exception:
+            pass
+        ratelimit.forget("demo")
+        checks.append(
+            _check(
+                "the global sample budget counts receipts, not runs",
+                big * DEMO_EMAILS_MAX == small == DEMO_HOURLY_RECEIPTS,
+                f"{big} runs of {DEMO_EMAILS_MAX} and {small} of 1 both stop at "
+                f"{DEMO_HOURLY_RECEIPTS} receipts/hour",
+            )
+        )
+
+        # Unauthenticated and it allocates, so it needs a ceiling of its own.
+        ratelimit.forget("oauth")
+        auth_codes = [(await client.get("/api/google/auth-url")).status_code for _ in range(12)]
+        checks.append(
+            _check(
+                "sign-in starts are rate limited per address",
+                429 in auth_codes,
+                f"{auth_codes.count(200)} allowed then {auth_codes.count(429)} refused",
+            )
+        )
+
+        # A state held only on the server proves a flow started *here*, not that
+        # it started in *this browser*. Without the second half, someone can
+        # begin a flow, hand the victim the callback URL, and land the victim on
+        # a session for the attacker's Google account.
+        ratelimit.forget("oauth")
+        started = await client.get("/api/google/auth-url")
+        state = started.cookies.get("receipts_oauth_state")
+        replayed = await httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ).get(f"/api/google/callback?code=stolen&state={state}", follow_redirects=False)
+        checks.append(
+            _check(
+                "an OAuth callback is refused without the browser that started it",
+                bool(state) and "connect=failed" in (replayed.headers.get("location") or ""),
+                f"cookieless replay of a valid state -> {replayed.headers.get('location')}",
+            )
+        )
+
+    # Decided at import from the environment, so assert the rule rather than the
+    # route: whatever this run is, docs exist only in development.
+    expected = settings.app_env == "development"
+    checks.append(
+        _check(
+            "the API schema is not published in production",
+            (app.openapi_url is not None) == expected,
+            f"app_env={settings.app_env}, openapi_url={app.openapi_url}",
+        )
+    )
+    return checks
+
+
 async def run() -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     checks += await _prompt_hygiene()
@@ -308,6 +421,7 @@ async def run() -> dict[str, Any]:
     checks += _crypto()
     checks += await _file_permissions()
     checks += await _api_boundaries()
+    checks += await _abuse_limits()
 
     failed = [c for c in checks if not c["ok"]]
     return {

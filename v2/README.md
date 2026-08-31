@@ -8,6 +8,8 @@ still in the repo root and still runs; nothing here touches it.
   model, and what flows through the state
 - **[docs/evals.md](docs/evals.md)**, quality, latency, robustness, injection
   resistance and security, with thresholds
+- **[Security](#security)** below, the threat model, what is stored, and what
+  the 21 automated checks assert
 
 ## What changed and why
 
@@ -136,8 +138,15 @@ surfaced on **Statement** and **Insights**):
 **Recurring-charge detection.** A subscription is a *pattern*, not a category:
 same merchant, steady interval, steady amount. Detected from the ledger rather
 than tagged by hand, with cadence, annualised cost, next expected charge, and
-price changes against the earlier baseline. Personally that answers "what am I
-committed to each year?"; on the business side it is evergreen-vendor tracking.
+price changes. Personally that answers "what am I committed to each year?"; on
+the business side it is evergreen-vendor tracking.
+
+A price rise compares the latest charge against the median of the ones before
+it, so what it reports is "this *just* went up", not a history. That is worth
+stating because the demo fixture got it wrong from the start: it planted the rise
+in the middle of the series, where the new price is already the median, and so
+reported a change of 0.0% no matter how large the rise. Fixed by counting the
+risen charges back from the most recent one.
 
 **Anomalies worth acting on.** Duplicate billing (same merchant, same amount,
 days apart), subscription price rises with the annual delta in dollars, lapsed
@@ -247,6 +256,116 @@ defaults to `8020`. Either add
 `GOOGLE_OAUTH_REDIRECT_URI` at it, or run the API on 8000.
 `tests/check_setup.py` will tell you which way it currently disagrees.
 
+## Security
+
+**The premise: email bodies are attacker controlled.** Anyone can send you a
+message, and that message is fed to a language model and rendered in a browser.
+Every control below either keeps untrusted text away from something privileged,
+or keeps something privileged out of a place untrusted text reaches.
+
+```bash
+cd v2/backend
+./.venv/bin/python tests/evals/run.py --only security
+```
+
+21 checks, run against the real ASGI app with no network. The full table is in
+[docs/evals.md](docs/evals.md#security).
+
+### Where untrusted text goes, and what meets it
+
+| Path | Control |
+|---|---|
+| email body → model prompt | a financial excerpt, not the whole message; `validate` then does arithmetic the model cannot argue with |
+| email body → vendor identity | the sender domain outranks anything in the body, so body text cannot rename a merchant |
+| email body → spreadsheet | a leading `=`, `+`, `-` or `@` in any cell is neutralised before export |
+| email body → browser | rendered as text, never as markup; no `dangerouslySetInnerHTML` anywhere |
+| merchant name → advisor prompt | collapsed to one line and bounded, since nothing upstream bounds it |
+
+The model ignoring an instruction smuggled into a merchant name was tested
+directly, and it does. The bound exists because an unbounded name still costs
+tokens and crowds out the real figures.
+
+### What is stored
+
+Email bodies are not. The ledger keeps extracted fields, the parse trace, and
+the Gmail message id, which is what stops the next sync re-parsing the same
+receipt. Gmail access is read-only (`gmail.readonly`). The refresh token is
+Fernet-encrypted before it is written and deleted on disconnect. Session tokens
+are 256-bit random, stored server side with a 30-day expiry, in an HttpOnly
+`SameSite=Lax` cookie.
+
+The advisor is built from **aggregates**, totals by month, category and
+merchant, never from records row by row. No order numbers, payment methods,
+message ids or individual dates reach its prompt. It is assembled explicitly
+that way so it stays true if v2 ever does store more.
+
+### Tenancy
+
+Every data route refuses an anonymous caller. Reads are scoped to the caller's
+ids; writes check ownership before touching a record. Both are asserted with
+two live accounts rather than argued from the code, because `PATCH` and
+`DELETE /api/transactions/{id}` once had no ownership check at all and returned
+another account's record happily.
+
+### Rate limits
+
+`app/ratelimit.py`. Two kinds, because they answer different questions: `allow`
+is per caller, and `budget` is global, since a per-caller limit does nothing
+against many callers and the model quota is one shared pool.
+
+| Endpoint | Per caller | Global |
+|---|---|---|
+| `POST /demo` | 3 runs / 10 min **per address** | 600 receipts / hour |
+| `POST /sync` | 6 starts / 5 min per user | none |
+| `POST /advisor/chat` | 12 / min per user | 240 / min |
+| `POST /review/{id}` | 60 / min per user | none |
+| `GET /google/auth-url` | 10 / 5 min per address | none |
+
+The sample run is keyed by address, not user, because it mints a fresh identity
+every time and a per-user limit would count to one forever. Its global budget
+counts **receipts rather than runs**, or a caller picking their own `limit`
+spends ten times the quota against the same single unit. The address comes from
+`x-forwarded-for`, since the API sits behind a proxy; treat it as best effort,
+it raises the cost of replaying the sample run, it does not make it impossible.
+
+This is not a substitute for a limiter at the edge. It lives in one process, so
+a second instance doubles every allowance, and it forgets everything on restart.
+What it does do is stop the two failure modes that have actually happened here.
+
+Per-run work is bounded too: `max_results` is capped at 500, the sample run at
+25, and 16 emails are in the graph at once (`runner.run_many`). The in-memory
+tables that used to grow without limit, sync runs, OAuth states and sample
+inboxes, are all bounded now.
+
+### Found and fixed
+
+**OAuth login CSRF.** The `state` was only held server side, which proves a flow
+started *here*, not that it started in *this browser*. An attacker could begin a
+flow, hand the victim the callback URL, and land the victim's browser on a
+session for the attacker's Google account. The state is now also a short-lived
+HttpOnly cookie, compared with `compare_digest`.
+
+**An unbounded OAuth state table.** Swept only when someone called
+`/google/auth-url`, which is unauthenticated, so it was not a bound at all.
+
+**A published API schema.** `/api/docs` and the OpenAPI JSON enumerated every
+route, parameter and shape in production. Development only now.
+
+**Tenant isolation on write.** See *Tenancy* above.
+
+**A security check measuring the wrong thing.** `security.py` asserted prompt
+length against body length, so adding to the prompt failed a check about how
+much of the *email* was being sent. It now measures the share of body lines that
+reach the model. Written up in [docs/fixtures.md](docs/fixtures.md).
+
+### Not claimed
+
+No edge rate limiting, no WAF, no audit log, no key rotation, no penetration
+test. `/api/health` makes a live model call, so it is a readiness report for a
+person rather than something to poll. The sample inbox holds generated fixtures
+in process for the life of a demo session; they are text the server wrote
+itself, they never touch Firestore, and they are dropped when the session ends.
+
 ## Deploying
 
 Two services, one origin as far as a browser is concerned.
@@ -285,12 +404,14 @@ backend/
     graph/          state, node implementations, wiring, patterns, vendor registry
     demo_data/      the sample corpus: receipts.py (the data model),
                     layouts.py (16 renderers plus what each one proves),
-                    corpus.py (assembly, recurring charges, planted duplicates)
+                    corpus.py (assembly, recurring charges, planted duplicates,
+                    and the trim that keeps a demo run inside the quota)
     insights/       recurring charges, anomalies, statements, tax, exports
     ingest/gmail.py Gmail fetch and body flattening
     store/          Firestore client, transaction repository, account store
     advisor.py      spending questions, answered from the aggregated ledger
     llm.py          Gemini access, request coalescing, rate gate
+    ratelimit.py    per-caller and global ceilings on what costs money
     notifications.py findings turned into a feed
     sync.py         run tracking and the SSE progress stream
     diagnostics.py  readiness checks for every external dependency
@@ -335,6 +456,17 @@ because a guardrail that depends on the model remembering is not a guardrail.
 backend, so a visitor trying the app never touches Firestore, and the data dies
 with the session. Signing in with Google replaces a demo session rather than
 requiring a sign-out first.
+
+**Fifteen receipts, not ninety-eight.** A sample run costs real model calls, and
+six months of generated history unabridged is 98 receipts, about thirty of which
+escalate. A handful of demo visits was enough to exhaust a day of a free-tier
+quota and leave every later run stalling on 429s. What survives the trim is
+chosen rather than sampled: the duplicate pair and one subscription series are
+kept whole, because half a series is not a price rise and one of two identical
+charges is not a duplicate, and the rest of the budget goes to layouts that have
+not appeared yet. Measured end to end at 15 receipts, 16s, 15 model calls, one
+paused for review. The cost is layout coverage, 12 of 14 rather than all of
+them: a run this short cannot both show every layout and carry a history.
 
 ## Front end
 

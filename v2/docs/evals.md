@@ -125,8 +125,14 @@ Static and behavioural checks, driven through the real ASGI app (no network):
 | sync parameters are bounded | an unbounded `max_results` spends quota and memory |
 | diagnostics never echo a secret | `/api/health` reports status and remediation only |
 | session cookie is HttpOnly and SameSite | no script access, no cross-site submission |
+| the sample run is rate limited per address | it spends the model quota with no account behind it |
+| the sample run size is bounded | a ceiling one query parameter can raise is not a ceiling |
+| the global sample budget counts receipts, not runs | otherwise one long run costs the same single unit as one short one |
+| sign-in starts are rate limited per address | unauthenticated, and it allocates |
+| an OAuth callback is refused without the browser that started it | a server-side state proves a flow began *here*, not in *this browser* |
+| the API schema is not published in production | `/api/docs` enumerates every route and parameter |
 
-**Threshold:** every check holds.
+**Threshold:** every check holds. 21 checks at last run.
 
 ---
 
